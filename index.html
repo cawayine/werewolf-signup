@@ -286,11 +286,12 @@
       document.getElementById('currentSessionLabel').innerText = currentSelectedSession;
     }
 
-    // 0 秒載入引擎
+    // 頁面加載主入口
     window.onload = function() {
+      // 1. 先初始化場次選單（避免下拉選單空白）
       initSessions();
 
-      // 1. 先從本地讀取歷史名單快取
+      // 2. 立即從 localStorage 讀取名單快取
       const cached = localStorage.getItem('werewolf_players_data');
       if (cached) {
         try {
@@ -299,16 +300,14 @@
         } catch (e) {}
       }
 
-      // 2. 本地暱稱快取
+      // 3. 讀取本地記住的暱稱
       const cachedName = localStorage.getItem('werewolf_user_name');
       if (cachedName) {
         document.getElementById('userName').value = cachedName;
+        checkUserSignupStatus();
       }
 
-      // 3. 立即根據「個人報名紀錄」做 0 毫秒狀態切換！
-      checkUserSignupStatus();
-
-      // 4. 背景並行拉取資料
+      // 4. 初始化 LIFF 與拉取最新後端資料
       initLiffAsync();
       fetchLatestPlayers();
     };
@@ -323,8 +322,12 @@
             localStorage.setItem('werewolf_user_name', profile.displayName);
             checkUserSignupStatus();
           }
+        } else {
+          document.getElementById('userName').placeholder = "請輸入您的稱呼";
         }
-      } catch (err) {}
+      } catch (err) {
+        document.getElementById('userName').placeholder = "請輸入您的稱呼";
+      }
     }
 
     function switchTab(tab) {
@@ -355,7 +358,7 @@
       renderPlayerList();
     }
 
-    // ⚡ 0 毫秒極速判定（先看本地個人紀錄，再看快取名單）
+    // 0 毫秒極速判定目前玩家狀態
     function checkUserSignupStatus() {
       const name = document.getElementById('userName').value.trim();
       const session = document.getElementById('sessionDate').value;
@@ -365,7 +368,6 @@
 
       if (!name) return;
 
-      // 優先讀取本地個人報名記憶
       const myRecordKey = `my_signup_${name}_${session}`;
       const localMyRecord = localStorage.getItem(myRecordKey);
 
@@ -374,7 +376,6 @@
         try { record = JSON.parse(localMyRecord); } catch(e) {}
       }
 
-      // 若無，再從全局名單找
       if (!record && allPlayersData.length > 0) {
         record = allPlayersData.find(p => 
           (p['場次日期'] || '').trim() === session.trim() && 
@@ -423,13 +424,11 @@
       alertBox.className = "status-msg";
       alertBox.style.display = "none";
 
-      // 1. 立即寫入本地個人記憶庫
       localStorage.setItem(`my_signup_${name}_${session}`, JSON.stringify({
         '到場時間': arrival,
         '離場時間': leave
       }));
 
-      // 2. 本地名單樂觀更新
       const existingIdx = allPlayersData.findIndex(p => 
         (p['場次日期'] || '').trim() === session.trim() && 
         (p['LINE暱稱'] || '').trim().toLowerCase() === name.toLowerCase()
@@ -450,7 +449,6 @@
       }
       localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
 
-      // 畫面瞬間切換，不讓使用者看 Loading
       alertBox.innerText = `🎉 已成功送出【${session}】的登記！`;
       alertBox.className = "status-msg success";
       
@@ -463,7 +461,6 @@
       submitBtn.innerText = "確認送出報名";
       updateBtn.innerText = "🔄 更新進/離場時間";
 
-      // 3. 後台背景送出同步
       try {
         await fetch(GAS_API_URL, {
           method: 'POST',
@@ -494,10 +491,8 @@
       updateBtn.disabled = true;
       cancelBtn.innerText = "取消中...";
 
-      // 1. 刪除本地個人記憶
       localStorage.removeItem(`my_signup_${name}_${session}`);
 
-      // 2. 本地名單樂觀移除
       allPlayersData = allPlayersData.filter(p => 
         !((p['場次日期'] || '').trim() === session.trim() && 
           (p['LINE暱稱'] || '').trim().toLowerCase() === name.toLowerCase())
@@ -515,7 +510,6 @@
       updateBtn.disabled = false;
       cancelBtn.innerText = "❌ 取消報名";
 
-      // 3. 後台背景送出取消
       try {
         await fetch(GAS_API_URL, {
           method: 'POST',
@@ -740,8 +734,9 @@
     }
 
     function escapeHtml(text) {
-      return text.replace(/[&<>"']/g, function(m) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'背景同步完成後自動校驗。' }[m];
+      if (!text) return '';
+      return String(text).replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
       });
     }
   </script>
