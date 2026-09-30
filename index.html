@@ -27,7 +27,6 @@
     .header { text-align: center; margin-bottom: 16px; }
     .header h1 { font-size: 20px; letter-spacing: 1px; color: #fff; margin-bottom: 10px; }
     
-    /* 頂部資訊卡片（地址、費用） */
     .venue-info {
       background: #1a202c;
       border: 1px solid #2d3748;
@@ -41,7 +40,6 @@
     .venue-info p { margin: 2px 0; color: #e2e8f0; display: flex; align-items: center; gap: 6px; }
     .venue-highlight { color: #f6e05e; font-weight: bold; }
 
-    /* 守則小卡樣式 */
     .rules-box {
       background: rgba(255, 255, 255, 0.03);
       border: 1px solid var(--border);
@@ -95,7 +93,6 @@
     .action-btn:hover { background: #4a5568; }
     .action-btn:active { transform: scale(0.96); }
 
-    /* 上帝專屬欄位樣式 */
     .god-banner {
       display: flex;
       align-items: center;
@@ -150,7 +147,6 @@
     <div class="header">
       <h1>🐺 基地狼人殺</h1>
       
-      <!-- 頂部資訊欄（地址與費用） -->
       <div class="venue-info">
         <p>📍 <strong>地點：</strong>台中市北屯區天津路三段57號</p>
         <p>💰 <strong>費用：</strong><span class="venue-highlight">入場費 $200 打到破桌</span></p>
@@ -293,33 +289,45 @@
       document.getElementById('currentSessionLabel').innerText = currentSelectedSession;
     }
 
-    window.onload = async function() {
+    // ⚡ 秒開引擎：頁面加載時同步並行運作，0秒看見畫面
+    window.onload = function() {
       initSessions();
 
-      // 先從快取秒開名單（解決卡鈍）
-      const cached = sessionStorage.getItem('werewolf_cache');
-      if (cached) {
+      // 1. 立即從 localStorage 讀取持久快取（0 秒秒開名單與暱稱）
+      const cachedData = localStorage.getItem('werewolf_players_data');
+      if (cachedData) {
         try {
-          allPlayersData = JSON.parse(cached);
+          allPlayersData = JSON.parse(cachedData);
           renderPlayerList();
         } catch (e) {}
       }
 
+      const cachedName = localStorage.getItem('werewolf_user_name');
+      if (cachedName) {
+        document.getElementById('userName').value = cachedName;
+        checkUserSignupStatus(); // 立即判定是否已報名過此場次！
+      }
+
+      // 2. 背景非阻塞執行：抓取 LIFF 暱稱 + 背景拉取 GAS 最新資料
+      initLiffAsync();
+      fetchLatestPlayers();
+    };
+
+    async function initLiffAsync() {
       try {
         await liff.init({ liffId: LIFF_ID });
         if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
-          document.getElementById('userName').value = profile.displayName;
-        } else {
-          document.getElementById('userName').placeholder = "請輸入您的稱呼";
+          if (profile && profile.displayName) {
+            document.getElementById('userName').value = profile.displayName;
+            localStorage.setItem('werewolf_user_name', profile.displayName);
+            checkUserSignupStatus(); // 拿到官方暱稱後再次確認狀態
+          }
         }
       } catch (err) {
-        document.getElementById('userName').placeholder = "請輸入您的稱呼";
+        console.warn("LIFF 背景載入提醒:", err);
       }
-
-      await fetchLatestPlayers();
-      checkUserSignupStatus();
-    };
+    }
 
     function switchTab(tab) {
       if (tab === 'signup') {
@@ -349,6 +357,7 @@
       renderPlayerList();
     }
 
+    // ⚡ 瞬間判定狀態，不再等待網路
     function checkUserSignupStatus() {
       const name = document.getElementById('userName').value.trim();
       const session = document.getElementById('sessionDate').value;
@@ -372,12 +381,8 @@
         const arrivalVal = (existingRecord['到場時間'] || '').replace('準時 ', '');
         const leaveVal = existingRecord['離場時間'] || '打到底';
 
-        if (document.getElementById('arrivalTime').value !== arrivalVal) {
-          document.getElementById('arrivalTime').value = arrivalVal;
-        }
-        if (document.getElementById('leaveTime').value !== leaveVal) {
-          document.getElementById('leaveTime').value = leaveVal;
-        }
+        document.getElementById('arrivalTime').value = arrivalVal;
+        document.getElementById('leaveTime').value = leaveVal;
 
         submitBtn.style.display = 'none';
         editGroup.style.display = 'flex';
@@ -413,6 +418,27 @@
       alertBox.className = "status-msg";
       alertBox.style.display = "none";
 
+      // 本地樂觀更新（不用等後端跑完，直接先在本地儲存格生效）
+      const existingIdx = allPlayersData.findIndex(p => 
+        (p['場次日期'] || '').trim() === session.trim() && 
+        (p['LINE暱稱'] || '').trim().toLowerCase() === name.toLowerCase()
+      );
+
+      if (existingIdx >= 0) {
+        allPlayersData[existingIdx]['到場時間'] = arrival;
+        allPlayersData[existingIdx]['離場時間'] = leave;
+      } else {
+        allPlayersData.push({
+          '場次日期': session,
+          'LINE暱稱': name,
+          '到場時間': arrival,
+          '離場時間': leave,
+          '簽到狀態': '未簽到',
+          '收款狀態': isGodUser(name) ? '免收費' : '未付款'
+        });
+      }
+      localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
+
       try {
         await fetch(GAS_API_URL, {
           method: 'POST',
@@ -430,8 +456,7 @@
         alertBox.innerText = `🎉 已成功送出【${session}】的登記！`;
         alertBox.className = "status-msg success";
         
-        setTimeout(async () => {
-          await fetchLatestPlayers(true);
+        setTimeout(() => {
           const sessionIdx = CURRENT_SESSIONS.indexOf(session);
           filterSession(session, sessionIdx !== -1 ? sessionIdx : 0);
           switchTab('list');
@@ -440,7 +465,7 @@
           cancelBtn.disabled = false;
           submitBtn.innerText = "確認送出報名";
           updateBtn.innerText = "🔄 更新進/離場時間";
-        }, 1000);
+        }, 500);
 
       } catch (err) {
         alertBox.innerText = "連線發生錯誤，請稍後再試！";
@@ -467,6 +492,13 @@
       updateBtn.disabled = true;
       cancelBtn.innerText = "取消中...";
 
+      // 本地樂觀刪除
+      allPlayersData = allPlayersData.filter(p => 
+        !((p['場次日期'] || '').trim() === session.trim() && 
+          (p['LINE暱稱'] || '').trim().toLowerCase() === name.toLowerCase())
+      );
+      localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
+
       try {
         await fetch(GAS_API_URL, {
           method: 'POST',
@@ -482,8 +514,7 @@
         alertBox.innerText = `✅ 已成功取消【${session}】的報名！`;
         alertBox.className = "status-msg success";
 
-        setTimeout(async () => {
-          await fetchLatestPlayers(true);
+        setTimeout(() => {
           checkUserSignupStatus();
           const sessionIdx = CURRENT_SESSIONS.indexOf(session);
           filterSession(session, sessionIdx !== -1 ? sessionIdx : 0);
@@ -491,7 +522,7 @@
           cancelBtn.disabled = false;
           updateBtn.disabled = false;
           cancelBtn.innerText = "❌ 取消報名";
-        }, 1000);
+        }, 500);
 
       } catch (err) {
         alert("取消報名發生錯誤，請稍後再試！");
@@ -501,20 +532,26 @@
       }
     }
 
-    async function fetchLatestPlayers(forceRefresh = false) {
-      const containerEl = document.getElementById('listContainer');
+    // 背景靜默更新名單
+    async function fetchLatestPlayers(isManual = false) {
+      const copyBtn = document.getElementById('copyBtn');
+      if (isManual && copyBtn) {
+        document.getElementById('listContainer').innerHTML = '<div class="empty-state">🔄 正在同步最新試算表資料...</div>';
+      }
+
       try {
         const res = await fetch(GAS_API_URL);
         const result = await res.json();
         
         if (result.status === "success") {
           allPlayersData = result.data || [];
-          sessionStorage.setItem('werewolf_cache', JSON.stringify(allPlayersData));
+          localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
           renderPlayerList();
+          checkUserSignupStatus(); // 背景更新完畢後再次校驗
         }
       } catch (err) {
-        if (!sessionStorage.getItem('werewolf_cache')) {
-          containerEl.innerHTML = '<div class="empty-state">無法讀取名單，請點擊上方刷新按鈕。</div>';
+        if (!localStorage.getItem('werewolf_players_data')) {
+          document.getElementById('listContainer').innerHTML = '<div class="empty-state">無法讀取名單，請稍後點擊刷新。</div>';
         }
       }
     }
@@ -533,10 +570,7 @@
       const countEl = document.getElementById('playerCount');
       
       const sessionRecords = allPlayersData.filter(p => (p['場次日期'] || '') === currentSelectedSession);
-
-      // 提取上帝 Ean
       const godUser = sessionRecords.find(p => isGodUser(p['LINE暱稱']));
-      // 提取一般玩家（排除 Ean）
       const actualPlayers = sessionRecords.filter(p => !isGodUser(p['LINE暱稱']));
 
       countEl.innerText = actualPlayers.length;
@@ -547,13 +581,11 @@
       }
 
       const sorted = [...actualPlayers].sort((a, b) => getTimeWeight(a['到場時間']) - getTimeWeight(b['到場時間']));
-
       const onTimePlayers = sorted.filter(p => (p['到場時間'] || '').includes('14:00'));
       const latePlayers = sorted.filter(p => !(p['到場時間'] || '').includes('14:00'));
 
       let html = '';
 
-      // 上帝橫幅（若有報名）
       if (godUser) {
         const checkBadge = (godUser['簽到狀態'] === '已簽到') 
           ? `<span class="badge badge-checked">已到場</span>` 
@@ -569,7 +601,6 @@
         `;
       }
 
-      // 1. 14:00 區塊
       html += `
         <div class="section-divider divider-ontime">
           <span>🟢 14:00</span>
@@ -586,7 +617,6 @@
         html += '<div class="empty-state" style="padding: 12px 0;">尚無 14:00 玩家</div>';
       }
 
-      // 2. 晚到 區塊
       html += `
         <div class="section-divider divider-late">
           <span>🟡 晚到</span>
@@ -631,7 +661,6 @@
       `;
     }
 
-    // 格式極致精簡的一鍵複製名單
     function copyCurrentList() {
       const sessionRecords = allPlayersData.filter(p => (p['場次日期'] || '') === currentSelectedSession);
       const godUser = sessionRecords.find(p => isGodUser(p['LINE暱稱']));
