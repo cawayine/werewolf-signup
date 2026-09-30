@@ -199,6 +199,7 @@
               <option value="22:00">22:00</option>
               <option value="23:00">23:00</option>
               <option value="00:00">00:00</option>
+              <option value="亂入">亂入</option>
             </select>
           </div>
 
@@ -569,13 +570,15 @@
       }
     }
 
+    // ⚡ 權重計算：亂入設定為 9999，保證排序在最後面
     function getTimeWeight(timeStr) {
-      if (!timeStr) return 999;
+      if (!timeStr) return 9999;
+      if (timeStr.includes("亂入")) return 9999;
       if (timeStr.includes("14:00")) return 14;
       if (timeStr.includes("00:00") || timeStr.includes("24:00")) return 24;
       const match = timeStr.match(/(\d{1,2}):\d{2}/);
       if (match) return parseInt(match[1], 10);
-      return 999;
+      return 9998;
     }
 
     function renderPlayerList() {
@@ -593,6 +596,7 @@
         return;
       }
 
+      // 依權重排序（亂入會被排到最後）
       const sorted = [...actualPlayers].sort((a, b) => getTimeWeight(a['到場時間']) - getTimeWeight(b['到場時間']));
       const onTimePlayers = sorted.filter(p => (p['到場時間'] || '').includes('14:00'));
       const latePlayers = sorted.filter(p => !(p['到場時間'] || '').includes('14:00'));
@@ -674,7 +678,6 @@
       `;
     }
 
-    // 🌟 一鍵複製：已更新報名短網址為 https://lihi.vip/NtvB7
     function copyCurrentList() {
       const sessionRecords = allPlayersData.filter(p => (p['場次日期'] || '') === currentSelectedSession);
       const godUser = sessionRecords.find(p => isGodUser(p['LINE暱稱']));
