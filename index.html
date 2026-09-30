@@ -520,7 +520,6 @@
       } catch (err) {}
     }
 
-    // ⚡ 靜默背景刷新：名單永不清空，按鈕給予即時回饋
     async function fetchLatestPlayers(isManual = false) {
       if (isFetching) return;
       isFetching = true;
@@ -531,13 +530,11 @@
         refreshBtn.disabled = true;
       }
 
-      // 如果從來沒有任何快取資料，才顯示載入中
       if (allPlayersData.length === 0) {
         document.getElementById('listContainer').innerHTML = '<div class="empty-state">名單載入中...</div>';
       }
 
       try {
-        // 加 timestamp 防止 HTTP 快取阻止獲取最新名單
         const res = await fetch(`${GAS_API_URL}?t=${Date.now()}`);
         const result = await res.json();
         
@@ -557,7 +554,7 @@
         }
       } catch (err) {
         if (isManual && refreshBtn) {
-          refreshBtn.innerText = "⚠️️ 重試";
+          refreshBtn.innerText = "⚠ 重試";
           setTimeout(() => {
             refreshBtn.innerText = "🔄 刷新";
             refreshBtn.disabled = false;
@@ -677,6 +674,7 @@
       `;
     }
 
+    // 🌟 一鍵複製：已更新報名短網址為 https://lihi.vip/NtvB7
     function copyCurrentList() {
       const sessionRecords = allPlayersData.filter(p => (p['場次日期'] || '') === currentSelectedSession);
       const godUser = sessionRecords.find(p => isGodUser(p['LINE暱稱']));
@@ -721,7 +719,7 @@
       const needed14 = 10 - onTimePlayers.length;
       const statusNote = (needed14 > 0) ? `14:00 缺 ${needed14} 人開局` : `14:00 已成局！`;
       text += `📊 玩家共 ${actualPlayers.length} 人 (${statusNote})\n`;
-      text += `👉 報名：https://liff.line.me/2011803898-DMDxFdXE`;
+      text += `👉 報名：https://lihi.vip/NtvB7`;
 
       if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text).then(showCopySuccess).catch(() => fallbackCopy(text));
