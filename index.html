@@ -58,8 +58,9 @@
     .filter-btn { flex: 1; padding: 8px 0; border: 1px solid var(--border); background: #151922; color: var(--text-sub); border-radius: 6px; font-size: 13px; cursor: pointer; }
     .filter-btn.active { background: #2d3748; color: #fff; border-color: var(--accent); font-weight: bold; }
 
+    /* 名單工具列按鈕樣式 */
     .list-actions { display: flex; gap: 8px; }
-    .action-btn { background: #2d3748; border: 1px solid var(--border); color: #e2e8f0; font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: 0.2s; }
+    .action-btn { background: #2d3748; border: 1px solid var(--border); color: #e2e8f0; font-size: 12px; padding: 6px 10px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; transition: 0.2s; }
     .action-btn:hover { background: #4a5568; }
     .action-btn:active { transform: scale(0.96); }
 
@@ -346,7 +347,6 @@
       }
     }
 
-    // 將時間轉為數值權重以進行精準排序
     function getTimeWeight(timeStr) {
       if (!timeStr) return 999;
       if (timeStr.includes("14:00")) return 14;
@@ -368,19 +368,17 @@
         return;
       }
 
-      // 依到場時間權重升冪排序
       const sorted = [...filtered].sort((a, b) => getTimeWeight(a['到場時間']) - getTimeWeight(b['到場時間']));
 
-      // 分成兩組：準時 14:00 vs 晚到補位
       const onTimePlayers = sorted.filter(p => (p['到場時間'] || '').includes('14:00'));
       const latePlayers = sorted.filter(p => !(p['到場時間'] || '').includes('14:00'));
 
       let html = '';
 
-      // 1. 準時開局區塊
+      // 1. 準時 14:00 區塊
       html += `
         <div class="section-divider divider-ontime">
-          <span>🟢 準時 14:00（首局開戰）</span>
+          <span>🟢 準時 14:00</span>
           <span class="section-count">${onTimePlayers.length} 人</span>
         </div>
       `;
@@ -391,13 +389,13 @@
         });
         html += '</ul>';
       } else {
-        html += '<div class="empty-state" style="padding: 12px 0;">尚無準時玩家，首局還無法開！</div>';
+        html += '<div class="empty-state" style="padding: 12px 0;">尚無準時玩家</div>';
       }
 
-      // 2. 晚到補位區塊
+      // 2. 晚到 區塊
       html += `
         <div class="section-divider divider-late">
-          <span>🟡 晚到 / 後續補位</span>
+          <span>🟡 晚到</span>
           <span class="section-count">${latePlayers.length} 人</span>
         </div>
       `;
@@ -408,7 +406,7 @@
         });
         html += '</ul>';
       } else {
-        html += '<div class="empty-state" style="padding: 12px 0;">目前無晚到補位玩家</div>';
+        html += '<div class="empty-state" style="padding: 12px 0;">無晚到玩家</div>';
       }
 
       containerEl.innerHTML = html;
@@ -437,7 +435,6 @@
       `;
     }
 
-    // 複製名單格式也同步分為兩組，開局情況一目了然
     function copyCurrentList() {
       const filtered = allPlayersData.filter(p => (p['場次日期'] || '') === currentSelectedSession);
       if (filtered.length === 0) {
@@ -450,21 +447,21 @@
       const latePlayers = sorted.filter(p => !(p['到場時間'] || '').includes('14:00'));
 
       let text = `🐺【基地狼人殺】${currentSelectedSession} 報名狀況\n`;
-      text += `📊 總報名：${filtered.length} 人（首局準時：${onTimePlayers.length} 人）\n`;
+      text += `📊 總計：${filtered.length} 人（準時 14:00：${onTimePlayers.length} 人）\n`;
       text += `─────────────────\n`;
       
-      text += `🟢 準時 14:00 首局名單 (${onTimePlayers.length}人)：\n`;
+      text += `🟢 準時 14:00 (${onTimePlayers.length}人)：\n`;
       if (onTimePlayers.length > 0) {
         onTimePlayers.forEach((p, idx) => {
           const sign = p['簽到狀態'] === '已簽到' ? ' [已簽到]' : '';
           text += ` ${idx + 1}. ${p['LINE暱稱']} (🏃 ${p['離場時間']})${sign}\n`;
         });
       } else {
-        text += ` (尚無)\n`;
+        text += ` (無)\n`;
       }
 
       if (latePlayers.length > 0) {
-        text += `\n🟡 晚到/補位名單 (${latePlayers.length}人)：\n`;
+        text += `\n🟡 晚到 (${latePlayers.length}人)：\n`;
         latePlayers.forEach((p, idx) => {
           const sign = p['簽到狀態'] === '已簽到' ? ' [已簽到]' : '';
           text += ` ${idx + 1}. ${p['LINE暱稱']} (🕒 ${p['到場時間']} ｜ 🏃 ${p['離場時間']})${sign}\n`;
