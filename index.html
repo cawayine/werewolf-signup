@@ -21,8 +21,24 @@
     body { background-color: var(--bg); color: var(--text-main); padding: 16px; min-height: 100vh; }
     .container { max-width: 480px; margin: 0 auto; }
     .header { text-align: center; margin-bottom: 20px; }
-    .header h1 { font-size: 20px; letter-spacing: 1px; color: #fff; margin-bottom: 6px; }
-    .header p { font-size: 13px; color: var(--text-sub); }
+    .header h1 { font-size: 20px; letter-spacing: 1px; color: #fff; margin-bottom: 12px; }
+    
+    /* 基地遊戲守則小卡樣式 */
+    .rules-box {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin: 0 auto 16px;
+      display: inline-block;
+      text-align: left;
+      font-size: 13px;
+      line-height: 1.8;
+      color: #cbd5e0;
+    }
+    .rules-box p { margin: 0; }
+    .rules-diamond { color: #f97316; margin-right: 6px; font-size: 12px; }
+
     .tabs { display: flex; background: var(--card-bg); border-radius: 10px; padding: 4px; margin-bottom: 16px; border: 1px solid var(--border); }
     .tab-btn { flex: 1; padding: 10px 0; border: none; background: transparent; color: var(--text-sub); font-size: 14px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; }
     .tab-btn.active { background: var(--accent); color: #fff; }
@@ -36,7 +52,7 @@
     .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
     
     .session-filter { display: flex; gap: 8px; margin-bottom: 16px; }
-    .filter-btn { flex: 1; padding: 10px 0; border: 1px solid var(--border); background: #151922; color: var(--text-sub); border-radius: 6px; font-size: 13px; cursor: pointer; }
+    .filter-btn { flex: 1; padding: 8px 0; border: 1px solid var(--border); background: #151922; color: var(--text-sub); border-radius: 6px; font-size: 13px; cursor: pointer; }
     .filter-btn.active { background: #2d3748; color: #fff; border-color: var(--accent); font-weight: bold; }
 
     .player-list { list-style: none; }
@@ -62,7 +78,13 @@
   <div class="container">
     <div class="header">
       <h1>🐺 基地狼人殺</h1>
-      <p>現場簽到 ｜ 離場結帳 ｜ 乾淨不洗版</p>
+      <div class="rules-box">
+        <p><span class="rules-diamond">◆</span>禁止情緒激動、脾氣大的人</p>
+        <p><span class="rules-diamond">◆</span>禁止任何不禮貌行為</p>
+        <p><span class="rules-diamond">◆</span>臨時無法參加/延後請告知主揪</p>
+        <p><span class="rules-diamond">◆</span>請包容每一位玩家勿隨意批評</p>
+        <p><span class="rules-diamond">◆</span>開心最重要</p>
+      </div>
     </div>
 
     <!-- 分頁切換 -->
@@ -157,7 +179,6 @@
     let allPlayersData = [];
     let currentSelectedSession = CURRENT_SESSIONS[0];
 
-    // 初始化場次選單與篩選按鈕
     function initSessions() {
       const selectEl = document.getElementById('sessionDate');
       const filterGroup = document.getElementById('sessionFilterButtons');
@@ -165,13 +186,11 @@
       filterGroup.innerHTML = '';
 
       CURRENT_SESSIONS.forEach((session, idx) => {
-        // 填入報名下拉選單
         const opt = document.createElement('option');
         opt.value = session;
         opt.textContent = session;
         selectEl.appendChild(opt);
 
-        // 填入名單切換按鈕
         const btn = document.createElement('button');
         btn.className = `filter-btn ${idx === 0 ? 'active' : ''}`;
         btn.id = `filterBtn_${idx}`;
