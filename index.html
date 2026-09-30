@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <!-- 強制禁止快取，確保手機 LINE 隨時抓到最新版 -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -50,21 +49,38 @@
     label { display: block; font-size: 13px; color: var(--text-sub); margin-bottom: 6px; }
     input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: #151922; color: #fff; font-size: 15px; outline: none; }
     input:focus, select:focus { border-color: var(--accent); }
+    
     .btn-submit { width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; }
     .btn-submit:active { background: var(--accent-hover); }
     .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* 已報名時的修改/取消操作按鈕組 */
+    .edit-actions { display: none; gap: 10px; margin-top: 10px; }
+    .btn-update { flex: 2; padding: 14px; background: #3182ce; border: none; border-radius: 8px; color: #fff; font-size: 15px; font-weight: bold; cursor: pointer; }
+    .btn-cancel-signup { flex: 1; padding: 14px; background: #4a5568; border: none; border-radius: 8px; color: #fc8181; font-size: 15px; font-weight: bold; cursor: pointer; }
+    .btn-update:active { background: #2b6cb0; }
+    .btn-cancel-signup:active { background: #2d3748; }
+
+    .user-status-notice {
+      display: none;
+      background: rgba(49, 130, 206, 0.15);
+      border: 1px solid rgba(49, 130, 206, 0.4);
+      color: #90cdf4;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 14px;
+    }
     
     .session-filter { display: flex; gap: 8px; margin-bottom: 16px; }
     .filter-btn { flex: 1; padding: 8px 0; border: 1px solid var(--border); background: #151922; color: var(--text-sub); border-radius: 6px; font-size: 13px; cursor: pointer; }
     .filter-btn.active { background: #2d3748; color: #fff; border-color: var(--accent); font-weight: bold; }
 
-    /* 名單工具列按鈕樣式 */
     .list-actions { display: flex; gap: 8px; }
     .action-btn { background: #2d3748; border: 1px solid var(--border); color: #e2e8f0; font-size: 12px; padding: 6px 10px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; transition: 0.2s; }
     .action-btn:hover { background: #4a5568; }
     .action-btn:active { transform: scale(0.96); }
 
-    /* 區隔板塊標題樣式 */
     .section-divider {
       display: flex;
       justify-content: space-between;
@@ -124,15 +140,20 @@
     <!-- 報名分頁 -->
     <div id="signupSection">
       <div class="card">
+        <!-- 狀態提醒卡片 -->
+        <div id="userStatusNotice" class="user-status-notice">
+          💡 您已報名此場次，可直接在此更新時間或取消報名。
+        </div>
+
         <form id="signupForm" onsubmit="handleFormSubmit(event)">
           <div class="form-group">
             <label>場次日期</label>
-            <select id="sessionDate"></select>
+            <select id="sessionDate" onchange="checkUserSignupStatus()"></select>
           </div>
 
           <div class="form-group">
             <label>LINE 暱稱（系統自動偵測）</label>
-            <input type="text" id="userName" placeholder="LINE 登入載入中..." required>
+            <input type="text" id="userName" placeholder="LINE 登入載入中..." required oninput="checkUserSignupStatus()">
           </div>
 
           <div class="form-group">
@@ -168,7 +189,14 @@
             </select>
           </div>
 
+          <!-- 一般送出報名按鈕 -->
           <button type="submit" id="submitBtn" class="btn-submit">確認送出報名</button>
+
+          <!-- 已報名時呈現的按鈕組 -->
+          <div id="editActionGroup" class="edit-actions">
+            <button type="button" id="updateBtn" class="btn-update" onclick="handleFormSubmit(event)">🔄 更新進/離場時間</button>
+            <button type="button" id="cancelSignupBtn" class="btn-cancel-signup" onclick="handleCancelSignup()">❌ 取消報名</button>
+          </div>
         </form>
       </div>
     </div>
@@ -187,7 +215,6 @@
           </div>
         </div>
 
-        <!-- 區塊容器：14:00 區 + 晚到區 -->
         <div id="listContainer">
           <div class="empty-state">名單載入中...</div>
         </div>
@@ -196,9 +223,6 @@
   </div>
 
   <script>
-    // ==========================================
-    // ⚙️ 場主每週更新專區
-    // ==========================================
     const CURRENT_SESSIONS = [
       "10/3 (週六場)",
       "10/4 (週日場)"
@@ -248,7 +272,8 @@
         console.error("LIFF 初始化失敗:", err);
         document.getElementById('userName').placeholder = "請輸入您的稱呼";
       }
-      fetchLatestPlayers();
+      await fetchLatestPlayers();
+      checkUserSignupStatus();
     };
 
     function switchTab(tab) {
@@ -257,6 +282,7 @@
         document.getElementById('listSection').style.display = 'none';
         document.getElementById('tabSignupBtn').classList.add('active');
         document.getElementById('tabListBtn').classList.remove('active');
+        checkUserSignupStatus();
       } else {
         document.getElementById('signupSection').style.display = 'none';
         document.getElementById('listSection').style.display = 'block';
@@ -278,9 +304,54 @@
       renderPlayerList();
     }
 
+    // 檢查目前使用者是否在所選場次中，動態切換按鈕
+    function checkUserSignupStatus() {
+      const name = document.getElementById('userName').value.trim();
+      const session = document.getElementById('sessionDate').value;
+      const submitBtn = document.getElementById('submitBtn');
+      const editGroup = document.getElementById('editActionGroup');
+      const noticeBox = document.getElementById('userStatusNotice');
+
+      if (!name || allPlayersData.length === 0) {
+        submitBtn.style.display = 'block';
+        editGroup.style.display = 'none';
+        noticeBox.style.display = 'none';
+        return;
+      }
+
+      const existingRecord = allPlayersData.find(p => 
+        (p['場次日期'] || '').trim() === session.trim() && 
+        (p['LINE暱稱'] || '').trim() === name
+      );
+
+      if (existingRecord) {
+        // 已報名過：帶入原時間並切換為修改/取消按鈕
+        const arrivalVal = (existingRecord['到場時間'] || '').replace('準時 ', '');
+        const leaveVal = existingRecord['離場時間'] || '打到底';
+
+        if (document.getElementById('arrivalTime').value !== arrivalVal) {
+          document.getElementById('arrivalTime').value = arrivalVal;
+        }
+        if (document.getElementById('leaveTime').value !== leaveVal) {
+          document.getElementById('leaveTime').value = leaveVal;
+        }
+
+        submitBtn.style.display = 'none';
+        editGroup.style.display = 'flex';
+        noticeBox.style.display = 'block';
+      } else {
+        // 未報名過：標準報名按鈕
+        submitBtn.style.display = 'block';
+        editGroup.style.display = 'none';
+        noticeBox.style.display = 'none';
+      }
+    }
+
     async function handleFormSubmit(e) {
-      e.preventDefault();
-      const btn = document.getElementById('submitBtn');
+      if (e) e.preventDefault();
+      const submitBtn = document.getElementById('submitBtn');
+      const updateBtn = document.getElementById('updateBtn');
+      const cancelBtn = document.getElementById('cancelSignupBtn');
       const alertBox = document.getElementById('statusAlert');
       const session = document.getElementById('sessionDate').value;
       const name = document.getElementById('userName').value.trim();
@@ -292,21 +363,11 @@
         return;
       }
 
-      // 🛡️ 防呆機制：檢查該場次是否已報名過
-      const isAlreadySignedUp = allPlayersData.some(p => 
-        (p['場次日期'] || '').trim() === session.trim() && 
-        (p['LINE暱稱'] || '').trim() === name
-      );
-
-      if (isAlreadySignedUp) {
-        const confirmUpdate = confirm(`【防呆提醒】\n您已經報名過【${session}】囉！\n\n是否要將您的時間更新為：\n到場：${arrival}\n離場：${leave}？`);
-        if (!confirmUpdate) {
-          return; // 使用者按取消，中止操作
-        }
-      }
-
-      btn.disabled = true;
-      btn.innerText = "資料同步中...";
+      submitBtn.disabled = true;
+      updateBtn.disabled = true;
+      cancelBtn.disabled = true;
+      updateBtn.innerText = "更新中...";
+      submitBtn.innerText = "資料送出中...";
       alertBox.className = "status-msg";
       alertBox.style.display = "none";
 
@@ -316,6 +377,7 @@
           mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: "submit",
             sessionDate: session,
             userName: name,
             arrivalTime: arrival,
@@ -323,25 +385,78 @@
           })
         });
 
-        alertBox.innerText = isAlreadySignedUp 
-          ? `🔄 已成功更新【${session}】的報名時間！` 
-          : `🎉 已成功報名【${session}】！`;
+        alertBox.innerText = `🎉 已成功送出【${session}】的登記！`;
         alertBox.className = "status-msg success";
-        btn.innerText = isAlreadySignedUp ? "時間已更新" : "已完成報名";
         
-        setTimeout(() => {
+        setTimeout(async () => {
+          await fetchLatestPlayers();
           const sessionIdx = CURRENT_SESSIONS.indexOf(session);
           filterSession(session, sessionIdx !== -1 ? sessionIdx : 0);
           switchTab('list');
-          btn.disabled = false;
-          btn.innerText = "確認送出報名";
+          submitBtn.disabled = false;
+          updateBtn.disabled = false;
+          cancelBtn.disabled = false;
+          submitBtn.innerText = "確認送出報名";
+          updateBtn.innerText = "🔄 更新進/離場時間";
         }, 1200);
 
       } catch (err) {
         alertBox.innerText = "連線發生錯誤，請稍後再試！";
         alertBox.className = "status-msg error";
-        btn.disabled = false;
-        btn.innerText = "重新送出";
+        submitBtn.disabled = false;
+        updateBtn.disabled = false;
+        cancelBtn.disabled = false;
+        submitBtn.innerText = "重新送出";
+        updateBtn.innerText = "🔄 更新進/離場時間";
+      }
+    }
+
+    // 取消報名處理邏輯
+    async function handleCancelSignup() {
+      const session = document.getElementById('sessionDate').value;
+      const name = document.getElementById('userName').value.trim();
+      const cancelBtn = document.getElementById('cancelSignupBtn');
+      const updateBtn = document.getElementById('updateBtn');
+      const alertBox = document.getElementById('statusAlert');
+
+      const isConfirmed = confirm(`⚠️️ 確定要取消【${session}】的報名嗎？\n取消後名額將自動釋出。`);
+      if (!isConfirmed) return;
+
+      cancelBtn.disabled = true;
+      updateBtn.disabled = true;
+      cancelBtn.innerText = "取消中...";
+
+      try {
+        await fetch(GAS_API_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: "cancel",
+            sessionDate: session,
+            userName: name
+          })
+        });
+
+        alertBox.innerText = `✅ 已成功取消【${session}】的報名！`;
+        alertBox.className = "status-msg success";
+
+        setTimeout(async () => {
+          await fetchLatestPlayers();
+          checkUserSignupStatus();
+          const sessionIdx = CURRENT_SESSIONS.indexOf(session);
+          filterSession(session, sessionIdx !== -1 ? sessionIdx : 0);
+          switchTab('list');
+          cancelBtn.disabled = false;
+          updateBtn.disabled = false;
+          cancelBtn.innerText = "❌ 取消報名";
+        }, 1200);
+
+      } catch (err) {
+        alert("取消報名發生錯誤，請稍後再試！");
+        cancelBtn.disabled = false;
+        updateBtn.disabled = false;
+        cancelBtn.innerText = "❌ 取消報名";
       }
     }
 
