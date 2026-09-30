@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- 強制禁止快取，確保手機 LINE 隨時抓到最新版 -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>基地狼人殺 報名櫃台</title>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
@@ -23,7 +27,6 @@
     .header { text-align: center; margin-bottom: 20px; }
     .header h1 { font-size: 20px; letter-spacing: 1px; color: #fff; margin-bottom: 12px; }
     
-    /* 基地遊戲守則小卡樣式 */
     .rules-box {
       background: rgba(255, 255, 255, 0.04);
       border: 1px solid var(--border);
@@ -55,13 +58,29 @@
     .filter-btn { flex: 1; padding: 8px 0; border: 1px solid var(--border); background: #151922; color: var(--text-sub); border-radius: 6px; font-size: 13px; cursor: pointer; }
     .filter-btn.active { background: #2d3748; color: #fff; border-color: var(--accent); font-weight: bold; }
 
-    /* 名單工具列按鈕 */
     .list-actions { display: flex; gap: 8px; }
     .action-btn { background: #2d3748; border: 1px solid var(--border); color: #e2e8f0; font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: 0.2s; }
     .action-btn:hover { background: #4a5568; }
     .action-btn:active { transform: scale(0.96); }
 
-    .player-list { list-style: none; }
+    /* 區隔板塊標題樣式 */
+    .section-divider {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #151922;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin: 14px 0 8px 0;
+      border-left: 3px solid var(--accent);
+      font-size: 13px;
+      font-weight: bold;
+    }
+    .divider-ontime { border-left-color: #38a169; color: #68d391; }
+    .divider-late { border-left-color: #dd6b20; color: #f6ad55; }
+    .section-count { font-size: 12px; color: var(--text-sub); font-weight: normal; }
+
+    .player-list { list-style: none; margin-bottom: 10px; }
     .player-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 10px; border-bottom: 1px solid var(--border); }
     .player-item:last-child { border-bottom: none; }
     .player-idx { font-size: 14px; font-weight: bold; color: var(--accent); width: 28px; }
@@ -74,7 +93,7 @@
     .badge-unpaid { background: rgba(221, 107, 32, 0.2); color: #ed8936; border: 1px solid rgba(221, 107, 32, 0.4); }
     .badge-checked { background: rgba(66, 153, 225, 0.2); color: #63b3ed; border: 1px solid rgba(66, 153, 225, 0.4); }
     .badge-unchecked { background: rgba(160, 174, 192, 0.15); color: #a0aec0; border: 1px solid rgba(160, 174, 192, 0.3); }
-    .empty-state { text-align: center; color: var(--text-sub); padding: 30px 0; font-size: 14px; }
+    .empty-state { text-align: center; color: var(--text-sub); padding: 24px 0; font-size: 13px; }
     .status-msg { text-align: center; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 14px; display: none; }
     .status-msg.success { background: rgba(56, 161, 105, 0.2); color: #48bb78; display: block; }
     .status-msg.error { background: rgba(229, 57, 53, 0.2); color: #f56565; display: block; }
@@ -156,19 +175,21 @@
     <!-- 名單分頁 -->
     <div id="listSection" style="display: none;">
       <div class="card">
-        <!-- 切換觀看哪一場的名單 -->
+        <!-- 場次切換 -->
         <div class="session-filter" id="sessionFilterButtons"></div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <span style="font-size: 14px; font-weight: bold;"><span id="currentSessionLabel"></span> 人數：<span id="playerCount" style="color: var(--accent);">0</span> 人</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="font-size: 14px; font-weight: bold;"><span id="currentSessionLabel"></span> 總計：<span id="playerCount" style="color: var(--accent);">0</span> 人</span>
           <div class="list-actions">
             <button class="action-btn" id="copyBtn" onclick="copyCurrentList()">📋 複製名單</button>
             <button class="action-btn" onclick="fetchLatestPlayers()">🔄 刷新</button>
           </div>
         </div>
-        <ul id="playerList" class="player-list">
+
+        <!-- 區塊容器：準時區 + 晚到區 -->
+        <div id="listContainer">
           <div class="empty-state">名單載入中...</div>
-        </ul>
+        </div>
       </div>
     </div>
   </div>
@@ -309,7 +330,7 @@
     }
 
     async function fetchLatestPlayers() {
-      const listEl = document.getElementById('playerList');
+      const containerEl = document.getElementById('listContainer');
       try {
         const res = await fetch(GAS_API_URL);
         const result = await res.json();
@@ -318,52 +339,105 @@
           allPlayersData = result.data || [];
           renderPlayerList();
         } else {
-          listEl.innerHTML = '<div class="empty-state">名單載入失敗</div>';
+          containerEl.innerHTML = '<div class="empty-state">名單載入失敗</div>';
         }
       } catch (err) {
-        listEl.innerHTML = '<div class="empty-state">無法讀取名單，請稍後刷新。</div>';
+        containerEl.innerHTML = '<div class="empty-state">無法讀取名單，請稍後刷新。</div>';
       }
     }
 
+    // 將時間轉為數值權重以進行精準排序
+    function getTimeWeight(timeStr) {
+      if (!timeStr) return 999;
+      if (timeStr.includes("14:00")) return 14;
+      if (timeStr.includes("00:00") || timeStr.includes("24:00")) return 24;
+      const match = timeStr.match(/(\d{1,2}):\d{2}/);
+      if (match) return parseInt(match[1], 10);
+      return 999;
+    }
+
     function renderPlayerList() {
-      const listEl = document.getElementById('playerList');
+      const containerEl = document.getElementById('listContainer');
       const countEl = document.getElementById('playerCount');
       
       const filtered = allPlayersData.filter(p => (p['場次日期'] || '') === currentSelectedSession);
       countEl.innerText = filtered.length;
 
       if (filtered.length === 0) {
-        listEl.innerHTML = `<div class="empty-state">目前【${currentSelectedSession}】尚無人報名，搶先當 1 號位！</div>`;
+        containerEl.innerHTML = `<div class="empty-state">目前【${currentSelectedSession}】尚無人報名，搶先當 1 號位！</div>`;
         return;
       }
 
-      let html = '';
-      filtered.forEach((p, idx) => {
-        const checkBadge = (p['簽到狀態'] === '已簽到') 
-          ? `<span class="badge badge-checked">已簽到</span>` 
-          : `<span class="badge badge-unchecked">未簽到</span>`;
-        const payBadge = (p['收款狀態'] === '已付款') 
-          ? `<span class="badge badge-paid">已付款</span>` 
-          : `<span class="badge badge-unpaid">未付款</span>`;
+      // 依到場時間權重升冪排序
+      const sorted = [...filtered].sort((a, b) => getTimeWeight(a['到場時間']) - getTimeWeight(b['到場時間']));
 
-        html += `
-          <li class="player-item">
-            <div class="player-idx">${idx + 1}</div>
-            <div class="player-info">
-              <div class="player-name">${escapeHtml(p['LINE暱稱'] || '匿名玩家')}</div>
-              <div class="player-time">🕒 ${escapeHtml(p['到場時間'] || '-')} ｜ 🏃 ${escapeHtml(p['離場時間'] || '-')}</div>
-            </div>
-            <div class="player-badges">
-              ${checkBadge}
-              ${payBadge}
-            </div>
-          </li>
-        `;
-      });
-      listEl.innerHTML = html;
+      // 分成兩組：準時 14:00 vs 晚到補位
+      const onTimePlayers = sorted.filter(p => (p['到場時間'] || '').includes('14:00'));
+      const latePlayers = sorted.filter(p => !(p['到場時間'] || '').includes('14:00'));
+
+      let html = '';
+
+      // 1. 準時開局區塊
+      html += `
+        <div class="section-divider divider-ontime">
+          <span>🟢 準時 14:00（首局開戰）</span>
+          <span class="section-count">${onTimePlayers.length} 人</span>
+        </div>
+      `;
+      if (onTimePlayers.length > 0) {
+        html += '<ul class="player-list">';
+        onTimePlayers.forEach((p, idx) => {
+          html += renderPlayerItem(p, idx + 1);
+        });
+        html += '</ul>';
+      } else {
+        html += '<div class="empty-state" style="padding: 12px 0;">尚無準時玩家，首局還無法開！</div>';
+      }
+
+      // 2. 晚到補位區塊
+      html += `
+        <div class="section-divider divider-late">
+          <span>🟡 晚到 / 後續補位</span>
+          <span class="section-count">${latePlayers.length} 人</span>
+        </div>
+      `;
+      if (latePlayers.length > 0) {
+        html += '<ul class="player-list">';
+        latePlayers.forEach((p, idx) => {
+          html += renderPlayerItem(p, onTimePlayers.length + idx + 1);
+        });
+        html += '</ul>';
+      } else {
+        html += '<div class="empty-state" style="padding: 12px 0;">目前無晚到補位玩家</div>';
+      }
+
+      containerEl.innerHTML = html;
     }
 
-    // 一鍵複製目前場次名單（相容手機與 LINE 內嵌瀏覽器）
+    function renderPlayerItem(p, displayIdx) {
+      const checkBadge = (p['簽到狀態'] === '已簽到') 
+        ? `<span class="badge badge-checked">已簽到</span>` 
+        : `<span class="badge badge-unchecked">未簽到</span>`;
+      const payBadge = (p['收款狀態'] === '已付款') 
+        ? `<span class="badge badge-paid">已付款</span>` 
+        : `<span class="badge badge-unpaid">未付款</span>`;
+
+      return `
+        <li class="player-item">
+          <div class="player-idx">${displayIdx}</div>
+          <div class="player-info">
+            <div class="player-name">${escapeHtml(p['LINE暱稱'] || '匿名玩家')}</div>
+            <div class="player-time">🕒 ${escapeHtml(p['到場時間'] || '-')} ｜ 🏃 ${escapeHtml(p['離場時間'] || '-')}</div>
+          </div>
+          <div class="player-badges">
+            ${checkBadge}
+            ${payBadge}
+          </div>
+        </li>
+      `;
+    }
+
+    // 複製名單格式也同步分為兩組，開局情況一目了然
     function copyCurrentList() {
       const filtered = allPlayersData.filter(p => (p['場次日期'] || '') === currentSelectedSession);
       if (filtered.length === 0) {
@@ -371,16 +445,35 @@
         return;
       }
 
-      let text = `🐺【基地狼人殺】${currentSelectedSession} 報名名單（共 ${filtered.length} 人）\n`;
+      const sorted = [...filtered].sort((a, b) => getTimeWeight(a['到場時間']) - getTimeWeight(b['到場時間']));
+      const onTimePlayers = sorted.filter(p => (p['到場時間'] || '').includes('14:00'));
+      const latePlayers = sorted.filter(p => !(p['到場時間'] || '').includes('14:00'));
+
+      let text = `🐺【基地狼人殺】${currentSelectedSession} 報名狀況\n`;
+      text += `📊 總報名：${filtered.length} 人（首局準時：${onTimePlayers.length} 人）\n`;
       text += `─────────────────\n`;
-      filtered.forEach((p, idx) => {
-        const sign = p['簽到狀態'] === '已簽到' ? ' [已簽到]' : '';
-        text += `${idx + 1}. ${p['LINE暱稱'] || '匿名'} (🕒 ${p['到場時間'] || '-'} ｜ 🏃 ${p['離場時間'] || '-'})${sign}\n`;
-      });
+      
+      text += `🟢 準時 14:00 首局名單 (${onTimePlayers.length}人)：\n`;
+      if (onTimePlayers.length > 0) {
+        onTimePlayers.forEach((p, idx) => {
+          const sign = p['簽到狀態'] === '已簽到' ? ' [已簽到]' : '';
+          text += ` ${idx + 1}. ${p['LINE暱稱']} (🏃 ${p['離場時間']})${sign}\n`;
+        });
+      } else {
+        text += ` (尚無)\n`;
+      }
+
+      if (latePlayers.length > 0) {
+        text += `\n🟡 晚到/補位名單 (${latePlayers.length}人)：\n`;
+        latePlayers.forEach((p, idx) => {
+          const sign = p['簽到狀態'] === '已簽到' ? ' [已簽到]' : '';
+          text += ` ${idx + 1}. ${p['LINE暱稱']} (🕒 ${p['到場時間']} ｜ 🏃 ${p['離場時間']})${sign}\n`;
+        });
+      }
+
       text += `─────────────────\n`;
       text += `👉 報名櫃台：https://liff.line.me/2011803898-DMDxFdXE`;
 
-      // 複製機制
       if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text).then(showCopySuccess).catch(() => fallbackCopy(text));
       } else {
