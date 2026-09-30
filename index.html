@@ -138,7 +138,7 @@
           <div class="form-group">
             <label>預計到場時間</label>
             <select id="arrivalTime">
-              <option value="準時 14:00" selected>準時 14:00</option>
+              <option value="14:00" selected>14:00</option>
               <option value="15:00">15:00</option>
               <option value="16:00">16:00</option>
               <option value="17:00">17:00</option>
@@ -148,7 +148,7 @@
               <option value="21:00">21:00</option>
               <option value="22:00">22:00</option>
               <option value="23:00">23:00</option>
-              <option value="00:00 到">00:00 到</option>
+              <option value="00:00">00:00</option>
             </select>
           </div>
 
@@ -187,7 +187,7 @@
           </div>
         </div>
 
-        <!-- 區塊容器：準時區 + 晚到區 -->
+        <!-- 區塊容器：14:00 區 + 晚到區 -->
         <div id="listContainer">
           <div class="empty-state">名單載入中...</div>
         </div>
@@ -370,15 +370,16 @@
 
       const sorted = [...filtered].sort((a, b) => getTimeWeight(a['到場時間']) - getTimeWeight(b['到場時間']));
 
+      // 只要包含 14:00（相容先前寫入的「準時 14:00」與新版的「14:00」）
       const onTimePlayers = sorted.filter(p => (p['到場時間'] || '').includes('14:00'));
       const latePlayers = sorted.filter(p => !(p['到場時間'] || '').includes('14:00'));
 
       let html = '';
 
-      // 1. 準時 14:00 區塊
+      // 1. 14:00 區塊
       html += `
         <div class="section-divider divider-ontime">
-          <span>🟢 準時 14:00</span>
+          <span>🟢 14:00</span>
           <span class="section-count">${onTimePlayers.length} 人</span>
         </div>
       `;
@@ -389,7 +390,7 @@
         });
         html += '</ul>';
       } else {
-        html += '<div class="empty-state" style="padding: 12px 0;">尚無準時玩家</div>';
+        html += '<div class="empty-state" style="padding: 12px 0;">尚無 14:00 玩家</div>';
       }
 
       // 2. 晚到 區塊
@@ -420,12 +421,15 @@
         ? `<span class="badge badge-paid">已付款</span>` 
         : `<span class="badge badge-unpaid">未付款</span>`;
 
+      // 顯示時間時，若有舊的「準時 14:00」也自動過濾成「14:00」
+      const displayArrivalTime = (p['到場時間'] || '-').replace('準時 ', '');
+
       return `
         <li class="player-item">
           <div class="player-idx">${displayIdx}</div>
           <div class="player-info">
             <div class="player-name">${escapeHtml(p['LINE暱稱'] || '匿名玩家')}</div>
-            <div class="player-time">🕒 ${escapeHtml(p['到場時間'] || '-')} ｜ 🏃 ${escapeHtml(p['離場時間'] || '-')}</div>
+            <div class="player-time">🕒 ${escapeHtml(displayArrivalTime)} ｜ 🏃 ${escapeHtml(p['離場時間'] || '-')}</div>
           </div>
           <div class="player-badges">
             ${checkBadge}
@@ -447,10 +451,10 @@
       const latePlayers = sorted.filter(p => !(p['到場時間'] || '').includes('14:00'));
 
       let text = `🐺【基地狼人殺】${currentSelectedSession} 報名狀況\n`;
-      text += `📊 總計：${filtered.length} 人（準時 14:00：${onTimePlayers.length} 人）\n`;
+      text += `📊 總計：${filtered.length} 人（14:00：${onTimePlayers.length} 人）\n`;
       text += `─────────────────\n`;
       
-      text += `🟢 準時 14:00 (${onTimePlayers.length}人)：\n`;
+      text += `🟢 14:00 (${onTimePlayers.length}人)：\n`;
       if (onTimePlayers.length > 0) {
         onTimePlayers.forEach((p, idx) => {
           const sign = p['簽到狀態'] === '已簽到' ? ' [已簽到]' : '';
@@ -464,7 +468,8 @@
         text += `\n🟡 晚到 (${latePlayers.length}人)：\n`;
         latePlayers.forEach((p, idx) => {
           const sign = p['簽到狀態'] === '已簽到' ? ' [已簽到]' : '';
-          text += ` ${idx + 1}. ${p['LINE暱稱']} (🕒 ${p['到場時間']} ｜ 🏃 ${p['離場時間']})${sign}\n`;
+          const displayArrival = (p['到場時間'] || '').replace('準時 ', '');
+          text += ` ${idx + 1}. ${p['LINE暱稱']} (🕒 ${displayArrival} ｜ 🏃 ${p['離場時間']})${sign}\n`;
         });
       }
 
