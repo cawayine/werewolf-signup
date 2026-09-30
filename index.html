@@ -36,7 +36,7 @@
     .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
     
     .session-filter { display: flex; gap: 8px; margin-bottom: 16px; }
-    .filter-btn { flex: 1; padding: 8px 0; border: 1px solid var(--border); background: #151922; color: var(--text-sub); border-radius: 6px; font-size: 13px; cursor: pointer; }
+    .filter-btn { flex: 1; padding: 10px 0; border: 1px solid var(--border); background: #151922; color: var(--text-sub); border-radius: 6px; font-size: 13px; cursor: pointer; }
     .filter-btn.active { background: #2d3748; color: #fff; border-color: var(--accent); font-weight: bold; }
 
     .player-list { list-style: none; }
@@ -65,6 +65,7 @@
       <p>現場簽到 ｜ 離場結帳 ｜ 乾淨不洗版</p>
     </div>
 
+    <!-- 分頁切換 -->
     <div class="tabs">
       <button class="tab-btn active" id="tabSignupBtn" onclick="switchTab('signup')">我要報名</button>
       <button class="tab-btn" id="tabListBtn" onclick="switchTab('list')">目前名單</button>
@@ -72,30 +73,34 @@
 
     <div id="statusAlert" class="status-msg"></div>
 
+    <!-- 報名分頁 -->
     <div id="signupSection">
       <div class="card">
         <form id="signupForm" onsubmit="handleFormSubmit(event)">
           <div class="form-group">
             <label>場次日期</label>
-            <select id="sessionDate">
-              <option value="週六場" selected>週六場 (14:00 開局)</option>
-              <option value="週日場">週日場 (14:00 開局)</option>
-            </select>
+            <select id="sessionDate"></select>
           </div>
 
           <div class="form-group">
             <label>LINE 暱稱（系統自動偵測）</label>
-            <input type="text" id="userName" placeholder="載入中..." required>
+            <input type="text" id="userName" placeholder="LINE 登入載入中..." required>
           </div>
 
           <div class="form-group">
             <label>預計到場時間</label>
             <select id="arrivalTime">
               <option value="準時 14:00" selected>準時 14:00</option>
-              <option value="約 14:30">約 14:30</option>
-              <option value="約 15:00">約 15:00</option>
-              <option value="約 16:00">約 16:00</option>
-              <option value="約 17:00 後">約 17:00 後</option>
+              <option value="15:00">15:00</option>
+              <option value="16:00">16:00</option>
+              <option value="17:00">17:00</option>
+              <option value="18:00">18:00</option>
+              <option value="19:00">19:00</option>
+              <option value="20:00">20:00</option>
+              <option value="21:00">21:00</option>
+              <option value="22:00">22:00</option>
+              <option value="23:00">23:00</option>
+              <option value="00:00 到">00:00 到</option>
             </select>
           </div>
 
@@ -103,10 +108,15 @@
             <label>預計離場時間</label>
             <select id="leaveTime">
               <option value="打到底" selected>打到底</option>
-              <option value="約 18:00 前先走">約 18:00 前先走</option>
-              <option value="約 19:00 前先走">約 19:00 前先走</option>
-              <option value="約 20:00 前先走">約 20:00 前先走</option>
-              <option value="其他（現場告知主揪）">其他（現場告知主揪）</option>
+              <option value="16:00 前走">16:00 前走</option>
+              <option value="17:00 前走">17:00 前走</option>
+              <option value="18:00 前走">18:00 前走</option>
+              <option value="19:00 前走">19:00 前走</option>
+              <option value="20:00 前走">20:00 前走</option>
+              <option value="21:00 前走">21:00 前走</option>
+              <option value="22:00 前走">22:00 前走</option>
+              <option value="23:00 前走">23:00 前走</option>
+              <option value="00:00 前走">00:00 前走</option>
             </select>
           </div>
 
@@ -115,15 +125,14 @@
       </div>
     </div>
 
+    <!-- 名單分頁 -->
     <div id="listSection" style="display: none;">
       <div class="card">
-        <div class="session-filter">
-          <button class="filter-btn active" id="btnFilterSat" onclick="filterSession('週六場')">📅 週六場名單</button>
-          <button class="filter-btn" id="btnFilterSun" onclick="filterSession('週日場')">📅 週日場名單</button>
-        </div>
+        <!-- 切換觀看哪一場的名單 -->
+        <div class="session-filter" id="sessionFilterButtons"></div>
 
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <span style="font-size: 14px; font-weight: bold;"><span id="currentSessionLabel">週六場</span> 人數：<span id="playerCount" style="color: var(--accent);">0</span> 人</span>
+          <span style="font-size: 14px; font-weight: bold;"><span id="currentSessionLabel"></span> 人數：<span id="playerCount" style="color: var(--accent);">0</span> 人</span>
           <button onclick="fetchLatestPlayers()" style="background: none; border: none; color: var(--text-sub); font-size: 13px; cursor: pointer;">🔄 刷新名單</button>
         </div>
         <ul id="playerList" class="player-list">
@@ -134,13 +143,49 @@
   </div>
 
   <script>
+    // ==========================================
+    // ⚙️ 場主每週更新專區（改這裡的文字即可更新整週場次）
+    // ==========================================
+    const CURRENT_SESSIONS = [
+      "10/3 (週六場)",
+      "10/4 (週日場)"
+    ];
+
     const LIFF_ID = "2011803898-DMDxFdXE";
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbz3Wae--2O_vMolZ7hXHYU-1sNRytT6K8VWQJ0O4Lc4xxuq-R-bH-PcvrNtb6arvHg/exec";
 
     let allPlayersData = [];
-    let currentSelectedSession = '週六場';
+    let currentSelectedSession = CURRENT_SESSIONS[0];
+
+    // 初始化場次選單與篩選按鈕
+    function initSessions() {
+      const selectEl = document.getElementById('sessionDate');
+      const filterGroup = document.getElementById('sessionFilterButtons');
+      selectEl.innerHTML = '';
+      filterGroup.innerHTML = '';
+
+      CURRENT_SESSIONS.forEach((session, idx) => {
+        // 填入報名下拉選單
+        const opt = document.createElement('option');
+        opt.value = session;
+        opt.textContent = session;
+        selectEl.appendChild(opt);
+
+        // 填入名單切換按鈕
+        const btn = document.createElement('button');
+        btn.className = `filter-btn ${idx === 0 ? 'active' : ''}`;
+        btn.id = `filterBtn_${idx}`;
+        btn.textContent = `📅 ${session}`;
+        btn.onclick = () => filterSession(session, idx);
+        filterGroup.appendChild(btn);
+      });
+
+      document.getElementById('currentSessionLabel').innerText = currentSelectedSession;
+    }
 
     window.onload = async function() {
+      initSessions();
+
       try {
         await liff.init({ liffId: LIFF_ID });
         if (liff.isLoggedIn()) {
@@ -171,11 +216,15 @@
       }
     }
 
-    function filterSession(session) {
+    function filterSession(session, activeIndex) {
       currentSelectedSession = session;
       document.getElementById('currentSessionLabel').innerText = session;
-      document.getElementById('btnFilterSat').classList.toggle('active', session === '週六場');
-      document.getElementById('btnFilterSun').classList.toggle('active', session === '週日場');
+      
+      CURRENT_SESSIONS.forEach((_, idx) => {
+        const btn = document.getElementById(`filterBtn_${idx}`);
+        if (btn) btn.classList.toggle('active', idx === activeIndex);
+      });
+
       renderPlayerList();
     }
 
@@ -216,12 +265,12 @@
         btn.innerText = "已完成報名";
         
         setTimeout(() => {
-          currentSelectedSession = session;
-          filterSession(session);
+          const sessionIdx = CURRENT_SESSIONS.indexOf(session);
+          filterSession(session, sessionIdx !== -1 ? sessionIdx : 0);
           switchTab('list');
           btn.disabled = false;
           btn.innerText = "確認送出報名";
-        }, 1500);
+        }, 1200);
 
       } catch (err) {
         alertBox.innerText = "報名發生錯誤，請稍後再試！";
@@ -252,7 +301,7 @@
       const listEl = document.getElementById('playerList');
       const countEl = document.getElementById('playerCount');
       
-      const filtered = allPlayersData.filter(p => (p['場次日期'] || '週六場') === currentSelectedSession);
+      const filtered = allPlayersData.filter(p => (p['場次日期'] || '') === currentSelectedSession);
       countEl.innerText = filtered.length;
 
       if (filtered.length === 0) {
