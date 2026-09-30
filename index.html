@@ -55,6 +55,12 @@
     .filter-btn { flex: 1; padding: 8px 0; border: 1px solid var(--border); background: #151922; color: var(--text-sub); border-radius: 6px; font-size: 13px; cursor: pointer; }
     .filter-btn.active { background: #2d3748; color: #fff; border-color: var(--accent); font-weight: bold; }
 
+    /* 名單工具列按鈕 */
+    .list-actions { display: flex; gap: 8px; }
+    .action-btn { background: #2d3748; border: 1px solid var(--border); color: #e2e8f0; font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: 0.2s; }
+    .action-btn:hover { background: #4a5568; }
+    .action-btn:active { transform: scale(0.96); }
+
     .player-list { list-style: none; }
     .player-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 10px; border-bottom: 1px solid var(--border); }
     .player-item:last-child { border-bottom: none; }
@@ -155,7 +161,10 @@
 
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <span style="font-size: 14px; font-weight: bold;"><span id="currentSessionLabel"></span> 人數：<span id="playerCount" style="color: var(--accent);">0</span> 人</span>
-          <button onclick="fetchLatestPlayers()" style="background: none; border: none; color: var(--text-sub); font-size: 13px; cursor: pointer;">🔄 刷新名單</button>
+          <div class="list-actions">
+            <button class="action-btn" id="copyBtn" onclick="copyCurrentList()">📋 複製名單</button>
+            <button class="action-btn" onclick="fetchLatestPlayers()">🔄 刷新</button>
+          </div>
         </div>
         <ul id="playerList" class="player-list">
           <div class="empty-state">名單載入中...</div>
@@ -352,6 +361,60 @@
         `;
       });
       listEl.innerHTML = html;
+    }
+
+    // 一鍵複製目前場次名單（相容手機與 LINE 內嵌瀏覽器）
+    function copyCurrentList() {
+      const filtered = allPlayersData.filter(p => (p['場次日期'] || '') === currentSelectedSession);
+      if (filtered.length === 0) {
+        alert(`目前【${currentSelectedSession}】尚無報名人員！`);
+        return;
+      }
+
+      let text = `🐺【基地狼人殺】${currentSelectedSession} 報名名單（共 ${filtered.length} 人）\n`;
+      text += `─────────────────\n`;
+      filtered.forEach((p, idx) => {
+        const sign = p['簽到狀態'] === '已簽到' ? ' [已簽到]' : '';
+        text += `${idx + 1}. ${p['LINE暱稱'] || '匿名'} (🕒 ${p['到場時間'] || '-'} ｜ 🏃 ${p['離場時間'] || '-'})${sign}\n`;
+      });
+      text += `─────────────────\n`;
+      text += `👉 報名櫃台：https://liff.line.me/2011803898-DMDxFdXE`;
+
+      // 複製機制
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(showCopySuccess).catch(() => fallbackCopy(text));
+      } else {
+        fallbackCopy(text);
+      }
+    }
+
+    function fallbackCopy(text) {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        showCopySuccess();
+      } catch (err) {
+        alert("複製失敗，請手動複製！");
+      }
+      document.body.removeChild(textArea);
+    }
+
+    function showCopySuccess() {
+      const copyBtn = document.getElementById('copyBtn');
+      const originalText = copyBtn.innerHTML;
+      copyBtn.innerHTML = "✅ 已複製！";
+      copyBtn.style.background = "#2b6cb0";
+      setTimeout(() => {
+        copyBtn.innerHTML = originalText;
+        copyBtn.style.background = "#2d3748";
+      }, 1500);
     }
 
     function escapeHtml(text) {
