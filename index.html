@@ -197,7 +197,7 @@
 
   <script>
     // ==========================================
-    // ⚙️ 場主每週更新專區（改這裡的文字即可更新整週場次）
+    // ⚙️ 場主每週更新專區
     // ==========================================
     const CURRENT_SESSIONS = [
       "10/3 (週六場)",
@@ -292,8 +292,21 @@
         return;
       }
 
+      // 🛡️ 防呆機制：檢查該場次是否已報名過
+      const isAlreadySignedUp = allPlayersData.some(p => 
+        (p['場次日期'] || '').trim() === session.trim() && 
+        (p['LINE暱稱'] || '').trim() === name
+      );
+
+      if (isAlreadySignedUp) {
+        const confirmUpdate = confirm(`【防呆提醒】\n您已經報名過【${session}】囉！\n\n是否要將您的時間更新為：\n到場：${arrival}\n離場：${leave}？`);
+        if (!confirmUpdate) {
+          return; // 使用者按取消，中止操作
+        }
+      }
+
       btn.disabled = true;
-      btn.innerText = "資料送出中...";
+      btn.innerText = "資料同步中...";
       alertBox.className = "status-msg";
       alertBox.style.display = "none";
 
@@ -310,9 +323,11 @@
           })
         });
 
-        alertBox.innerText = `🎉 已成功報名【${session}】！`;
+        alertBox.innerText = isAlreadySignedUp 
+          ? `🔄 已成功更新【${session}】的報名時間！` 
+          : `🎉 已成功報名【${session}】！`;
         alertBox.className = "status-msg success";
-        btn.innerText = "已完成報名";
+        btn.innerText = isAlreadySignedUp ? "時間已更新" : "已完成報名";
         
         setTimeout(() => {
           const sessionIdx = CURRENT_SESSIONS.indexOf(session);
@@ -323,7 +338,7 @@
         }, 1200);
 
       } catch (err) {
-        alertBox.innerText = "報名發生錯誤，請稍後再試！";
+        alertBox.innerText = "連線發生錯誤，請稍後再試！";
         alertBox.className = "status-msg error";
         btn.disabled = false;
         btn.innerText = "重新送出";
@@ -370,7 +385,6 @@
 
       const sorted = [...filtered].sort((a, b) => getTimeWeight(a['到場時間']) - getTimeWeight(b['到場時間']));
 
-      // 只要包含 14:00（相容先前寫入的「準時 14:00」與新版的「14:00」）
       const onTimePlayers = sorted.filter(p => (p['到場時間'] || '').includes('14:00'));
       const latePlayers = sorted.filter(p => !(p['到場時間'] || '').includes('14:00'));
 
@@ -421,7 +435,6 @@
         ? `<span class="badge badge-paid">已付款</span>` 
         : `<span class="badge badge-unpaid">未付款</span>`;
 
-      // 顯示時間時，若有舊的「準時 14:00」也自動過濾成「14:00」
       const displayArrivalTime = (p['到場時間'] || '-').replace('準時 ', '');
 
       return `
