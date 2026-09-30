@@ -92,6 +92,7 @@
     .action-btn { background: #2d3748; border: 1px solid var(--border); color: #e2e8f0; font-size: 12px; padding: 6px 10px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; transition: 0.2s; }
     .action-btn:hover { background: #4a5568; }
     .action-btn:active { transform: scale(0.96); }
+    .action-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
     .god-banner {
       display: flex;
@@ -236,7 +237,7 @@
           <span style="font-size: 14px; font-weight: bold;"><span id="currentSessionLabel"></span> 玩家：<span id="playerCount" style="color: var(--accent);">0</span> 人</span>
           <div class="list-actions">
             <button class="action-btn" id="copyBtn" onclick="copyCurrentList()">📋 複製名單</button>
-            <button class="action-btn" onclick="fetchLatestPlayers(true)">🔄 刷新</button>
+            <button class="action-btn" id="refreshBtn" onclick="fetchLatestPlayers(true)">🔄 刷新</button>
           </div>
         </div>
 
@@ -258,6 +259,7 @@
 
     let allPlayersData = [];
     let currentSelectedSession = CURRENT_SESSIONS[0];
+    let isFetching = false;
 
     function isGodUser(name) {
       return (name || '').trim().toLowerCase() === 'ean';
@@ -286,12 +288,9 @@
       document.getElementById('currentSessionLabel').innerText = currentSelectedSession;
     }
 
-    // 頁面加載主入口
     window.onload = function() {
-      // 1. 先初始化場次選單（避免下拉選單空白）
       initSessions();
 
-      // 2. 立即從 localStorage 讀取名單快取
       const cached = localStorage.getItem('werewolf_players_data');
       if (cached) {
         try {
@@ -300,16 +299,14 @@
         } catch (e) {}
       }
 
-      // 3. 讀取本地記住的暱稱
       const cachedName = localStorage.getItem('werewolf_user_name');
       if (cachedName) {
         document.getElementById('userName').value = cachedName;
         checkUserSignupStatus();
       }
 
-      // 4. 初始化 LIFF 與拉取最新後端資料
       initLiffAsync();
-      fetchLatestPlayers();
+      fetchLatestPlayers(false);
     };
 
     async function initLiffAsync() {
@@ -358,7 +355,6 @@
       renderPlayerList();
     }
 
-    // 0 毫秒極速判定目前玩家狀態
     function checkUserSignupStatus() {
       const name = document.getElementById('userName').value.trim();
       const session = document.getElementById('sessionDate').value;
@@ -524,13 +520,25 @@
       } catch (err) {}
     }
 
+    // ⚡ 靜默背景刷新：名單永不清空，按鈕給予即時回饋
     async function fetchLatestPlayers(isManual = false) {
-      if (isManual) {
-        document.getElementById('listContainer').innerHTML = '<div class="empty-state">🔄 正在同步試算表最新名單...</div>';
+      if (isFetching) return;
+      isFetching = true;
+
+      const refreshBtn = document.getElementById('refreshBtn');
+      if (isManual && refreshBtn) {
+        refreshBtn.innerText = "⏳ 同步中...";
+        refreshBtn.disabled = true;
+      }
+
+      // 如果從來沒有任何快取資料，才顯示載入中
+      if (allPlayersData.length === 0) {
+        document.getElementById('listContainer').innerHTML = '<div class="empty-state">名單載入中...</div>';
       }
 
       try {
-        const res = await fetch(GAS_API_URL);
+        // 加 timestamp 防止 HTTP 快取阻止獲取最新名單
+        const res = await fetch(`${GAS_API_URL}?t=${Date.now()}`);
         const result = await res.json();
         
         if (result.status === "success") {
@@ -538,10 +546,28 @@
           localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
           renderPlayerList();
           checkUserSignupStatus();
+          
+          if (isManual && refreshBtn) {
+            refreshBtn.innerText = "✅ 已是最新";
+            setTimeout(() => {
+              refreshBtn.innerText = "🔄 刷新";
+              refreshBtn.disabled = false;
+            }, 1000);
+          }
         }
       } catch (err) {
-        if (!localStorage.getItem('werewolf_players_data')) {
-          document.getElementById('listContainer').innerHTML = '<div class="empty-state">無法讀取名單，請點擊上方刷新按鈕。</div>';
+        if (isManual && refreshBtn) {
+          refreshBtn.innerText = "⚠️️ 重試";
+          setTimeout(() => {
+            refreshBtn.innerText = "🔄 刷新";
+            refreshBtn.disabled = false;
+          }, 1500);
+        }
+      } finally {
+        isFetching = false;
+        if (!isManual && refreshBtn) {
+          refreshBtn.innerText = "🔄 刷新";
+          refreshBtn.disabled = false;
         }
       }
     }
