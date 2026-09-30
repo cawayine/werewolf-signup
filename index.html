@@ -22,7 +22,7 @@
       --gold: #ecc94b;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-    body { background-color: var(--bg); color: var(--text-main); padding: 16px; min-height: 100vh; }
+    body { background-color: var(--bg); color: var(--text-main); padding: 16px; min-height: 100vh; padding-bottom: 70px; }
     .container { max-width: 480px; margin: 0 auto; }
     .header { text-align: center; margin-bottom: 16px; }
     .header h1 { font-size: 20px; letter-spacing: 1px; color: #fff; margin-bottom: 10px; }
@@ -63,7 +63,7 @@
     input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: #151922; color: #fff; font-size: 15px; outline: none; }
     input:focus, select:focus { border-color: var(--accent); }
     
-    .btn-submit { width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .btn-submit { width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 6px; }
     .btn-submit:active { background: var(--accent-hover); }
     .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -146,12 +146,10 @@
   <div class="container">
     <div class="header">
       <h1>🐺 基地狼人殺</h1>
-      
       <div class="venue-info">
         <p>📍 <strong>地點：</strong>台中市北屯區天津路三段57號</p>
         <p>💰 <strong>費用：</strong><span class="venue-highlight">入場費 $200 打到破桌</span></p>
       </div>
-
       <div class="rules-box">
         <p><span class="rules-diamond">◆</span>禁止情緒激動、脾氣大的人</p>
         <p><span class="rules-diamond">◆</span>禁止任何不禮貌行為</p>
@@ -161,7 +159,6 @@
       </div>
     </div>
 
-    <!-- 分頁切換 -->
     <div class="tabs">
       <button class="tab-btn active" id="tabSignupBtn" onclick="switchTab('signup')">我要報名</button>
       <button class="tab-btn" id="tabListBtn" onclick="switchTab('list')">目前名單</button>
@@ -289,26 +286,29 @@
       document.getElementById('currentSessionLabel').innerText = currentSelectedSession;
     }
 
-    // ⚡ 秒開引擎：頁面加載時同步並行運作，0秒看見畫面
+    // 0 秒載入引擎
     window.onload = function() {
       initSessions();
 
-      // 1. 立即從 localStorage 讀取持久快取（0 秒秒開名單與暱稱）
-      const cachedData = localStorage.getItem('werewolf_players_data');
-      if (cachedData) {
+      // 1. 先從本地讀取歷史名單快取
+      const cached = localStorage.getItem('werewolf_players_data');
+      if (cached) {
         try {
-          allPlayersData = JSON.parse(cachedData);
+          allPlayersData = JSON.parse(cached);
           renderPlayerList();
         } catch (e) {}
       }
 
+      // 2. 本地暱稱快取
       const cachedName = localStorage.getItem('werewolf_user_name');
       if (cachedName) {
         document.getElementById('userName').value = cachedName;
-        checkUserSignupStatus(); // 立即判定是否已報名過此場次！
       }
 
-      // 2. 背景非阻塞執行：抓取 LIFF 暱稱 + 背景拉取 GAS 最新資料
+      // 3. 立即根據「個人報名紀錄」做 0 毫秒狀態切換！
+      checkUserSignupStatus();
+
+      // 4. 背景並行拉取資料
       initLiffAsync();
       fetchLatestPlayers();
     };
@@ -321,12 +321,10 @@
           if (profile && profile.displayName) {
             document.getElementById('userName').value = profile.displayName;
             localStorage.setItem('werewolf_user_name', profile.displayName);
-            checkUserSignupStatus(); // 拿到官方暱稱後再次確認狀態
+            checkUserSignupStatus();
           }
         }
-      } catch (err) {
-        console.warn("LIFF 背景載入提醒:", err);
-      }
+      } catch (err) {}
     }
 
     function switchTab(tab) {
@@ -357,7 +355,7 @@
       renderPlayerList();
     }
 
-    // ⚡ 瞬間判定狀態，不再等待網路
+    // ⚡ 0 毫秒極速判定（先看本地個人紀錄，再看快取名單）
     function checkUserSignupStatus() {
       const name = document.getElementById('userName').value.trim();
       const session = document.getElementById('sessionDate').value;
@@ -365,21 +363,28 @@
       const editGroup = document.getElementById('editActionGroup');
       const noticeBox = document.getElementById('userStatusNotice');
 
-      if (!name || allPlayersData.length === 0) {
-        submitBtn.style.display = 'block';
-        editGroup.style.display = 'none';
-        noticeBox.style.display = 'none';
-        return;
+      if (!name) return;
+
+      // 優先讀取本地個人報名記憶
+      const myRecordKey = `my_signup_${name}_${session}`;
+      const localMyRecord = localStorage.getItem(myRecordKey);
+
+      let record = null;
+      if (localMyRecord) {
+        try { record = JSON.parse(localMyRecord); } catch(e) {}
       }
 
-      const existingRecord = allPlayersData.find(p => 
-        (p['場次日期'] || '').trim() === session.trim() && 
-        (p['LINE暱稱'] || '').trim().toLowerCase() === name.toLowerCase()
-      );
+      // 若無，再從全局名單找
+      if (!record && allPlayersData.length > 0) {
+        record = allPlayersData.find(p => 
+          (p['場次日期'] || '').trim() === session.trim() && 
+          (p['LINE暱稱'] || '').trim().toLowerCase() === name.toLowerCase()
+        );
+      }
 
-      if (existingRecord) {
-        const arrivalVal = (existingRecord['到場時間'] || '').replace('準時 ', '');
-        const leaveVal = existingRecord['離場時間'] || '打到底';
+      if (record) {
+        const arrivalVal = (record['到場時間'] || '').replace('準時 ', '');
+        const leaveVal = record['離場時間'] || '打到底';
 
         document.getElementById('arrivalTime').value = arrivalVal;
         document.getElementById('leaveTime').value = leaveVal;
@@ -414,11 +419,17 @@
       updateBtn.disabled = true;
       cancelBtn.disabled = true;
       updateBtn.innerText = "更新中...";
-      submitBtn.innerText = "資料送出中...";
+      submitBtn.innerText = "送出中...";
       alertBox.className = "status-msg";
       alertBox.style.display = "none";
 
-      // 本地樂觀更新（不用等後端跑完，直接先在本地儲存格生效）
+      // 1. 立即寫入本地個人記憶庫
+      localStorage.setItem(`my_signup_${name}_${session}`, JSON.stringify({
+        '到場時間': arrival,
+        '離場時間': leave
+      }));
+
+      // 2. 本地名單樂觀更新
       const existingIdx = allPlayersData.findIndex(p => 
         (p['場次日期'] || '').trim() === session.trim() && 
         (p['LINE暱稱'] || '').trim().toLowerCase() === name.toLowerCase()
@@ -439,6 +450,20 @@
       }
       localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
 
+      // 畫面瞬間切換，不讓使用者看 Loading
+      alertBox.innerText = `🎉 已成功送出【${session}】的登記！`;
+      alertBox.className = "status-msg success";
+      
+      const sessionIdx = CURRENT_SESSIONS.indexOf(session);
+      filterSession(session, sessionIdx !== -1 ? sessionIdx : 0);
+      switchTab('list');
+      submitBtn.disabled = false;
+      updateBtn.disabled = false;
+      cancelBtn.disabled = false;
+      submitBtn.innerText = "確認送出報名";
+      updateBtn.innerText = "🔄 更新進/離場時間";
+
+      // 3. 後台背景送出同步
       try {
         await fetch(GAS_API_URL, {
           method: 'POST',
@@ -452,30 +477,7 @@
             leaveTime: leave
           })
         });
-
-        alertBox.innerText = `🎉 已成功送出【${session}】的登記！`;
-        alertBox.className = "status-msg success";
-        
-        setTimeout(() => {
-          const sessionIdx = CURRENT_SESSIONS.indexOf(session);
-          filterSession(session, sessionIdx !== -1 ? sessionIdx : 0);
-          switchTab('list');
-          submitBtn.disabled = false;
-          updateBtn.disabled = false;
-          cancelBtn.disabled = false;
-          submitBtn.innerText = "確認送出報名";
-          updateBtn.innerText = "🔄 更新進/離場時間";
-        }, 500);
-
-      } catch (err) {
-        alertBox.innerText = "連線發生錯誤，請稍後再試！";
-        alertBox.className = "status-msg error";
-        submitBtn.disabled = false;
-        updateBtn.disabled = false;
-        cancelBtn.disabled = false;
-        submitBtn.innerText = "重新送出";
-        updateBtn.innerText = "🔄 更新進/離場時間";
-      }
+      } catch (err) {}
     }
 
     async function handleCancelSignup() {
@@ -485,20 +487,35 @@
       const updateBtn = document.getElementById('updateBtn');
       const alertBox = document.getElementById('statusAlert');
 
-      const isConfirmed = confirm(`⚠ 確定要取消【${session}】的報名嗎？\n取消後名額將自動釋出。`);
+      const isConfirmed = confirm(`⚠ 確定要取消【${session}】的報名嗎？\n名額將自動釋出。`);
       if (!isConfirmed) return;
 
       cancelBtn.disabled = true;
       updateBtn.disabled = true;
       cancelBtn.innerText = "取消中...";
 
-      // 本地樂觀刪除
+      // 1. 刪除本地個人記憶
+      localStorage.removeItem(`my_signup_${name}_${session}`);
+
+      // 2. 本地名單樂觀移除
       allPlayersData = allPlayersData.filter(p => 
         !((p['場次日期'] || '').trim() === session.trim() && 
           (p['LINE暱稱'] || '').trim().toLowerCase() === name.toLowerCase())
       );
       localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
 
+      alertBox.innerText = `✅ 已成功取消【${session}】的報名！`;
+      alertBox.className = "status-msg success";
+
+      checkUserSignupStatus();
+      const sessionIdx = CURRENT_SESSIONS.indexOf(session);
+      filterSession(session, sessionIdx !== -1 ? sessionIdx : 0);
+      switchTab('list');
+      cancelBtn.disabled = false;
+      updateBtn.disabled = false;
+      cancelBtn.innerText = "❌ 取消報名";
+
+      // 3. 後台背景送出取消
       try {
         await fetch(GAS_API_URL, {
           method: 'POST',
@@ -510,33 +527,12 @@
             userName: name
           })
         });
-
-        alertBox.innerText = `✅ 已成功取消【${session}】的報名！`;
-        alertBox.className = "status-msg success";
-
-        setTimeout(() => {
-          checkUserSignupStatus();
-          const sessionIdx = CURRENT_SESSIONS.indexOf(session);
-          filterSession(session, sessionIdx !== -1 ? sessionIdx : 0);
-          switchTab('list');
-          cancelBtn.disabled = false;
-          updateBtn.disabled = false;
-          cancelBtn.innerText = "❌ 取消報名";
-        }, 500);
-
-      } catch (err) {
-        alert("取消報名發生錯誤，請稍後再試！");
-        cancelBtn.disabled = false;
-        updateBtn.disabled = false;
-        cancelBtn.innerText = "❌ 取消報名";
-      }
+      } catch (err) {}
     }
 
-    // 背景靜默更新名單
     async function fetchLatestPlayers(isManual = false) {
-      const copyBtn = document.getElementById('copyBtn');
-      if (isManual && copyBtn) {
-        document.getElementById('listContainer').innerHTML = '<div class="empty-state">🔄 正在同步最新試算表資料...</div>';
+      if (isManual) {
+        document.getElementById('listContainer').innerHTML = '<div class="empty-state">🔄 正在同步試算表最新名單...</div>';
       }
 
       try {
@@ -547,11 +543,11 @@
           allPlayersData = result.data || [];
           localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
           renderPlayerList();
-          checkUserSignupStatus(); // 背景更新完畢後再次校驗
+          checkUserSignupStatus();
         }
       } catch (err) {
         if (!localStorage.getItem('werewolf_players_data')) {
-          document.getElementById('listContainer').innerHTML = '<div class="empty-state">無法讀取名單，請稍後點擊刷新。</div>';
+          document.getElementById('listContainer').innerHTML = '<div class="empty-state">無法讀取名單，請點擊上方刷新按鈕。</div>';
         }
       }
     }
@@ -745,7 +741,7 @@
 
     function escapeHtml(text) {
       return text.replace(/[&<>"']/g, function(m) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'背景同步完成後自動校驗。' }[m];
       });
     }
   </script>
