@@ -8,26 +8,18 @@
   <meta http-equiv="Expires" content="0">
   <title>基地狼人殺 報名櫃台</title>
   
-  <!-- 🛡️ 核心黑科技：全自動版本檢查與強制破快取（放在最頂部優先執行） -->
   <script>
-    // 💡 只要你以後改了版，把這個版本號往上加（例如 1.0.1 -> 1.0.2）
-    // 用戶的手機就會自動在 0.1 秒內清空舊快取並重整，完全不需要用戶手動清除！
-    const APP_VERSION = "1.0.1";
+    const APP_VERSION = "1.0.3";
     
     (function autoUpdateCheck() {
       const savedVersion = localStorage.getItem('werewolf_app_version');
       const urlParams = new URLSearchParams(window.location.search);
-      
-      // 如果用戶手機存的版本與當前版本不符
       if (savedVersion !== APP_VERSION) {
-        // 自動清空本地所有過期的舊資料與快取
         localStorage.removeItem('werewolf_players_data');
         localStorage.setItem('werewolf_app_version', APP_VERSION);
-        
-        // 如果網址尚未帶有本次版本的防快取參數，自動無痕重載最新版
         if (urlParams.get('v') !== APP_VERSION) {
           urlParams.set('v', APP_VERSION);
-          urlParams.set('t', Date.now()); // 加入時間戳記徹底擊碎 LINE 內嵌瀏覽器快取
+          urlParams.set('t', Date.now());
           window.location.replace(window.location.pathname + '?' + urlParams.toString());
         }
       }
@@ -120,6 +112,21 @@
     .action-btn:hover { background: #4a5568; }
     .action-btn:active { transform: scale(0.96); }
     .action-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* 🌟 成團診斷狀態列樣式 */
+    .game-status-banner {
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      font-size: 13px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .status-ready { background: rgba(56, 161, 105, 0.2); border: 1px solid rgba(56, 161, 105, 0.5); color: #68d391; }
+    .status-late-ready { background: rgba(236, 201, 75, 0.15); border: 1px solid rgba(236, 201, 75, 0.4); color: #f6e05e; }
+    .status-not-ready { background: rgba(229, 57, 53, 0.18); border: 1px solid rgba(229, 57, 53, 0.4); color: #fc8181; }
 
     .god-banner {
       display: flex;
@@ -269,6 +276,9 @@
           </div>
         </div>
 
+        <!-- 🌟 成局預測狀態條 -->
+        <div id="gameStatusContainer"></div>
+
         <div id="listContainer">
           <div class="empty-state">名單載入中...</div>
         </div>
@@ -277,9 +287,6 @@
   </div>
 
   <script>
-    // ==========================================
-    // ⚙️ 場主每週更新專區
-    // ==========================================
     const CURRENT_SESSIONS = [
       "10/3 (週六場)",
       "10/4 (週日場)"
@@ -610,9 +617,78 @@
       return 9998;
     }
 
+    function parseHour(timeStr) {
+      if (!timeStr) return null;
+      if (timeStr.includes("14:00")) return 14;
+      if (timeStr.includes("00:00") || timeStr.includes("24:00")) return 24;
+      const m = timeStr.match(/(\d{1,2}):00/);
+      return m ? parseInt(m[1], 10) : null;
+    }
+
+    // ⚡ 12 人成團智慧診斷計算引擎
+    function calculateGameReadiness(players) {
+      const TARGET = 12;
+      const onTimePlayers = players.filter(p => (p['到場時間'] || '').includes('14:00'));
+      const onTimeCount = onTimePlayers.length;
+
+      // 檢查各整點（14:00 到 24:00）的在場人數
+      const timelineHours = [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
+      let earliestReadyHour = null;
+      let maxPresentCount = 0;
+
+      timelineHours.forEach(h => {
+        // 在場條件：已到場 且 尚未離開
+        const present = players.filter(p => {
+          const arrH = parseHour(p['到場時間']);
+          if (arrH === null) return false; // 亂入不計入保證時段
+          if (arrH > h) return false;      // 還沒到
+
+          // 判斷離場時間
+          const leaveStr = p['離場時間'] || '打到底';
+          if (leaveStr !== '打到底') {
+            const leaveH = parseHour(leaveStr);
+            if (leaveH !== null && leaveH <= h) return false; // 已經先走了
+          }
+          return true;
+        });
+
+        if (present.length > maxPresentCount) {
+          maxPresentCount = present.length;
+        }
+
+        if (earliestReadyHour === null && present.length >= TARGET) {
+          earliestReadyHour = h;
+        }
+      });
+
+      if (onTimeCount >= TARGET) {
+        return {
+          type: "ready",
+          text: `🎉 14:00 準時成局！(首局已有 ${onTimeCount} 人)`,
+          earliestText: "14:00"
+        };
+      } else if (earliestReadyHour !== null) {
+        const timeLabel = earliestReadyHour === 24 ? "00:00" : `${earliestReadyHour}:00`;
+        const diff = TARGET - onTimeCount;
+        return {
+          type: "late-ready",
+          text: `⏰ 預計最早【${timeLabel}】可成局！(14:00 缺 ${diff} 人)`,
+          earliestText: timeLabel
+        };
+      } else {
+        const needed = TARGET - maxPresentCount;
+        return {
+          type: "not-ready",
+          text: `🚨 尚未成局 (目前最高 ${maxPresentCount} 人，尚缺 ${needed} 人)`,
+          earliestText: null
+        };
+      }
+    }
+
     function renderPlayerList() {
       const containerEl = document.getElementById('listContainer');
       const countEl = document.getElementById('playerCount');
+      const gameStatusEl = document.getElementById('gameStatusContainer');
       
       const sessionRecords = allPlayersData.filter(p => (p['場次日期'] || '') === currentSelectedSession);
       const godUser = sessionRecords.find(p => isGodUser(p['LINE暱稱']));
@@ -621,9 +697,23 @@
       countEl.innerText = actualPlayers.length;
 
       if (actualPlayers.length === 0 && !godUser) {
+        gameStatusEl.innerHTML = '';
         containerEl.innerHTML = `<div class="empty-state">目前【${currentSelectedSession}】尚無人報名，搶先當 1 號位！</div>`;
         return;
       }
+
+      // 渲染成團診斷提示列
+      const readiness = calculateGameReadiness(actualPlayers);
+      let statusClass = "status-not-ready";
+      if (readiness.type === "ready") statusClass = "status-ready";
+      if (readiness.type === "late-ready") statusClass = "status-late-ready";
+
+      gameStatusEl.innerHTML = `
+        <div class="game-status-banner ${statusClass}">
+          <span>${readiness.text}</span>
+          <span style="font-size: 11px; opacity: 0.85;">目標 12 人</span>
+        </div>
+      `;
 
       const sorted = [...actualPlayers].sort((a, b) => getTimeWeight(a['到場時間']) - getTimeWeight(b['到場時間']));
       const onTimePlayers = sorted.filter(p => (p['到場時間'] || '').includes('14:00'));
@@ -719,6 +809,7 @@
       const sorted = [...actualPlayers].sort((a, b) => getTimeWeight(a['到場時間']) - getTimeWeight(b['到場時間']));
       const onTimePlayers = sorted.filter(p => (p['到場時間'] || '').includes('14:00'));
       const latePlayers = sorted.filter(p => !(p['到場時間'] || '').includes('14:00'));
+      const readiness = calculateGameReadiness(actualPlayers);
 
       let text = `🐺 基地狼人殺 ${currentSelectedSession}\n`;
       text += `📍 天津路三段57號｜💰 $200打到破桌\n`;
@@ -747,9 +838,9 @@
       }
 
       text += `────────────────\n`;
-      const needed14 = 10 - onTimePlayers.length;
-      const statusNote = (needed14 > 0) ? `14:00 缺 ${needed14} 人開局` : `14:00 已成局！`;
-      text += `📊 玩家共 ${actualPlayers.length} 人 (${statusNote})\n`;
+      // 自動帶入成團診斷摘要
+      text += `🎯 開局診斷：${readiness.text}\n`;
+      text += `📊 玩家共 ${actualPlayers.length} 人\n`;
       text += `👉 報名：https://lihi.vip/NtvB7`;
 
       if (navigator.clipboard && window.isSecureContext) {
