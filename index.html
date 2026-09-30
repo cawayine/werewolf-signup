@@ -34,6 +34,11 @@
     .btn-submit { width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; }
     .btn-submit:active { background: var(--accent-hover); }
     .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .session-filter { display: flex; gap: 8px; margin-bottom: 16px; }
+    .filter-btn { flex: 1; padding: 8px 0; border: 1px solid var(--border); background: #151922; color: var(--text-sub); border-radius: 6px; font-size: 13px; cursor: pointer; }
+    .filter-btn.active { background: #2d3748; color: #fff; border-color: var(--accent); font-weight: bold; }
+
     .player-list { list-style: none; }
     .player-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 10px; border-bottom: 1px solid var(--border); }
     .player-item:last-child { border-bottom: none; }
@@ -71,6 +76,14 @@
       <div class="card">
         <form id="signupForm" onsubmit="handleFormSubmit(event)">
           <div class="form-group">
+            <label>場次日期</label>
+            <select id="sessionDate">
+              <option value="週六場" selected>週六場 (14:00 開局)</option>
+              <option value="週日場">週日場 (14:00 開局)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
             <label>LINE 暱稱（系統自動偵測）</label>
             <input type="text" id="userName" placeholder="載入中..." required>
           </div>
@@ -104,8 +117,13 @@
 
     <div id="listSection" style="display: none;">
       <div class="card">
+        <div class="session-filter">
+          <button class="filter-btn active" id="btnFilterSat" onclick="filterSession('週六場')">📅 週六場名單</button>
+          <button class="filter-btn" id="btnFilterSun" onclick="filterSession('週日場')">📅 週日場名單</button>
+        </div>
+
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <span style="font-size: 14px; font-weight: bold;">已報名人數：<span id="playerCount" style="color: var(--accent);">0</span> 人</span>
+          <span style="font-size: 14px; font-weight: bold;"><span id="currentSessionLabel">週六場</span> 人數：<span id="playerCount" style="color: var(--accent);">0</span> 人</span>
           <button onclick="fetchLatestPlayers()" style="background: none; border: none; color: var(--text-sub); font-size: 13px; cursor: pointer;">🔄 刷新名單</button>
         </div>
         <ul id="playerList" class="player-list">
@@ -118,6 +136,9 @@
   <script>
     const LIFF_ID = "2011803898-DMDxFdXE";
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbz3Wae--2O_vMolZ7hXHYU-1sNRytT6K8VWQJ0O4Lc4xxuq-R-bH-PcvrNtb6arvHg/exec";
+
+    let allPlayersData = [];
+    let currentSelectedSession = '週六場';
 
     window.onload = async function() {
       try {
@@ -150,10 +171,19 @@
       }
     }
 
+    function filterSession(session) {
+      currentSelectedSession = session;
+      document.getElementById('currentSessionLabel').innerText = session;
+      document.getElementById('btnFilterSat').classList.toggle('active', session === '週六場');
+      document.getElementById('btnFilterSun').classList.toggle('active', session === '週日場');
+      renderPlayerList();
+    }
+
     async function handleFormSubmit(e) {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
       const alertBox = document.getElementById('statusAlert');
+      const session = document.getElementById('sessionDate').value;
       const name = document.getElementById('userName').value.trim();
       const arrival = document.getElementById('arrivalTime').value;
       const leave = document.getElementById('leaveTime').value;
@@ -174,17 +204,20 @@
           mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            sessionDate: session,
             userName: name,
             arrivalTime: arrival,
             leaveTime: leave
           })
         });
 
-        alertBox.innerText = "🎉 報名成功！已登記於名單中。";
+        alertBox.innerText = `🎉 已成功報名【${session}】！`;
         alertBox.className = "status-msg success";
         btn.innerText = "已完成報名";
         
         setTimeout(() => {
+          currentSelectedSession = session;
+          filterSession(session);
           switchTab('list');
           btn.disabled = false;
           btn.innerText = "確認送出報名";
@@ -200,44 +233,57 @@
 
     async function fetchLatestPlayers() {
       const listEl = document.getElementById('playerList');
-      const countEl = document.getElementById('playerCount');
       try {
         const res = await fetch(GAS_API_URL);
         const result = await res.json();
         
-        if (result.status === "success" && result.data.length > 0) {
-          countEl.innerText = result.data.length;
-          let html = '';
-          result.data.forEach((p, idx) => {
-            const checkBadge = (p['簽到狀態'] === '已簽到') 
-              ? `<span class="badge badge-checked">已簽到</span>` 
-              : `<span class="badge badge-unchecked">未簽到</span>`;
-            const payBadge = (p['收款狀態'] === '已付款') 
-              ? `<span class="badge badge-paid">已付款</span>` 
-              : `<span class="badge badge-unpaid">未付款</span>`;
-
-            html += `
-              <li class="player-item">
-                <div class="player-idx">${idx + 1}</div>
-                <div class="player-info">
-                  <div class="player-name">${escapeHtml(p['LINE暱稱'] || '匿名玩家')}</div>
-                  <div class="player-time">🕒 ${escapeHtml(p['到場時間'] || '-')} ｜ 🏃 ${escapeHtml(p['離場時間'] || '-')}</div>
-                </div>
-                <div class="player-badges">
-                  ${checkBadge}
-                  ${payBadge}
-                </div>
-              </li>
-            `;
-          });
-          listEl.innerHTML = html;
+        if (result.status === "success") {
+          allPlayersData = result.data || [];
+          renderPlayerList();
         } else {
-          countEl.innerText = "0";
-          listEl.innerHTML = '<div class="empty-state">目前尚無人報名，搶先當 1 號位！</div>';
+          listEl.innerHTML = '<div class="empty-state">名單載入失敗</div>';
         }
       } catch (err) {
         listEl.innerHTML = '<div class="empty-state">無法讀取名單，請稍後刷新。</div>';
       }
+    }
+
+    function renderPlayerList() {
+      const listEl = document.getElementById('playerList');
+      const countEl = document.getElementById('playerCount');
+      
+      const filtered = allPlayersData.filter(p => (p['場次日期'] || '週六場') === currentSelectedSession);
+      countEl.innerText = filtered.length;
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = `<div class="empty-state">目前【${currentSelectedSession}】尚無人報名，搶先當 1 號位！</div>`;
+        return;
+      }
+
+      let html = '';
+      filtered.forEach((p, idx) => {
+        const checkBadge = (p['簽到狀態'] === '已簽到') 
+          ? `<span class="badge badge-checked">已簽到</span>` 
+          : `<span class="badge badge-unchecked">未簽到</span>`;
+        const payBadge = (p['收款狀態'] === '已付款') 
+          ? `<span class="badge badge-paid">已付款</span>` 
+          : `<span class="badge badge-unpaid">未付款</span>`;
+
+        html += `
+          <li class="player-item">
+            <div class="player-idx">${idx + 1}</div>
+            <div class="player-info">
+              <div class="player-name">${escapeHtml(p['LINE暱稱'] || '匿名玩家')}</div>
+              <div class="player-time">🕒 ${escapeHtml(p['到場時間'] || '-')} ｜ 🏃 ${escapeHtml(p['離場時間'] || '-')}</div>
+            </div>
+            <div class="player-badges">
+              ${checkBadge}
+              ${payBadge}
+            </div>
+          </li>
+        `;
+      });
+      listEl.innerHTML = html;
     }
 
     function escapeHtml(text) {
