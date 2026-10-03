@@ -9,7 +9,6 @@
   <title>基地狼人殺 報名櫃台</title>
   
   <script>
-    // 升級版本號至 1.0.6 自動破除群友快取
     const APP_VERSION = "1.0.8";
     
     (function autoUpdateCheck() {
@@ -162,7 +161,7 @@
     .player-item:last-child { border-bottom: none; }
     .player-idx { font-size: 14px; font-weight: bold; color: var(--accent); width: 24px; text-align: center; }
 
-    /* 🌟 頭像樣式 */
+    /* 頭像樣式 */
     .avatar-wrapper { margin: 0 10px 0 6px; width: 38px; height: 38px; flex-shrink: 0; }
     .player-avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #4a5568; display: block; }
     .player-avatar-placeholder {
@@ -303,15 +302,13 @@
 
     const LIFF_ID = "2011803898-DMDxFdXE";
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbz3Wae--2O_vMolZ7hXHYU-1sNRytT6K8VWQJ0O4Lc4xxuq-R-bH-PcvrNtb6arvHg/exec";
-    
-    // ⚡ 0.3 秒 GVIZ 高速讀取
     const SHEET_ID = "1PABHGXq9LJr7Y-Qg7kRqAYbfrSezW8pR12fQcOyWzNQ";
     const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=本週名單`;
 
     let allPlayersData = [];
     let currentSelectedSession = CURRENT_SESSIONS[0];
     let isFetching = false;
-    let currentUserAvatar = ""; // 本地暫存的頭像 URL
+    let currentUserAvatar = "";
 
     function isGodUser(name) {
       return (name || '').trim().toLowerCase() === 'ean';
@@ -366,24 +363,24 @@
     async function initLiffAsync() {
       try {
         await liff.init({ liffId: LIFF_ID });
-        if (liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          if (profile) {
-            if (profile.displayName) {
-              document.getElementById('userName').value = profile.displayName;
-              localStorage.setItem('werewolf_user_name', profile.displayName);
-            }
-            if (profile.pictureUrl) {
-              currentUserAvatar = profile.pictureUrl;
-              localStorage.setItem('werewolf_user_avatar', profile.pictureUrl);
-            }
-            checkUserSignupStatus();
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+        const profile = await liff.getProfile();
+        if (profile) {
+          if (profile.displayName) {
+            document.getElementById('userName').value = profile.displayName;
+            localStorage.setItem('werewolf_user_name', profile.displayName);
           }
-        } else {
-          document.getElementById('userName').placeholder = "請輸入您的稱呼";
+          if (profile.pictureUrl) {
+            currentUserAvatar = profile.pictureUrl;
+            localStorage.setItem('werewolf_user_avatar', profile.pictureUrl);
+          }
+          checkUserSignupStatus();
         }
       } catch (err) {
-        document.getElementById('userName').placeholder = "請輸入您的稱呼";
+        console.error("LIFF 初始化異常:", err);
       }
     }
 
@@ -456,6 +453,7 @@
       }
     }
 
+    // ⚡ 送出 / 更新表單（雙重保障即時補抓頭像）
     async function handleFormSubmit(e) {
       if (e) e.preventDefault();
       const submitBtn = document.getElementById('submitBtn');
@@ -479,6 +477,17 @@
       submitBtn.innerText = "送出中...";
       alertBox.className = "status-msg";
       alertBox.style.display = "none";
+
+      // 嘗試在送出前最後再要一次頭像（以防剛剛才授權完成）
+      if (!currentUserAvatar && window.liff && liff.isLoggedIn()) {
+        try {
+          const p = await liff.getProfile();
+          if (p && p.pictureUrl) {
+            currentUserAvatar = p.pictureUrl;
+            localStorage.setItem('werewolf_user_avatar', p.pictureUrl);
+          }
+        } catch(err) {}
+      }
 
       localStorage.setItem(`my_signup_${name}_${session}`, JSON.stringify({
         '到場時間': arrival,
@@ -585,7 +594,6 @@
       } catch (err) {}
     }
 
-    // ⚡ 0.3 秒 GVIZ 解析（支援第 7 欄 LINE 頭像）
     async function fetchLatestPlayers(isManual = false) {
       if (isFetching) return;
       isFetching = true;
@@ -618,7 +626,7 @@
               '離場時間': getVal(3),
               '簽到狀態': getVal(4),
               '收款狀態': getVal(5),
-              'LINE頭像': getVal(6) // 第 7 欄頭像
+              'LINE頭像': getVal(6)
             };
           }).filter(p => p['場次日期'] && p['LINE暱稱']);
 
@@ -814,7 +822,6 @@
       containerEl.innerHTML = html;
     }
 
-    // 🌟 頭像渲染邏輯：有頭像顯示圖片，無頭像或圖片載入失敗顯示問號
     function renderPlayerItem(p, displayIdx) {
       const checkBadge = (p['簽到狀態'] === '已簽到') 
         ? `<span class="badge badge-checked">已簽到</span>` 
@@ -935,7 +942,7 @@
     function escapeHtml(text) {
       if (!text) return '';
       return String(text).replace(/[&<>"']/g, function(m) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
       });
     }
   </script>
