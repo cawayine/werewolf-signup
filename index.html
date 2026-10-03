@@ -159,23 +159,12 @@
     .player-list { list-style: none; margin-bottom: 10px; }
     .player-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 10px; border-bottom: 1px solid var(--border); }
     .player-item:last-child { border-bottom: none; }
-    .player-idx { font-size: 14px; font-weight: bold; color: var(--accent); width: 24px; text-align: center; }
-
-    .avatar-wrapper { margin: 0 10px 0 6px; width: 38px; height: 38px; flex-shrink: 0; }
-    .player-avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #4a5568; display: block; }
-    .player-avatar-placeholder {
-      width: 38px; height: 38px; border-radius: 50%;
-      background: #2d3748; color: #a0aec0; border: 1px dashed #4a5568;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 17px; font-weight: bold; user-select: none;
-    }
-
-    .player-info { flex: 1; min-width: 0; }
-    .player-name { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .player-idx { font-size: 14px; font-weight: bold; color: var(--accent); width: 28px; }
+    .player-info { flex: 1; }
+    .player-name { font-size: 15px; font-weight: 500; }
     .player-time { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
-    
-    .player-badges { display: flex; gap: 4px; flex-shrink: 0; margin-left: 8px; }
-    .badge { font-size: 11px; padding: 3px 6px; border-radius: 4px; font-weight: 500; white-space: nowrap; }
+    .player-badges { display: flex; gap: 4px; }
+    .badge { font-size: 11px; padding: 3px 6px; border-radius: 4px; font-weight: 500; }
     .badge-paid { background: rgba(56, 161, 105, 0.2); color: #48bb78; border: 1px solid rgba(56, 161, 105, 0.4); }
     .badge-unpaid { background: rgba(221, 107, 32, 0.2); color: #ed8936; border: 1px solid rgba(221, 107, 32, 0.4); }
     .badge-free { background: rgba(236, 201, 75, 0.2); color: #ecc94b; border: 1px solid rgba(236, 201, 75, 0.4); }
@@ -307,7 +296,6 @@
     let allPlayersData = [];
     let currentSelectedSession = CURRENT_SESSIONS[0];
     let isFetching = false;
-    let currentUserAvatar = "";
 
     function isGodUser(name) {
       return (name || '').trim().toLowerCase() === 'ean';
@@ -348,8 +336,6 @@
       }
 
       const cachedName = localStorage.getItem('werewolf_user_name');
-      currentUserAvatar = localStorage.getItem('werewolf_user_avatar') || "";
-
       if (cachedName) {
         document.getElementById('userName').value = cachedName;
         checkUserSignupStatus();
@@ -364,19 +350,17 @@
         await liff.init({ liffId: LIFF_ID });
         if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
-          if (profile) {
-            if (profile.displayName) {
-              document.getElementById('userName').value = profile.displayName;
-              localStorage.setItem('werewolf_user_name', profile.displayName);
-            }
-            if (profile.pictureUrl) {
-              currentUserAvatar = profile.pictureUrl;
-              localStorage.setItem('werewolf_user_avatar', profile.pictureUrl);
-            }
+          if (profile && profile.displayName) {
+            document.getElementById('userName').value = profile.displayName;
+            localStorage.setItem('werewolf_user_name', profile.displayName);
             checkUserSignupStatus();
           }
+        } else {
+          document.getElementById('userName').placeholder = "請輸入您的稱呼";
         }
-      } catch (err) {}
+      } catch (err) {
+        document.getElementById('userName').placeholder = "請輸入您的稱呼";
+      }
     }
 
     function switchTab(tab) {
@@ -448,7 +432,6 @@
       }
     }
 
-    // ⚡ 核心修復：使用 FormData 傳送，100% 規避 no-cors 解析問題，並自動補抓頭像
     async function handleFormSubmit(e) {
       if (e) e.preventDefault();
       const submitBtn = document.getElementById('submitBtn');
@@ -463,17 +446,6 @@
       if (!name) {
         alert("請輸入暱稱！");
         return;
-      }
-
-      // 如果尚未抓到頭像，嘗試即時抓取一次
-      if (!currentUserAvatar && window.liff && liff.isLoggedIn()) {
-        try {
-          const p = await liff.getProfile();
-          if (p && p.pictureUrl) {
-            currentUserAvatar = p.pictureUrl;
-            localStorage.setItem('werewolf_user_avatar', p.pictureUrl);
-          }
-        } catch(err) {}
       }
 
       submitBtn.disabled = true;
@@ -495,7 +467,6 @@
       if (existingIdx >= 0) {
         allPlayersData[existingIdx]['到場時間'] = arrival;
         allPlayersData[existingIdx]['離場時間'] = leave;
-        if (currentUserAvatar) allPlayersData[existingIdx]['LINE頭像'] = currentUserAvatar;
       } else {
         allPlayersData.push({
           '場次日期': session,
@@ -503,15 +474,12 @@
           '到場時間': arrival,
           '離場時間': leave,
           '簽到狀態': '未簽到',
-          '收款狀態': isGodUser(name) ? '免收費' : '未付款',
-          'LINE頭像': currentUserAvatar
+          '收款狀態': isGodUser(name) ? '免收費' : '未付款'
         });
       }
       localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
 
-      // 提示狀態（包含頭像偵測狀況）
-      const avatarStatusText = currentUserAvatar ? "（頭像已同步）" : "（無頭像資料）";
-      alertBox.innerText = `🎉 已成功送出【${session}】的登記！${avatarStatusText}`;
+      alertBox.innerText = `🎉 已成功送出【${session}】的登記！`;
       alertBox.className = "status-msg success";
       
       const sessionIdx = CURRENT_SESSIONS.indexOf(session);
@@ -523,14 +491,12 @@
       submitBtn.innerText = "確認送出報名";
       updateBtn.innerText = "🔄 更新進/離場時間";
 
-      // ⚡ 改用 URLSearchParams 傳送（瀏覽器底層相容性最高，絕不報錯）
       const payload = new URLSearchParams();
       payload.append("action", "submit");
       payload.append("sessionDate", session);
       payload.append("userName", name);
       payload.append("arrivalTime", arrival);
       payload.append("leaveTime", leave);
-      payload.append("userAvatar", currentUserAvatar || "");
 
       try {
         await fetch(GAS_API_URL, {
@@ -539,9 +505,7 @@
           body: payload
         });
         setTimeout(() => fetchLatestPlayers(false), 1500);
-      } catch (err) {
-        console.error("提交失敗:", err);
-      }
+      } catch (err) {}
     }
 
     async function handleCancelSignup() {
@@ -623,8 +587,7 @@
               '到場時間': getVal(2),
               '離場時間': getVal(3),
               '簽到狀態': getVal(4),
-              '收款狀態': getVal(5),
-              'LINE頭像': getVal(6)
+              '收款狀態': getVal(5)
             };
           }).filter(p => p['場次日期'] && p['LINE暱稱']);
 
@@ -773,10 +736,7 @@
           : `<span class="badge badge-unchecked">未到場</span>`;
         html += `
           <div class="god-banner">
-            <div style="display: flex; align-items: center;">
-              <span style="font-size: 15px; margin-right: 6px;">👑</span>
-              <strong>場主 / 法官：</strong>${escapeHtml(godUser['LINE暱稱'])} <span style="font-size:11px; opacity:0.8; margin-left: 4px;">(🕒 ${godUser['到場時間'] || '14:00'})</span>
-            </div>
+            <div><strong>👑 場主 / 法官：</strong>${escapeHtml(godUser['LINE暱稱'])} <span style="font-size:11px; opacity:0.8;">(🕒 ${godUser['到場時間'] || '14:00'})</span></div>
             <div class="player-badges">
               ${checkBadge}
               <span class="badge badge-free">免收費</span>
@@ -829,20 +789,10 @@
         : `<span class="badge badge-unpaid">未付款</span>`;
 
       const displayArrivalTime = (p['到場時間'] || '-').replace('準時 ', '');
-      const avatarUrl = (p['LINE頭像'] || '').trim();
-
-      const avatarHtml = avatarUrl ? `
-        <img class="player-avatar" src="${escapeHtml(avatarUrl)}" alt="avatar" loading="lazy" onerror="this.outerHTML='<div class=\\'player-avatar-placeholder\\'>?</div>'">
-      ` : `
-        <div class="player-avatar-placeholder">?</div>
-      `;
 
       return `
         <li class="player-item">
           <div class="player-idx">${displayIdx}</div>
-          <div class="avatar-wrapper">
-            ${avatarHtml}
-          </div>
           <div class="player-info">
             <div class="player-name">${escapeHtml(p['LINE暱稱'] || '匿名玩家')}</div>
             <div class="player-time">🕒 ${escapeHtml(displayArrivalTime)} ｜ 🏃 ${escapeHtml(p['離場時間'] || '-')}</div>
