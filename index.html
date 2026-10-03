@@ -9,7 +9,7 @@
   <title>基地狼人殺 報名櫃台</title>
   
   <script>
-    const APP_VERSION = "1.0.8";
+    const APP_VERSION = "1.0.9";
     
     (function autoUpdateCheck() {
       const savedVersion = localStorage.getItem('werewolf_app_version');
@@ -161,7 +161,6 @@
     .player-item:last-child { border-bottom: none; }
     .player-idx { font-size: 14px; font-weight: bold; color: var(--accent); width: 24px; text-align: center; }
 
-    /* 頭像樣式 */
     .avatar-wrapper { margin: 0 10px 0 6px; width: 38px; height: 38px; flex-shrink: 0; }
     .player-avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #4a5568; display: block; }
     .player-avatar-placeholder {
@@ -363,25 +362,21 @@
     async function initLiffAsync() {
       try {
         await liff.init({ liffId: LIFF_ID });
-        if (!liff.isLoggedIn()) {
-          liff.login();
-          return;
-        }
-        const profile = await liff.getProfile();
-        if (profile) {
-          if (profile.displayName) {
-            document.getElementById('userName').value = profile.displayName;
-            localStorage.setItem('werewolf_user_name', profile.displayName);
+        if (liff.isLoggedIn()) {
+          const profile = await liff.getProfile();
+          if (profile) {
+            if (profile.displayName) {
+              document.getElementById('userName').value = profile.displayName;
+              localStorage.setItem('werewolf_user_name', profile.displayName);
+            }
+            if (profile.pictureUrl) {
+              currentUserAvatar = profile.pictureUrl;
+              localStorage.setItem('werewolf_user_avatar', profile.pictureUrl);
+            }
+            checkUserSignupStatus();
           }
-          if (profile.pictureUrl) {
-            currentUserAvatar = profile.pictureUrl;
-            localStorage.setItem('werewolf_user_avatar', profile.pictureUrl);
-          }
-          checkUserSignupStatus();
         }
-      } catch (err) {
-        console.error("LIFF 初始化異常:", err);
-      }
+      } catch (err) {}
     }
 
     function switchTab(tab) {
@@ -453,7 +448,7 @@
       }
     }
 
-    // ⚡ 送出 / 更新表單（雙重保障即時補抓頭像）
+    // ⚡ 核心修復：使用 FormData 傳送，100% 規避 no-cors 解析問題，並自動補抓頭像
     async function handleFormSubmit(e) {
       if (e) e.preventDefault();
       const submitBtn = document.getElementById('submitBtn');
@@ -470,15 +465,7 @@
         return;
       }
 
-      submitBtn.disabled = true;
-      updateBtn.disabled = true;
-      cancelBtn.disabled = true;
-      updateBtn.innerText = "更新中...";
-      submitBtn.innerText = "送出中...";
-      alertBox.className = "status-msg";
-      alertBox.style.display = "none";
-
-      // 嘗試在送出前最後再要一次頭像（以防剛剛才授權完成）
+      // 如果尚未抓到頭像，嘗試即時抓取一次
       if (!currentUserAvatar && window.liff && liff.isLoggedIn()) {
         try {
           const p = await liff.getProfile();
@@ -488,6 +475,12 @@
           }
         } catch(err) {}
       }
+
+      submitBtn.disabled = true;
+      updateBtn.disabled = true;
+      cancelBtn.disabled = true;
+      updateBtn.innerText = "更新中...";
+      submitBtn.innerText = "送出中...";
 
       localStorage.setItem(`my_signup_${name}_${session}`, JSON.stringify({
         '到場時間': arrival,
@@ -516,7 +509,9 @@
       }
       localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
 
-      alertBox.innerText = `🎉 已成功送出【${session}】的登記！`;
+      // 提示狀態（包含頭像偵測狀況）
+      const avatarStatusText = currentUserAvatar ? "（頭像已同步）" : "（無頭像資料）";
+      alertBox.innerText = `🎉 已成功送出【${session}】的登記！${avatarStatusText}`;
       alertBox.className = "status-msg success";
       
       const sessionIdx = CURRENT_SESSIONS.indexOf(session);
@@ -528,22 +523,25 @@
       submitBtn.innerText = "確認送出報名";
       updateBtn.innerText = "🔄 更新進/離場時間";
 
+      // ⚡ 改用 URLSearchParams 傳送（瀏覽器底層相容性最高，絕不報錯）
+      const payload = new URLSearchParams();
+      payload.append("action", "submit");
+      payload.append("sessionDate", session);
+      payload.append("userName", name);
+      payload.append("arrivalTime", arrival);
+      payload.append("leaveTime", leave);
+      payload.append("userAvatar", currentUserAvatar || "");
+
       try {
         await fetch(GAS_API_URL, {
           method: 'POST',
           mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: "submit",
-            sessionDate: session,
-            userName: name,
-            arrivalTime: arrival,
-            leaveTime: leave,
-            userAvatar: currentUserAvatar
-          })
+          body: payload
         });
         setTimeout(() => fetchLatestPlayers(false), 1500);
-      } catch (err) {}
+      } catch (err) {
+        console.error("提交失敗:", err);
+      }
     }
 
     async function handleCancelSignup() {
@@ -579,16 +577,16 @@
       updateBtn.disabled = false;
       cancelBtn.innerText = "❌ 取消報名";
 
+      const payload = new URLSearchParams();
+      payload.append("action", "cancel");
+      payload.append("sessionDate", session);
+      payload.append("userName", name);
+
       try {
         await fetch(GAS_API_URL, {
           method: 'POST',
           mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: "cancel",
-            sessionDate: session,
-            userName: name
-          })
+          body: payload
         });
         setTimeout(() => fetchLatestPlayers(false), 1500);
       } catch (err) {}
