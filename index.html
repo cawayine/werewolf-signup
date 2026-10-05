@@ -9,7 +9,7 @@
   <title>基地狼人殺 報名櫃台</title>
   
   <script>
-    const APP_VERSION = "1.1.0";
+    const APP_VERSION = "1.1.1";
     
     (function autoUpdateCheck() {
       const savedVersion = localStorage.getItem('werewolf_app_version');
@@ -82,7 +82,6 @@
     input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: #151922; color: #fff; font-size: 15px; outline: none; }
     input:focus, select:focus { border-color: var(--accent); }
 
-    /* 🔒 LINE 暱稱鎖定專用樣式 */
     input.readonly-lock {
       background: #0d1017;
       color: #68d391;
@@ -102,6 +101,24 @@
     .btn-submit { width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 6px; }
     .btn-submit:active { background: var(--accent-hover); }
     .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-open-line {
+      width: 100%;
+      padding: 14px;
+      background: #06c755;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-open-line:active { background: #05b04c; }
 
     .edit-actions { display: none; gap: 10px; margin-top: 10px; }
     .btn-update { flex: 2; padding: 14px; background: #3182ce; border: none; border-radius: 8px; color: #fff; font-size: 15px; font-weight: bold; cursor: pointer; }
@@ -232,9 +249,8 @@
 
           <div class="form-group">
             <label>LINE 暱稱（系統自動綁定）</label>
-            <!-- 🔒 強制鎖定輸入框，禁止自行修改 -->
-            <input type="text" id="userName" class="readonly-lock" placeholder="⏳ LINE 身分驗證中..." readonly required tabindex="-1">
-            <div class="lock-hint">🔒 為確保身分真實，一律自動帶入 LINE 帳號暱稱，禁止編輯。</div>
+            <input type="text" id="userName" class="readonly-lock" placeholder="⏳ 正在偵測 LINE 身分..." readonly required tabindex="-1">
+            <div class="lock-hint" id="lockHintText">🔒 為確保身分真實，一律自動帶入 LINE 暱稱。</div>
           </div>
 
           <div class="form-group">
@@ -271,7 +287,13 @@
             </select>
           </div>
 
-          <button type="submit" id="submitBtn" class="btn-submit" disabled>驗證身分中...</button>
+          <!-- 正常送出按鈕 -->
+          <button type="submit" id="submitBtn" class="btn-submit" style="display: none;">確認送出報名</button>
+
+          <!-- ⚡ 外部瀏覽器專用：直接喚醒 LINE APP 按鈕 -->
+          <button type="button" id="openLineBtn" class="btn-open-line" style="display: none;" onclick="triggerOpenLineApp()">
+            💬 開啟 LINE App 報名
+          </button>
 
           <div id="editActionGroup" class="edit-actions">
             <button type="button" id="updateBtn" class="btn-update" onclick="handleFormSubmit(event)">🔄 更新進/離場時間</button>
@@ -316,10 +338,31 @@
     let allPlayersData = [];
     let currentSelectedSession = CURRENT_SESSIONS[0];
     let isFetching = false;
-    let verifiedLineName = ""; // 保存經 LINE LIFF 認證的真實暱稱
+    let verifiedLineName = "";
 
     function isGodUser(name) {
       return (name || '').trim().toLowerCase() === 'ean';
+    }
+
+    // 判斷是否為行動裝置（手機/平板）
+    function isMobileDevice() {
+      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    }
+
+    // ⚡ 核心喚醒：直接使用 line://app/ 協定喚醒手機的 LINE App，絕不進入輸入帳號密碼頁面
+    function triggerOpenLineApp() {
+      if (isMobileDevice()) {
+        // 第一優先：直接喚醒本機 LINE App 協定
+        window.location.href = `line://app/${LIFF_ID}`;
+        
+        // 備用機制：若系統未自動彈出，1.5 秒後嘗試通用 LIFF 轉址
+        setTimeout(() => {
+          window.location.href = `https://liff.line.me/${LIFF_ID}`;
+        }, 1500);
+      } else {
+        // 電腦版無 App 可喚醒，才呼叫網頁授權登入
+        liff.login();
+      }
     }
 
     function initSessions() {
@@ -356,43 +399,50 @@
         } catch (e) {}
       }
 
-      // 優先啟動 LINE LIFF 身分驗證
       initLiffAsync();
       fetchLatestPlayers(false);
     };
 
-    // 🔒 強制 LINE 渠道登入驗證
+    // 🔒 智慧判斷環境與身分
     async function initLiffAsync() {
       const nameInput = document.getElementById('userName');
       const submitBtn = document.getElementById('submitBtn');
+      const openLineBtn = document.getElementById('openLineBtn');
+      const lockHint = document.getElementById('lockHintText');
 
       try {
         await liff.init({ liffId: LIFF_ID });
 
-        // 未登入 LINE，強制引導登入
+        // 🌟 關鍵改進：如果是在外部瀏覽器（未登入 LINE）打開
         if (!liff.isLoggedIn()) {
-          nameInput.placeholder = "請登入 LINE 進行報名...";
-          submitBtn.innerText = "👉 點此登入 LINE 報名";
-          submitBtn.disabled = false;
-          submitBtn.onclick = () => liff.login();
+          // 如果是手機，立刻嘗試自動喚起 LINE App
+          if (isMobileDevice() && !liff.isInClient()) {
+            // 自動嘗試喚醒一次
+            window.location.href = `line://app/${LIFF_ID}`;
+          }
+
+          nameInput.placeholder = "請開啟 LINE App 進行報名";
+          lockHint.innerHTML = "💡 外部瀏覽器無法自動辨識身分，請點下方按鈕切換至 LINE。";
+          submitBtn.style.display = "none";
+          openLineBtn.style.display = "flex";
           return;
         }
 
-        // 已登入，抓取不可竄改的真實暱稱
+        // ✅ 已在 LINE 內登入，正常抓取不可竄改的真實暱稱
         const profile = await liff.getProfile();
         if (profile && profile.displayName) {
           verifiedLineName = profile.displayName.trim();
           nameInput.value = verifiedLineName;
+          openLineBtn.style.display = "none";
+          submitBtn.style.display = "block";
           submitBtn.innerText = "確認送出報名";
           submitBtn.disabled = false;
           checkUserSignupStatus();
-        } else {
-          throw new Error("無法獲取個人檔案");
         }
       } catch (err) {
-        nameInput.placeholder = "⚠ 請使用 LINE 打開此頁面";
-        submitBtn.innerText = "無法驗證 LINE 身分";
-        submitBtn.disabled = true;
+        // 例外時提供綠色開啟按鈕
+        submitBtn.style.display = "none";
+        openLineBtn.style.display = "flex";
       }
     }
 
@@ -465,12 +515,12 @@
       }
     }
 
-    // 🔒 報名送出：雙重驗證真實 LINE 暱稱
     async function handleFormSubmit(e) {
       if (e) e.preventDefault();
 
       if (!verifiedLineName) {
-        alert("尚未通過 LINE 驗證，請在 LINE 內開啟本頁面！");
+        alert("尚未通過 LINE 驗證，請開啟 LINE App 報名！");
+        triggerOpenLineApp();
         return;
       }
 
@@ -479,7 +529,7 @@
       const cancelBtn = document.getElementById('cancelSignupBtn');
       const alertBox = document.getElementById('statusAlert');
       const session = document.getElementById('sessionDate').value;
-      const name = verifiedLineName; // 強制使用驗證過的名字，禁止使用 DOM 自定義值
+      const name = verifiedLineName;
       const arrival = document.getElementById('arrivalTime').value;
       const leave = document.getElementById('leaveTime').value;
 
