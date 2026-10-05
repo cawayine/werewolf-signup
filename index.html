@@ -9,7 +9,7 @@
   <title>基地狼人殺 報名櫃台</title>
   
   <script>
-    const APP_VERSION = "1.0.9";
+    const APP_VERSION = "1.1.0";
     
     (function autoUpdateCheck() {
       const savedVersion = localStorage.getItem('werewolf_app_version');
@@ -81,6 +81,23 @@
     label { display: block; font-size: 13px; color: var(--text-sub); margin-bottom: 6px; }
     input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: #151922; color: #fff; font-size: 15px; outline: none; }
     input:focus, select:focus { border-color: var(--accent); }
+
+    /* 🔒 LINE 暱稱鎖定專用樣式 */
+    input.readonly-lock {
+      background: #0d1017;
+      color: #68d391;
+      border: 1px solid #234e52;
+      cursor: not-allowed;
+      font-weight: bold;
+    }
+    .lock-hint {
+      font-size: 11px;
+      color: #718096;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
     
     .btn-submit { width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 6px; }
     .btn-submit:active { background: var(--accent-hover); }
@@ -214,8 +231,10 @@
           </div>
 
           <div class="form-group">
-            <label>LINE 暱稱（系統自動偵測）</label>
-            <input type="text" id="userName" placeholder="LINE 登入載入中..." required oninput="checkUserSignupStatus()">
+            <label>LINE 暱稱（系統自動綁定）</label>
+            <!-- 🔒 強制鎖定輸入框，禁止自行修改 -->
+            <input type="text" id="userName" class="readonly-lock" placeholder="⏳ LINE 身分驗證中..." readonly required tabindex="-1">
+            <div class="lock-hint">🔒 為確保身分真實，一律自動帶入 LINE 帳號暱稱，禁止編輯。</div>
           </div>
 
           <div class="form-group">
@@ -252,7 +271,7 @@
             </select>
           </div>
 
-          <button type="submit" id="submitBtn" class="btn-submit">確認送出報名</button>
+          <button type="submit" id="submitBtn" class="btn-submit" disabled>驗證身分中...</button>
 
           <div id="editActionGroup" class="edit-actions">
             <button type="button" id="updateBtn" class="btn-update" onclick="handleFormSubmit(event)">🔄 更新進/離場時間</button>
@@ -285,7 +304,8 @@
 
   <script>
     const CURRENT_SESSIONS = [
-      "10/4 (週日場)"
+      "10/10 (週六場)",
+      "10/11 (週日場)"
     ];
 
     const LIFF_ID = "2011803898-DMDxFdXE";
@@ -296,6 +316,7 @@
     let allPlayersData = [];
     let currentSelectedSession = CURRENT_SESSIONS[0];
     let isFetching = false;
+    let verifiedLineName = ""; // 保存經 LINE LIFF 認證的真實暱稱
 
     function isGodUser(name) {
       return (name || '').trim().toLowerCase() === 'ean';
@@ -335,31 +356,43 @@
         } catch (e) {}
       }
 
-      const cachedName = localStorage.getItem('werewolf_user_name');
-      if (cachedName) {
-        document.getElementById('userName').value = cachedName;
-        checkUserSignupStatus();
-      }
-
+      // 優先啟動 LINE LIFF 身分驗證
       initLiffAsync();
       fetchLatestPlayers(false);
     };
 
+    // 🔒 強制 LINE 渠道登入驗證
     async function initLiffAsync() {
+      const nameInput = document.getElementById('userName');
+      const submitBtn = document.getElementById('submitBtn');
+
       try {
         await liff.init({ liffId: LIFF_ID });
-        if (liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          if (profile && profile.displayName) {
-            document.getElementById('userName').value = profile.displayName;
-            localStorage.setItem('werewolf_user_name', profile.displayName);
-            checkUserSignupStatus();
-          }
+
+        // 未登入 LINE，強制引導登入
+        if (!liff.isLoggedIn()) {
+          nameInput.placeholder = "請登入 LINE 進行報名...";
+          submitBtn.innerText = "👉 點此登入 LINE 報名";
+          submitBtn.disabled = false;
+          submitBtn.onclick = () => liff.login();
+          return;
+        }
+
+        // 已登入，抓取不可竄改的真實暱稱
+        const profile = await liff.getProfile();
+        if (profile && profile.displayName) {
+          verifiedLineName = profile.displayName.trim();
+          nameInput.value = verifiedLineName;
+          submitBtn.innerText = "確認送出報名";
+          submitBtn.disabled = false;
+          checkUserSignupStatus();
         } else {
-          document.getElementById('userName').placeholder = "請輸入您的稱呼";
+          throw new Error("無法獲取個人檔案");
         }
       } catch (err) {
-        document.getElementById('userName').placeholder = "請輸入您的稱呼";
+        nameInput.placeholder = "⚠ 請使用 LINE 打開此頁面";
+        submitBtn.innerText = "無法驗證 LINE 身分";
+        submitBtn.disabled = true;
       }
     }
 
@@ -392,7 +425,7 @@
     }
 
     function checkUserSignupStatus() {
-      const name = document.getElementById('userName').value.trim();
+      const name = verifiedLineName || document.getElementById('userName').value.trim();
       const session = document.getElementById('sessionDate').value;
       const submitBtn = document.getElementById('submitBtn');
       const editGroup = document.getElementById('editActionGroup');
@@ -432,21 +465,23 @@
       }
     }
 
+    // 🔒 報名送出：雙重驗證真實 LINE 暱稱
     async function handleFormSubmit(e) {
       if (e) e.preventDefault();
+
+      if (!verifiedLineName) {
+        alert("尚未通過 LINE 驗證，請在 LINE 內開啟本頁面！");
+        return;
+      }
+
       const submitBtn = document.getElementById('submitBtn');
       const updateBtn = document.getElementById('updateBtn');
       const cancelBtn = document.getElementById('cancelSignupBtn');
       const alertBox = document.getElementById('statusAlert');
       const session = document.getElementById('sessionDate').value;
-      const name = document.getElementById('userName').value.trim();
+      const name = verifiedLineName; // 強制使用驗證過的名字，禁止使用 DOM 自定義值
       const arrival = document.getElementById('arrivalTime').value;
       const leave = document.getElementById('leaveTime').value;
-
-      if (!name) {
-        alert("請輸入暱稱！");
-        return;
-      }
 
       submitBtn.disabled = true;
       updateBtn.disabled = true;
@@ -510,7 +545,7 @@
 
     async function handleCancelSignup() {
       const session = document.getElementById('sessionDate').value;
-      const name = document.getElementById('userName').value.trim();
+      const name = verifiedLineName || document.getElementById('userName').value.trim();
       const cancelBtn = document.getElementById('cancelSignupBtn');
       const updateBtn = document.getElementById('updateBtn');
       const alertBox = document.getElementById('statusAlert');
