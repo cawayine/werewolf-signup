@@ -9,7 +9,7 @@
   <title>基地狼人殺 報名櫃台</title>
   
   <script>
-    const APP_VERSION = "1.1.4";
+    const APP_VERSION = "1.1.5";
     
     (function autoUpdateCheck() {
       const savedVersion = localStorage.getItem('werewolf_app_version');
@@ -252,13 +252,15 @@
           <div class="form-group">
             <label>LINE 暱稱（系統自動偵測）</label>
             <input type="text" id="userName" class="readonly-lock" placeholder="⏳ 正在偵測 LINE 身分..." readonly required tabindex="-1">
-            <div class="lock-hint">🔒 為確保身分真實，一律自動帶入 LINE 暱稱。</div>
+            <!-- ✨ 修改：為方便主揪核對 -->
+            <div class="lock-hint">🔒 為方便主揪核對，一律自動帶入 LINE 暱稱。</div>
           </div>
 
           <!-- ✏️ 自訂暱稱：選填，可空白 -->
           <div class="form-group">
             <label>自訂暱稱（選填）</label>
-            <input type="text" id="customNickname" placeholder="若有重名或想讓主揪好辨識可填，無則留空">
+            <!-- ✨ 修改：若有重名則此欄必填 -->
+            <input type="text" id="customNickname" placeholder="若有重名則此欄必填">
             <div class="lock-hint">💡 若填寫，名單上將優先顯示此暱稱；留空則顯示 LINE 暱稱。</div>
           </div>
 
@@ -646,7 +648,6 @@
       } catch (err) {}
     }
 
-    // ⚡ 7 欄 GVIZ 讀取：解析自訂暱稱與真實 LINE 暱稱
     async function fetchLatestPlayers(isManual = false) {
       if (isFetching) return;
       isFetching = true;
@@ -673,13 +674,13 @@
               return r.c[idx].f || (r.c[idx].v !== null ? String(r.c[idx].v) : '');
             };
             return {
-              '場次日期': getVal(0), // A欄
-              'LINE暱稱': getVal(1), // B欄
-              '自訂暱稱': getVal(2), // C欄
-              '到場時間': getVal(3), // D欄
-              '離場時間': getVal(4), // E欄
-              '簽到狀態': getVal(5), // F欄
-              '收款狀態': getVal(6)  // G欄
+              '場次日期': getVal(0),
+              'LINE暱稱': getVal(1),
+              '自訂暱稱': getVal(2),
+              '到場時間': getVal(3),
+              '離場時間': getVal(4),
+              '簽到狀態': getVal(5),
+              '收款狀態': getVal(6)
             };
           }).filter(p => p['場次日期'] && p['LINE暱稱']);
 
@@ -789,7 +790,6 @@
       }
     }
 
-    // 🌟 取得優先顯示名稱（有自訂暱稱優先，無則顯示 LINE 暱稱）
     function getPlayerDisplayName(p) {
       return (p['自訂暱稱'] && p['自訂暱稱'].trim()) ? p['自訂暱稱'].trim() : (p['LINE暱稱'] || '匿名玩家').trim();
     }
