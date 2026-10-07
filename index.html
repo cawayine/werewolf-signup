@@ -484,7 +484,7 @@
 
       if (!lineName) return;
 
-      const myRecordKey = `my_signup_${lineName}_${session}`;
+      const myRecordKey = `my_signup_${verifiedUserId}_${session}`;
       const localMyRecord = localStorage.getItem(myRecordKey);
 
       let record = null;
@@ -545,7 +545,7 @@
       updateBtn.innerText = "更新中...";
       submitBtn.innerText = "送出中...";
 
-      localStorage.setItem(`my_signup_${lineName}_${session}`, JSON.stringify({
+      localStorage.setItem(`my_signup_${verifiedUserId}_${session}`, JSON.stringify({...}));
         '到場時間': arrival,
         '離場時間': leave,
         'LINE暱稱': lineName,
@@ -625,7 +625,7 @@
       updateBtn.disabled = true;
       cancelBtn.innerText = "取消中...";
 
-      localStorage.removeItem(`my_signup_${lineName}_${session}`);
+      localStorage.removeItem(`my_signup_${verifiedUserId}_${session}`);
 
       allPlayersData = allPlayersData.filter(p => {
         const matchSession = (p['場次日期'] || '').trim() === session.trim();
