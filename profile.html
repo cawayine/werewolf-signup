@@ -177,89 +177,68 @@
     // 頭像
     const avatarBox = document.getElementById('avatarBox');
     if (avatarUrl) {
-      avatarBox.innerHTML = `<img class="avatar" src="${avatarUrl}" onerror="this.parentElement.innerHTML='🐺'">`;
+      avatarBox.innerHTML = `<img class="avatar" src="${avatarUrl}" onerror="this.parentNode.innerHTML='🐺'">`;
     }
 
+    // 名稱
     document.getElementById('displayName').textContent = lineName || data.lineName || '—';
+
+    // 天梯
     document.getElementById('ladderScore').textContent = data.ladderScore ?? '—';
+
+    // 場次
     document.getElementById('totalGames').textContent = data.totalGames ?? '—';
     document.getElementById('monthlyGames').textContent = data.monthlyGames ?? '—';
     document.getElementById('winRate').textContent = toPercent(data.winRate);
     document.getElementById('totalWin').textContent = data.totalWin ?? '—';
     document.getElementById('totalLose').textContent = data.totalLose ?? '—';
-    document.getElementById('skillRateNum').textContent = toPercent(data.skillRate);
 
+    // 技能
+    const skillVal = toPercent(data.skillRate);
+    document.getElementById('skillRateNum').textContent = skillVal;
+    document.getElementById('skillRateDisplay').textContent = skillVal;
+    const skillNum = parseFloat(data.skillRate);
+    const skillPct = isNaN(skillNum) ? 0 : (skillNum <= 1 ? skillNum * 100 : skillNum);
+    document.getElementById('skillBarFill').style.width = Math.min(skillPct, 100) + '%';
+
+    // 陣營
     document.getElementById('villagerWin').textContent = data.villagerWin ?? '—';
     document.getElementById('villagerRate').textContent = toPercent(data.villagerRate);
     document.getElementById('werewolfWin').textContent = data.werewolfWin ?? '—';
     document.getElementById('werewolfRate').textContent = toPercent(data.werewolfRate);
     document.getElementById('thirdWin').textContent = data.thirdWin ?? '—';
     document.getElementById('thirdRate').textContent = toPercent(data.thirdRate);
-
-    const skillRate = parseFloat(data.skillRate);
-    const skillPct = isNaN(skillRate) ? 0 : (skillRate <= 1 ? Math.round(skillRate * 100) : Math.round(skillRate));
-    document.getElementById('skillRateDisplay').textContent = skillPct ? skillPct + '%' : '—';
-    document.getElementById('skillBarFill').style.width = skillPct + '%';
   }
 
-  async function init() {
-    // 從 localStorage 先拿快取的 UID，可以立刻打 GAS 不用等 LIFF
-    const cachedUid = localStorage.getItem('werewolf_uid');
-    const cachedName = localStorage.getItem('werewolf_line_name');
-
-    // 兩件事並行：LIFF init + GAS 請求
-    const liffPromise = liff.init({ liffId: LIFF_ID }).then(async () => {
+  // 主流程：直接從 LIFF 拿 UID，不依賴 localStorage
+  liff.init({ liffId: LIFF_ID })
+    .then(() => {
       if (!liff.isLoggedIn()) {
         liff.login();
-        return null;
+        return;
       }
-      return await liff.getProfile();
-    }).catch(() => null);
+      return liff.getProfile();
+    })
+    .then(profile => {
+      if (!profile) return;
+      const uid = profile.userId;
+      const lineName = profile.displayName;
+      const avatarUrl = profile.pictureUrl;
 
-    const gasPromise = cachedUid
-      ? fetch(`${GAS_URL}?action=getProfile&uid=${encodeURIComponent(cachedUid)}`)
-          .then(r => r.json())
-          .catch(() => null)
-      : Promise.resolve(null);
-
-    // 等兩個都回來
-    const [liffProfile, gasData] = await Promise.all([liffPromise, gasPromise]);
-
-    const uid = liffProfile?.userId || cachedUid;
-    const lineName = liffProfile?.displayName || cachedName;
-    const avatarUrl = liffProfile?.pictureUrl || null;
-
-    if (!uid) { showError(); return; }
-
-    // 如果 LIFF 拿到的 UID 和快取不同（不同帳號），重新打一次 GAS
-    let finalData = gasData;
-    if (liffProfile && liffProfile.userId !== cachedUid && cachedUid) {
-      try {
-        const res = await fetch(`${GAS_URL}?action=getProfile&uid=${encodeURIComponent(liffProfile.userId)}`);
-        finalData = await res.json();
-      } catch(e) { finalData = null; }
-    }
-
-    if (!finalData || finalData.error || !finalData.data) {
-      // 嘗試用 LIFF UID 再打一次（gasPromise 用的是 cachedUid 可能是空的）
-      if (uid && !gasData) {
-        try {
-          const res = await fetch(`${GAS_URL}?action=getProfile&uid=${encodeURIComponent(uid)}`);
-          const retryData = await res.json();
-          if (retryData && retryData.data) {
-            renderProfile(retryData.data, lineName, avatarUrl);
+      return fetch(GAS_URL + '?action=getProfile&uid=' + encodeURIComponent(uid))
+        .then(r => r.json())
+        .then(res => {
+          if (!res || !res.success) {
+            showError();
             return;
           }
-        } catch(e) {}
-      }
+          renderProfile(res.data, lineName, avatarUrl);
+        });
+    })
+    .catch(err => {
+      console.error('載入失敗', err);
       showError();
-      return;
-    }
-
-    renderProfile(finalData.data, lineName, avatarUrl);
-  }
-
-  init();
+    });
 </script>
 </body>
 </html>
