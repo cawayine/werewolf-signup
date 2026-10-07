@@ -403,9 +403,9 @@
         } catch (e) {}
       }
 
-      initLiffAsync();
-      fetchLatestPlayers(false);
-    };
+      fetchLatestPlayers(false).then(() => {
+        initLiffAsync();
+      });
 
     async function initLiffAsync() {
       const nameInput = document.getElementById('userName');
