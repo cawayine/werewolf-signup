@@ -72,6 +72,7 @@
 
   <div id="profileContent" style="display:none;">
 
+    <!-- 個人資料卡 -->
     <div class="card">
       <div class="profile-top">
         <div class="avatar-placeholder" id="avatarBox">🐺</div>
@@ -83,13 +84,20 @@
       </div>
     </div>
 
+    <!-- 場次紀錄 -->
     <div class="card">
-      <div class="section-divider">📊 本月場次紀錄</div>
-      <div class="stat-grid">
+      <div class="section-divider">📊 場次紀錄</div>
+      <div class="stat-grid-2">
         <div class="stat-box">
           <div class="stat-label">本月場次</div>
           <div class="stat-value blue" id="monthlyGames">—</div>
         </div>
+        <div class="stat-box">
+          <div class="stat-label">本月勝率</div>
+          <div class="stat-value gold" id="monthlyRate">—</div>
+        </div>
+      </div>
+      <div class="stat-grid">
         <div class="stat-box">
           <div class="stat-label">本月勝場</div>
           <div class="stat-value green" id="monthlyWin">—</div>
@@ -98,12 +106,6 @@
           <div class="stat-label">本月敗場</div>
           <div class="stat-value accent" id="monthlyLose">—</div>
         </div>
-      </div>
-      <div class="stat-grid-2">
-        <div class="stat-box">
-          <div class="stat-label">本月勝率</div>
-          <div class="stat-value gold" id="monthlyRate">—</div>
-        </div>
         <div class="stat-box">
           <div class="stat-label">技能正確率</div>
           <div class="stat-value purple" id="skillRateNum">—</div>
@@ -111,6 +113,7 @@
       </div>
     </div>
 
+    <!-- 陣營戰績 -->
     <div class="card">
       <div class="section-divider">⚔️ 陣營戰績</div>
       <div class="faction-row">
@@ -136,6 +139,7 @@
       </div>
     </div>
 
+    <!-- 技能正確率 -->
     <div class="card">
       <div class="section-divider">🎯 技能使用正確率</div>
       <div class="skill-rate-value" id="skillRateDisplay">—</div>
@@ -168,30 +172,29 @@
     }
 
     // 名稱與積分
-    document.getElementById('displayName').textContent = res.lineName || lineProfile.displayName || '—';
+    document.getElementById('displayName').textContent = res.lineName || '未知玩家';
     document.getElementById('ladderScore').textContent = res.ladderScore ?? '—';
 
-    // 本月場次
+    // 場次紀錄
     document.getElementById('monthlyGames').textContent = res.monthlyGames ?? '—';
-    document.getElementById('monthlyWin').textContent   = res.monthlyWin ?? '—';
-    document.getElementById('monthlyLose').textContent  = res.monthlyLose ?? '—';
-    document.getElementById('monthlyRate').textContent  = res.monthlyRate ?? '—';
-
-    // 技能正確率（兩個地方）
-    document.getElementById('skillRateNum').textContent     = res.skillRate ?? '—';
-    document.getElementById('skillRateDisplay').textContent = res.skillRate ?? '—';
-
-    // 技能進度條
-    const skillNum = parseFloat((res.skillRate || '0').replace('%', '')) || 0;
-    document.getElementById('skillBarFill').style.width = skillNum + '%';
+    document.getElementById('monthlyRate').textContent = res.monthlyRate ?? '—';
+    document.getElementById('monthlyWin').textContent = res.monthlyWin ?? '—';
+    document.getElementById('monthlyLose').textContent = res.monthlyLose ?? '—';
+    document.getElementById('skillRateNum').textContent = res.skillRate ?? '—';
 
     // 陣營戰績
-    document.getElementById('villagerWin').textContent  = res.villagerWin ?? '—';
+    document.getElementById('villagerWin').textContent = res.villagerWin ?? '—';
     document.getElementById('villagerRate').textContent = res.villagerRate ?? '—';
-    document.getElementById('werewolfWin').textContent  = res.werewolfWin ?? '—';
+    document.getElementById('werewolfWin').textContent = res.werewolfWin ?? '—';
     document.getElementById('werewolfRate').textContent = res.werewolfRate ?? '—';
-    document.getElementById('thirdWin').textContent     = res.thirdWin ?? '—';
-    document.getElementById('thirdRate').textContent    = res.thirdRate ?? '—';
+    document.getElementById('thirdWin').textContent = res.thirdWin ?? '—';
+    document.getElementById('thirdRate').textContent = res.thirdRate ?? '—';
+
+    // 技能正確率
+    const skillRateStr = res.skillRate || '0%';
+    document.getElementById('skillRateDisplay').textContent = skillRateStr;
+    const skillNum = parseFloat(skillRateStr);
+    document.getElementById('skillBarFill').style.width = (isNaN(skillNum) ? 0 : skillNum) + '%';
   }
 
   async function init() {
@@ -206,15 +209,15 @@
       const lineProfile = await liff.getProfile();
       const uid = lineProfile.userId;
 
-      const response = await fetch(`${GAS_URL}?action=getProfile&uid=${uid}`);
-      const res = await response.json();
+      const res = await fetch(`${GAS_URL}?action=getProfile&uid=${uid}`);
+      const data = await res.json();
 
-      if (!res.success) {
+      if (!data.success) {
         showError();
         return;
       }
 
-      renderProfile(res, lineProfile);
+      renderProfile(data, lineProfile);
 
     } catch (err) {
       console.error(err);
