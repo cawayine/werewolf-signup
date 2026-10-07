@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>基地狼人殺 個人檔案</title>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    :root {
+      --bg: #12151c;
+      --card-bg: #1e2430;
+      --accent: #e53935;
+      --text-main: #f0f3f6;
+      --text-sub: #9aa5b1;
+      --border: #2d3748;
+      --gold: #ecc94b;
+      --success: #38a169;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    body { background-color: var(--bg); color: var(--text-main); padding: 16px; min-height: 100vh; padding-bottom: 70px; }
+    .container { max-width: 480px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 16px; }
+    .header h1 { font-size: 20px; letter-spacing: 1px; color: #fff; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .profile-top { display: flex; align-items: center; gap: 16px; }
+    .avatar {
+      width: 72px; height: 72px; border-radius: 50%;
+      border: 2px solid var(--accent); object-fit: cover;
+      background: #2d3748; flex-shrink: 0;
+    }
+    .avatar-placeholder {
+      width: 72px; height: 72px; border-radius: 50%;
+      border: 2px solid var(--accent); background: #2d3748;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; flex-shrink: 0;
+    }
+    .profile-name { font-size: 20px; font-weight: bold; color: #fff; }
+    .profile-sub { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
+    .ladder-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(236,201,75,0.15); border: 1px solid rgba(236,201,75,0.4);
+      color: var(--gold); font-size: 13px; font-weight: bold;
+      padding: 4px 10px; border-radius: 20px; margin-top: 8px;
+    }
+    .section-divider {
+      display: flex; align-items: center;
+      background: #151922; padding: 8px 12px; border-radius: 6px;
+      margin-bottom: 12px; border-left: 3px solid var(--accent);
+      font-size: 13px; font-weight: bold; color: var(--text-main);
+    }
+    .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
+    .stat-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 10px; }
+    .stat-box { background: #151922; border: 1px solid var(--border); border-radius: 8px; padding: 12px 8px; text-align: center; }
+    .stat-label { font-size: 11px; color: var(--text-sub); margin-bottom: 6px; }
+    .stat-value { font-size: 20px; font-weight: bold; color: #fff; }
+    .stat-value.accent { color: var(--accent); }
+    .stat-value.gold { color: var(--gold); }
+    .stat-value.green { color: #68d391; }
+    .stat-value.blue { color: #63b3ed; }
+    .stat-value.purple { color: #b794f4; }
+    .faction-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+    }
+    .faction-row:last-child { border-bottom: none; }
+    .faction-label { color: var(--text-sub); display: flex; align-items: center; gap: 6px; }
+    .faction-values { display: flex; gap: 12px; align-items: center; }
+    .faction-win { font-weight: bold; font-size: 15px; }
+    .faction-rate { font-size: 12px; color: var(--text-sub); background: #151922; border-radius: 4px; padding: 2px 6px; }
+    .skill-bar-bg { background: #151922; border-radius: 20px; height: 10px; overflow: hidden; border: 1px solid var(--border); margin-top: 8px; }
+    .skill-bar-fill { height: 100%; border-radius: 20px; background: linear-gradient(90deg, #e53935, #ecc94b); transition: width 0.6s ease; }
+    .skill-rate-value { font-size: 28px; font-weight: bold; color: var(--gold); margin-bottom: 6px; }
+    .state-msg { text-align: center; padding: 40px 0; color: var(--text-sub); font-size: 14px; }
+    .error-msg { color: #fc8181; }
+    .btn-back {
+      width: 100%; padding: 14px; background: #2d3748;
+      border: none; border-radius: 8px; color: var(--text-main);
+      font-size: 15px; font-weight: bold; cursor: pointer;
+    }
+    .btn-back:active { background: #4a5568; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>🐺 基地狼人殺</h1>
+  </div>
+
+  <!-- 載入中 -->
+  <div id="loadingState" class="card">
+    <div class="state-msg">⏳ 載入個人資料中...</div>
+  </div>
+
+  <!-- 錯誤 -->
+  <div id="errorState" class="card" style="display:none;">
+    <div class="state-msg error-msg">
+      ⚠️ 找不到會員資料<br>
+      <span style="font-size:12px; margin-top:6px; display:block;">請先透過 LINE Bot 完成報名以建立會員。</span>
+    </div>
+  </div>
+
+  <!-- 主內容 -->
+  <div id="profileContent" style="display:none;">
+
+    <!-- 個人資訊 -->
+    <div class="card">
+      <div class="profile-top">
+        <div class="avatar-placeholder" id="avatarBox">🐺</div>
+        <div>
+          <div class="profile-name" id="displayName">—</div>
+          <div class="profile-sub">天梯積分</div>
+          <div class="ladder-badge">⚔️ <span id="ladderScore">—</span> 分</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 場次紀錄 -->
+    <div class="card">
+      <div class="section-divider">📊 場次紀錄</div>
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="stat-label">總場次</div>
+          <div class="stat-value" id="totalGames">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">本月場次</div>
+          <div class="stat-value blue" id="monthlyGames">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">勝率</div>
+          <div class="stat-value gold" id="winRate">—</div>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="stat-label">總勝場</div>
+          <div class="stat-value green" id="totalWin">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">總敗場</div>
+          <div class="stat-value accent" id="totalLose">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">技能正確率</div>
+          <div class="stat-value purple" id="skillRateNum">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 陣營戰績 -->
+    <div class="card">
+      <div class="section-divider">⚔️ 陣營戰績</div>
+      <div class="faction-row">
+        <div class="faction-label">🟢 好人陣營</div>
+        <div class="faction-values">
+          <span class="faction-win green" id="villagerWin">— 勝</span>
+          <span class="faction-rate" id="villagerRate">—</span>
+        </div>
+      </div>
+      <div class="faction-row">
+        <div class="faction-label">🔴 狼人陣營</div>
+        <div class="faction-values">
+          <span class="faction-win accent" id="werewolfWin">— 勝</span>
+          <span class="faction-rate" id="werewolfRate">—</span>
+        </div>
+      </div>
+      <div class="faction-row">
+        <div class="faction-label">🟣 第三方</div>
+        <div class="faction-values">
+          <span class="faction-win purple" id="thirdWin">— 勝</span>
+          <span class="faction-rate" id="thirdRate">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 技能使用正確率 -->
+    <div class="card">
+      <div class="section-divider">🎯 技能使用正確率</div>
+      <div class="skill-rate-value" id="skillRateDisplay">—</div>
+      <div class="skill-bar-bg">
+        <div class="skill-bar-fill" id="skillBarFill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <button class="btn-back" onclick="history.back()">← 返回</button>
+  </div>
+</div>
+
+<script>
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbzkW2ALKbEmErYZPXzn5yqzFZcx7tI_6dL4zEDouYAj5_mylskzA8mNsG-jlzaH1Vmtdg/exec';
+  const LIFF_ID = 'YOUR_LIFF_ID'; // ← 填入你的 LIFF ID
+
+  async function init() {
+    try {
+      await liff.init({ liffId: LIFF_ID });
+
+      let uid = new URLSearchParams(window.location.search).get('uid');
+
+      if (!uid) {
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+        const profile = await liff.getProfile();
+        uid = profile.userId;
+      }
+
+      await loadProfile(uid);
+    } catch (err) {
+      showError();
+    }
+  }
+
+  async function loadProfile(uid) {
+    try {
+      const res = await fetch(`${GAS_URL}?action=getProfile&uid=${encodeURIComponent(uid)}`);
+      const json = await res.json();
+
+      if (json.status !== 'success' || !json.data) {
+        showError();
+        return;
+      }
+
+      renderProfile(json.data);
+    } catch (err) {
+      showError();
+    }
+  }
+
+  function renderProfile(d) {
+    document.getElementById('displayName').textContent = d.lineName || '未知';
+    document.getElementById('ladderScore').textContent = d.ladderScore ?? '—';
+    document.getElementById('totalGames').textContent = d.totalGames ?? '—';
+    document.getElementById('monthlyGames').textContent = d.monthlyGames ?? '—';
+    document.getElementById('winRate').textContent = d.winRate ?? '—';
+    document.getElementById('totalWin').textContent = d.totalWin ?? '—';
+    document.getElementById('totalLose').textContent = d.totalLose ?? '—';
+    document.getElementById('villagerWin').textContent = (d.villagerWin ?? '—') + ' 勝';
+    document.getElementById('villagerRate').textContent = d.villagerRate ?? '—';
+    document.getElementById('werewolfWin').textContent = (d.werewolfWin ?? '—') + ' 勝';
+    document.getElementById('werewolfRate').textContent = d.werewolfRate ?? '—';
+    document.getElementById('thirdWin').textContent = (d.thirdWin ?? '—') + ' 勝';
+    document.getElementById('thirdRate').textContent = d.thirdRate ?? '—';
+
+    const skillRaw = d.skillRate ?? '0%';
+    document.getElementById('skillRateNum').textContent = skillRaw;
+    document.getElementById('skillRateDisplay').textContent = skillRaw;
+    const skillNum = parseFloat(skillRaw);
+    if (!isNaN(skillNum)) {
+      document.getElementById('skillBarFill').style.width = skillNum + '%';
+    }
+
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('profileContent').style.display = 'block';
+  }
+
+  function showError() {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('errorState').style.display = 'block';
+  }
+
+  init();
+</script>
+</body>
+</html>
