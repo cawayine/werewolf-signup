@@ -9,7 +9,7 @@
   <title>基地狼人殺 報名櫃台</title>
   
   <script>
-    const APP_VERSION = "1.1.9";
+    const APP_VERSION = "1.1.10";
     
     (function autoUpdateCheck() {
       const savedVersion = localStorage.getItem('werewolf_app_version');
@@ -545,7 +545,7 @@
       updateBtn.innerText = "更新中...";
       submitBtn.innerText = "送出中...";
 
-      localStorage.setItem(`my_signup_${verifiedUserId}_${session}`, JSON.stringify({...}));
+      localStorage.setItem(`my_signup_${verifiedUserId}_${session}`, JSON.stringify({
         '到場時間': arrival,
         '離場時間': leave,
         'LINE暱稱': lineName,
@@ -700,9 +700,9 @@
           }).filter(p => p['場次日期'] && p['LINE暱稱']);
 
           allPlayersData = parsedData;
-          localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
+         localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
           renderPlayerList();
-          checkUserSignupStatus();
+          if (verifiedUserId) checkUserSignupStatus();
 
           if (isManual && refreshBtn) {
             refreshBtn.innerText = "✅ 已是最新";
