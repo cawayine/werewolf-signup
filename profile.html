@@ -22,7 +22,7 @@
     .header h1 { font-size: 20px; letter-spacing: 1px; color: #fff; }
     .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
     .profile-top { display: flex; align-items: center; gap: 16px; }
-    .avatar { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; }
+    .avatar { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; flex-shrink: 0; }
     .avatar-placeholder { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--accent); background: #2d3748; display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; }
     .profile-name { font-size: 20px; font-weight: bold; color: #fff; }
     .profile-sub { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
@@ -155,45 +155,68 @@
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbzkW2ALKbEmErYZPXzn5yqzFZcx7tI_6dL4zEDouYAj5_mylskzA8mNsG-jlzaH1Vmtdg/exec';
   const LIFF_ID = '2011803898-YnV0gXZI';
 
-  function showDebug(msg) {
-    const el = document.getElementById('loadingState');
-    el.innerHTML += `<div style="font-size:12px; color:#fc8181; margin-top:8px;">${msg}</div>`;
-  }
-
   function showError() {
     document.getElementById('loadingState').style.display = 'none';
     document.getElementById('errorState').style.display = 'block';
   }
 
+  function renderProfile(res, lineProfile) {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('profileContent').style.display = 'block';
+
+    // 頭像
+    const avatarBox = document.getElementById('avatarBox');
+    if (lineProfile.pictureUrl) {
+      avatarBox.outerHTML = `<img class="avatar" id="avatarBox" src="${lineProfile.pictureUrl}" alt="avatar">`;
+    }
+
+    // 名稱與積分
+    document.getElementById('displayName').textContent = lineProfile.displayName || '—';
+    document.getElementById('ladderScore').textContent = res.ladderScore ?? '—';
+
+    // 場次
+    document.getElementById('totalGames').textContent = res.totalGames ?? '—';
+    document.getElementById('monthlyGames').textContent = res.monthlyGames ?? '—';
+    document.getElementById('winRate').textContent = res.winRate ?? '—';
+    document.getElementById('totalWin').textContent = res.totalWin ?? '—';
+    document.getElementById('totalLose').textContent = res.totalLose ?? '—';
+
+    // 技能正確率（stat-grid 裡）
+    document.getElementById('skillRateNum').textContent = res.skillRate ?? '—';
+
+    // 陣營戰績
+    document.getElementById('villagerWin').textContent = res.villagerWin ?? '—';
+    document.getElementById('villagerRate').textContent = res.villagerRate ?? '—';
+    document.getElementById('werewolfWin').textContent = res.werewolfWin ?? '—';
+    document.getElementById('werewolfRate').textContent = res.werewolfRate ?? '—';
+    document.getElementById('thirdWin').textContent = res.thirdWin ?? '—';
+    document.getElementById('thirdRate').textContent = res.thirdRate ?? '—';
+
+    // 技能正確率（進度條）
+    const skillRaw = parseFloat((res.skillRate || '0').toString().replace('%', ''));
+    document.getElementById('skillRateDisplay').textContent = res.skillRate ?? '—';
+    document.getElementById('skillBarFill').style.width = (isNaN(skillRaw) ? 0 : skillRaw) + '%';
+  }
+
   liff.init({ liffId: LIFF_ID })
     .then(() => {
-      showDebug('✅ LIFF init 成功');
       if (!liff.isLoggedIn()) {
-        showDebug('❌ 未登入，跳轉登入...');
         liff.login();
-        return;
+        return Promise.reject('not_logged_in');
       }
-      showDebug('✅ 已登入');
       return liff.getProfile();
     })
-    .then(profile => {
-      if (!profile) return;
-      showDebug('✅ 取得 UID: ' + profile.userId);
-      const url = GAS_URL + '?action=getProfile&uid=' + profile.userId;
-      showDebug('📡 fetch: ' + url);
-      return fetch(url);
+    .then(lineProfile => {
+      const url = GAS_URL + '?action=getProfile&uid=' + lineProfile.userId;
+      return fetch(url).then(r => r.json()).then(res => ({ res, lineProfile }));
     })
-    .then(r => {
-      showDebug('✅ fetch 回應 status: ' + r.status);
-      return r.json();
-    })
-    .then(res => {
-      showDebug('✅ JSON: ' + JSON.stringify(res).substring(0, 100));
+    .then(({ res, lineProfile }) => {
       if (!res.success) { showError(); return; }
-      // 成功後正常 render（暫時只顯示 debug）
+      renderProfile(res, lineProfile);
     })
     .catch(err => {
-      showDebug('❌ 錯誤: ' + err.message);
+      if (err === 'not_logged_in') return;
+      showError();
     });
 </script>
 </body>
