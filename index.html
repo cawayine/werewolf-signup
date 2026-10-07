@@ -430,6 +430,9 @@
         if (profile && profile.displayName) {
           verifiedLineName = profile.displayName.trim();
           verifiedUserId = profile.userId || "";
+          // 在 verifiedUserId 和 verifiedLineName 被賦值之後，加這兩行
+          localStorage.setItem('werewolf_uid', verifiedUserId);
+          localStorage.setItem('werewolf_line_name', verifiedLineName);
           nameInput.value = verifiedLineName;
           openLineBtn.style.display = "none";
           submitBtn.style.display = "block";
