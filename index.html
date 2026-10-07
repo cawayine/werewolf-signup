@@ -9,7 +9,7 @@
   <title>基地狼人殺 報名櫃台</title>
   
   <script>
-    const APP_VERSION = "1.1.7";
+    const APP_VERSION = "1.1.8";
     
     (function autoUpdateCheck() {
       const savedVersion = localStorage.getItem('werewolf_app_version');
@@ -348,8 +348,7 @@
     let currentSelectedSession = CURRENT_SESSIONS[0];
     let isFetching = false;
     let verifiedLineName = "";
-    let verifiedUserId = "";
-    
+    let verifiedUserId = ""; // 🌟 唯一身分識別
 
     function isGodUser(name) {
       return (name || '').trim().toLowerCase() === 'ean';
@@ -428,9 +427,9 @@
         }
 
         const profile = await liff.getProfile();
-        if (profile && profile.displayName) {
-          verifiedLineName = profile.displayName.trim();
-          verifiedUserId = profile.userId || "";
+        if (profile && profile.userId) {
+          verifiedUserId = profile.userId.trim();
+          verifiedLineName = (profile.displayName || "").trim();
           nameInput.value = verifiedLineName;
           openLineBtn.style.display = "none";
           submitBtn.style.display = "block";
@@ -472,17 +471,18 @@
       renderPlayerList();
     }
 
+    // 🔒 核心身分判定：100% 依據 LINE_UID 比對報名狀態
     function checkUserSignupStatus() {
-      const lineName = verifiedLineName || document.getElementById('userName').value.trim();
       const session = document.getElementById('sessionDate').value;
       const submitBtn = document.getElementById('submitBtn');
       const editGroup = document.getElementById('editActionGroup');
       const noticeBox = document.getElementById('userStatusNotice');
       const customNickInput = document.getElementById('customNickname');
 
-      if (!lineName) return;
+      if (!verifiedUserId) return;
 
-      const myRecordKey = `my_signup_${lineName}_${session}`;
+      // 本機快取 Key 以 verifiedUserId 綁定
+      const myRecordKey = `my_signup_${verifiedUserId}_${session}`;
       const localMyRecord = localStorage.getItem(myRecordKey);
 
       let record = null;
@@ -490,13 +490,12 @@
         try { record = JSON.parse(localMyRecord); } catch(e) {}
       }
 
+      // 若快取沒有，直接從最新名單中以 LINE_UID 比對
       if (!record && allPlayersData.length > 0) {
-        record = allPlayersData.find(p => {
-          const matchSession = (p['場次日期'] || '').trim() === session.trim();
-          if (!matchSession) return false;
-          if (verifiedUserId && (p['LINE_UID'] || '').trim() === verifiedUserId) return true;
-          return (p['LINE暱稱'] || '').trim().toLowerCase() === lineName.toLowerCase();
-        });
+        record = allPlayersData.find(p => 
+          (p['場次日期'] || '').trim() === session.trim() && 
+          (p['LINE_UID'] || '').trim() === verifiedUserId
+        );
       }
 
       if (record) {
@@ -522,7 +521,7 @@
     async function handleFormSubmit(e) {
       if (e) e.preventDefault();
 
-      if (!verifiedLineName) {
+      if (!verifiedUserId) {
         alert("尚未通過 LINE 驗證，請開啟 LINE App 報名！");
         triggerOpenLineApp();
         return;
@@ -544,7 +543,8 @@
       updateBtn.innerText = "更新中...";
       submitBtn.innerText = "送出中...";
 
-      localStorage.setItem(`my_signup_${lineName}_${session}`, JSON.stringify({
+      // 以 verifiedUserId 儲存本機登記狀態
+      localStorage.setItem(`my_signup_${verifiedUserId}_${session}`, JSON.stringify({
         '到場時間': arrival,
         '離場時間': leave,
         'LINE暱稱': lineName,
@@ -552,18 +552,17 @@
         'LINE_UID': verifiedUserId
       }));
 
-      const existingIdx = allPlayersData.findIndex(p => {
-        const matchSession = (p['場次日期'] || '').trim() === session.trim();
-        if (!matchSession) return false;
-        if (verifiedUserId && (p['LINE_UID'] || '').trim() === verifiedUserId) return true;
-        return (p['LINE暱稱'] || '').trim().toLowerCase() === lineName.toLowerCase();
-      });
+      // 比對本機名單陣列（以 LINE_UID 判定）
+      const existingIdx = allPlayersData.findIndex(p => 
+        (p['場次日期'] || '').trim() === session.trim() && 
+        (p['LINE_UID'] || '').trim() === verifiedUserId
+      );
 
       if (existingIdx >= 0) {
+        allPlayersData[existingIdx]['LINE暱稱'] = lineName;
         allPlayersData[existingIdx]['自訂暱稱'] = customNick;
         allPlayersData[existingIdx]['到場時間'] = arrival;
         allPlayersData[existingIdx]['離場時間'] = leave;
-        if (verifiedUserId) allPlayersData[existingIdx]['LINE_UID'] = verifiedUserId;
       } else {
         allPlayersData.push({
           '場次日期': session,
@@ -612,7 +611,11 @@
 
     async function handleCancelSignup() {
       const session = document.getElementById('sessionDate').value;
-      const lineName = verifiedLineName || document.getElementById('userName').value.trim();
+
+      if (!verifiedUserId) {
+        alert("無法識別身分，請重新進入！");
+        return;
+      }
 
       const cancelBtn = document.getElementById('cancelSignupBtn');
       const updateBtn = document.getElementById('updateBtn');
@@ -625,14 +628,12 @@
       updateBtn.disabled = true;
       cancelBtn.innerText = "取消中...";
 
-      localStorage.removeItem(`my_signup_${lineName}_${session}`);
+      localStorage.removeItem(`my_signup_${verifiedUserId}_${session}`);
 
-      allPlayersData = allPlayersData.filter(p => {
-        const matchSession = (p['場次日期'] || '').trim() === session.trim();
-        if (!matchSession) return true;
-        if (verifiedUserId && (p['LINE_UID'] || '').trim() === verifiedUserId) return false;
-        return (p['LINE暱稱'] || '').trim().toLowerCase() !== lineName.toLowerCase();
-      });
+      allPlayersData = allPlayersData.filter(p => 
+        !((p['場次日期'] || '').trim() === session.trim() && 
+          (p['LINE_UID'] || '').trim() === verifiedUserId)
+      );
       localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
 
       alertBox.innerText = `✅ 已成功取消【${session}】的報名！`;
@@ -649,7 +650,6 @@
       const payload = new URLSearchParams();
       payload.append("action", "cancel");
       payload.append("sessionDate", session);
-      payload.append("lineName", lineName);
       payload.append("userId", verifiedUserId);
 
       try {
@@ -662,7 +662,7 @@
       } catch (err) {}
     }
 
-    // ⚡ 8 欄 GVIZ 讀取（C欄為 LINE_UID，D欄為自訂暱稱，E到場，F離場，G簽到，H收款）
+    // ⚡ 8 欄 GVIZ 讀取（C欄為 LINE_UID）
     async function fetchLatestPlayers(isManual = false) {
       if (isFetching) return;
       isFetching = true;
@@ -698,7 +698,7 @@
               '簽到狀態': getVal(6), // G欄
               '收款狀態': getVal(7)  // H欄
             };
-          }).filter(p => p['場次日期'] && p['LINE暱稱']);
+          }).filter(p => p['場次日期'] && (p['LINE暱稱'] || p['LINE_UID']));
 
           allPlayersData = parsedData;
           localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
@@ -740,7 +740,6 @@
       return 9998;
     }
 
-    // 支援 00:00(24), 01:00(25), 02:00(26) 跨夜整點解析
     function parseHour(timeStr) {
       if (!timeStr) return null;
       if (timeStr.includes("14:00")) return 14;
@@ -1013,7 +1012,7 @@
     function escapeHtml(text) {
       if (!text) return '';
       return String(text).replace(/[&<>"']/g, function(m) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
       });
     }
   </script>
