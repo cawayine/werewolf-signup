@@ -496,8 +496,7 @@
         record = allPlayersData.find(p => {
           const matchSession = (p['場次日期'] || '').trim() === session.trim();
           if (!matchSession) return false;
-          if (verifiedUserId && (p['LINE_UID'] || '').trim() === verifiedUserId) return true;
-          return (p['LINE暱稱'] || '').trim().toLowerCase() === lineName.toLowerCase();
+          return (p['LINE_UID'] || '').trim() === verifiedUserId;
         });
       }
 
@@ -557,8 +556,7 @@
       const existingIdx = allPlayersData.findIndex(p => {
         const matchSession = (p['場次日期'] || '').trim() === session.trim();
         if (!matchSession) return false;
-        if (verifiedUserId && (p['LINE_UID'] || '').trim() === verifiedUserId) return true;
-        return (p['LINE暱稱'] || '').trim().toLowerCase() === lineName.toLowerCase();
+        return (p['LINE_UID'] || '').trim() === verifiedUserId;
       });
 
       if (existingIdx >= 0) {
@@ -632,8 +630,7 @@
       allPlayersData = allPlayersData.filter(p => {
         const matchSession = (p['場次日期'] || '').trim() === session.trim();
         if (!matchSession) return true;
-        if (verifiedUserId && (p['LINE_UID'] || '').trim() === verifiedUserId) return false;
-        return (p['LINE暱稱'] || '').trim().toLowerCase() !== lineName.toLowerCase();
+        return (p['LINE_UID'] || '').trim() !== verifiedUserId;
       });
       localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
 
