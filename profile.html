@@ -155,14 +155,9 @@
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbzkW2ALKbEmErYZPXzn5yqzFZcx7tI_6dL4zEDouYAj5_mylskzA8mNsG-jlzaH1Vmtdg/exec';
   const LIFF_ID = '2011803898-YnV0gXZI';
 
-  function toPercent(val) {
-    if (val === null || val === undefined || val === '') return '—';
-    const str = val.toString().trim();
-    if (str.endsWith('%')) return str;
-    const num = parseFloat(str);
-    if (isNaN(num)) return '—';
-    if (num <= 1) return Math.round(num * 100) + '%';
-    return Math.round(num) + '%';
+  function showDebug(msg) {
+    const el = document.getElementById('loadingState');
+    el.innerHTML += `<div style="font-size:12px; color:#fc8181; margin-top:8px;">${msg}</div>`;
   }
 
   function showError() {
@@ -170,74 +165,35 @@
     document.getElementById('errorState').style.display = 'block';
   }
 
-  function renderProfile(data, lineName, avatarUrl) {
-    document.getElementById('loadingState').style.display = 'none';
-    document.getElementById('profileContent').style.display = 'block';
-
-    // 頭像
-    const avatarBox = document.getElementById('avatarBox');
-    if (avatarUrl) {
-      avatarBox.innerHTML = `<img class="avatar" src="${avatarUrl}" onerror="this.parentNode.innerHTML='🐺'">`;
-    }
-
-    // 名稱
-    document.getElementById('displayName').textContent = lineName || data.lineName || '—';
-
-    // 天梯
-    document.getElementById('ladderScore').textContent = data.ladderScore ?? '—';
-
-    // 場次
-    document.getElementById('totalGames').textContent = data.totalGames ?? '—';
-    document.getElementById('monthlyGames').textContent = data.monthlyGames ?? '—';
-    document.getElementById('winRate').textContent = toPercent(data.winRate);
-    document.getElementById('totalWin').textContent = data.totalWin ?? '—';
-    document.getElementById('totalLose').textContent = data.totalLose ?? '—';
-
-    // 技能
-    const skillVal = toPercent(data.skillRate);
-    document.getElementById('skillRateNum').textContent = skillVal;
-    document.getElementById('skillRateDisplay').textContent = skillVal;
-    const skillNum = parseFloat(data.skillRate);
-    const skillPct = isNaN(skillNum) ? 0 : (skillNum <= 1 ? skillNum * 100 : skillNum);
-    document.getElementById('skillBarFill').style.width = Math.min(skillPct, 100) + '%';
-
-    // 陣營
-    document.getElementById('villagerWin').textContent = data.villagerWin ?? '—';
-    document.getElementById('villagerRate').textContent = toPercent(data.villagerRate);
-    document.getElementById('werewolfWin').textContent = data.werewolfWin ?? '—';
-    document.getElementById('werewolfRate').textContent = toPercent(data.werewolfRate);
-    document.getElementById('thirdWin').textContent = data.thirdWin ?? '—';
-    document.getElementById('thirdRate').textContent = toPercent(data.thirdRate);
-  }
-
-  // 主流程：直接從 LIFF 拿 UID，不依賴 localStorage
   liff.init({ liffId: LIFF_ID })
     .then(() => {
+      showDebug('✅ LIFF init 成功');
       if (!liff.isLoggedIn()) {
+        showDebug('❌ 未登入，跳轉登入...');
         liff.login();
         return;
       }
+      showDebug('✅ 已登入');
       return liff.getProfile();
     })
     .then(profile => {
       if (!profile) return;
-      const uid = profile.userId;
-      const lineName = profile.displayName;
-      const avatarUrl = profile.pictureUrl;
-
-      return fetch(GAS_URL + '?action=getProfile&uid=' + encodeURIComponent(uid))
-        .then(r => r.json())
-        .then(res => {
-          if (!res || !res.success) {
-            showError();
-            return;
-          }
-          renderProfile(res.data, lineName, avatarUrl);
-        });
+      showDebug('✅ 取得 UID: ' + profile.userId);
+      const url = GAS_URL + '?action=getProfile&uid=' + profile.userId;
+      showDebug('📡 fetch: ' + url);
+      return fetch(url);
+    })
+    .then(r => {
+      showDebug('✅ fetch 回應 status: ' + r.status);
+      return r.json();
+    })
+    .then(res => {
+      showDebug('✅ JSON: ' + JSON.stringify(res).substring(0, 100));
+      if (!res.success) { showError(); return; }
+      // 成功後正常 render（暫時只顯示 debug）
     })
     .catch(err => {
-      console.error('載入失敗', err);
-      showError();
+      showDebug('❌ 錯誤: ' + err.message);
     });
 </script>
 </body>
