@@ -23,33 +23,13 @@
     .header h1 { font-size: 20px; letter-spacing: 1px; color: #fff; }
     .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
     .profile-top { display: flex; align-items: center; gap: 16px; }
-    .avatar {
-      width: 72px; height: 72px; border-radius: 50%;
-      border: 2px solid var(--accent); object-fit: cover;
-      background: #2d3748; flex-shrink: 0;
-    }
-    .avatar-placeholder {
-      width: 72px; height: 72px; border-radius: 50%;
-      border: 2px solid var(--accent); background: #2d3748;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 28px; flex-shrink: 0;
-    }
+    .avatar { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; background: #2d3748; flex-shrink: 0; }
+    .avatar-placeholder { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--accent); background: #2d3748; display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; }
     .profile-name { font-size: 20px; font-weight: bold; color: #fff; }
     .profile-sub { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
-    .ladder-badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      background: rgba(236,201,75,0.15); border: 1px solid rgba(236,201,75,0.4);
-      color: var(--gold); font-size: 13px; font-weight: bold;
-      padding: 4px 10px; border-radius: 20px; margin-top: 8px;
-    }
-    .section-divider {
-      display: flex; align-items: center;
-      background: #151922; padding: 8px 12px; border-radius: 6px;
-      margin-bottom: 12px; border-left: 3px solid var(--accent);
-      font-size: 13px; font-weight: bold; color: var(--text-main);
-    }
+    .ladder-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(236,201,75,0.15); border: 1px solid rgba(236,201,75,0.4); color: var(--gold); font-size: 13px; font-weight: bold; padding: 4px 10px; border-radius: 20px; margin-top: 8px; }
+    .section-divider { display: flex; align-items: center; background: #151922; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; border-left: 3px solid var(--accent); font-size: 13px; font-weight: bold; color: var(--text-main); }
     .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
-    .stat-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 10px; }
     .stat-box { background: #151922; border: 1px solid var(--border); border-radius: 8px; padding: 12px 8px; text-align: center; }
     .stat-label { font-size: 11px; color: var(--text-sub); margin-bottom: 6px; }
     .stat-value { font-size: 20px; font-weight: bold; color: #fff; }
@@ -58,10 +38,7 @@
     .stat-value.green { color: #68d391; }
     .stat-value.blue { color: #63b3ed; }
     .stat-value.purple { color: #b794f4; }
-    .faction-row {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px;
-    }
+    .faction-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
     .faction-row:last-child { border-bottom: none; }
     .faction-label { color: var(--text-sub); display: flex; align-items: center; gap: 6px; }
     .faction-values { display: flex; gap: 12px; align-items: center; }
@@ -72,11 +49,8 @@
     .skill-rate-value { font-size: 28px; font-weight: bold; color: var(--gold); margin-bottom: 6px; }
     .state-msg { text-align: center; padding: 40px 0; color: var(--text-sub); font-size: 14px; }
     .error-msg { color: #fc8181; }
-    .btn-back {
-      width: 100%; padding: 14px; background: #2d3748;
-      border: none; border-radius: 8px; color: var(--text-main);
-      font-size: 15px; font-weight: bold; cursor: pointer;
-    }
+    .debug-box { background: #151922; border: 1px solid #2d3748; border-radius: 6px; padding: 10px; margin-top: 6px; word-break: break-all; color: #ecc94b; font-size: 12px; font-family: monospace; }
+    .btn-back { width: 100%; padding: 14px; background: #2d3748; border: none; border-radius: 8px; color: var(--text-main); font-size: 15px; font-weight: bold; cursor: pointer; }
     .btn-back:active { background: #4a5568; }
   </style>
 </head>
@@ -86,7 +60,7 @@
     <h1>🐺 基地狼人殺</h1>
   </div>
 
-  <!-- 載入中 -->
+  <!-- 載入中 / debug 區 -->
   <div id="loadingState" class="card">
     <div class="state-msg">⏳ 載入個人資料中...</div>
   </div>
@@ -187,5 +161,100 @@
 </div>
 
 <script>
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbzkW2ALKbEmErYZPXzn5yqzFZcx7tI_6dL4zEDouYAj5_mylskzA8mNsG-jlzaH1Vmtdg/exec';
+  const LIFF_ID = '2011803898-YnV0gXZI';
+
+  async function init() {
+    try {
+      await liff.init({ liffId: LIFF_ID });
+
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
+      }
+
+      const profile = await liff.getProfile();
+      const uid = profile.userId;
+      const lineName = profile.displayName;
+      const avatarUrl = profile.pictureUrl;
+
+      // DEBUG：顯示 UID
+      document.getElementById('loadingState').innerHTML = `
+        <div style="padding:12px; font-size:13px; line-height:2;">
+          <div style="color:#68d391; font-weight:bold; margin-bottom:8px;">✅ LIFF 登入成功</div>
+          <div style="color:#9aa5b1;">LINE 名稱：<span style="color:#fff;">${lineName}</span></div>
+          <div style="color:#9aa5b1; margin-top:4px;">你的 UID：</div>
+          <div class="debug-box">${uid}</div>
+          <div style="color:#9aa5b1; margin-top:10px; font-size:12px;">請把上方 UID 複製，填入 Google Sheet 第二列 A 欄，再重新整理此頁面。</div>
+        </div>
+      `;
+
+      await loadProfile(uid, lineName, avatarUrl);
+
+    } catch (err) {
+      console.error(err);
+      document.getElementById('loadingState').innerHTML = `
+        <div style="padding:20px; color:#fc8181; font-size:13px;">
+          ❌ 錯誤：${err.message}
+        </div>
+      `;
+    }
+  }
+
+  async function loadProfile(uid, lineName, avatarUrl) {
+    try {
+      const res = await fetch(`${GAS_URL}?action=getProfile&uid=${encodeURIComponent(uid)}`);
+      const json = await res.json();
+
+      if (json.status !== 'success') {
+        // UID 已顯示，等待使用者填入 Sheet
+        return;
+      }
+
+      const d = json.data;
+
+      // 頭像
+      const avatarBox = document.getElementById('avatarBox');
+      if (avatarUrl) {
+        avatarBox.innerHTML = `<img src="${avatarUrl}" class="avatar" alt="avatar">`;
+      }
+
+      // 名稱與積分
+      document.getElementById('displayName').textContent = lineName;
+      document.getElementById('ladderScore').textContent = d.ladderScore ?? '—';
+
+      // 場次
+      document.getElementById('totalGames').textContent = d.totalGames ?? '—';
+      document.getElementById('monthlyGames').textContent = d.monthlyGames ?? '—';
+      document.getElementById('winRate').textContent = d.winRate ?? '—';
+      document.getElementById('totalWin').textContent = d.totalWin ?? '—';
+      document.getElementById('totalLose').textContent = d.totalLose ?? '—';
+      document.getElementById('skillRateNum').textContent = d.skillRate ?? '—';
+
+      // 陣營
+      document.getElementById('villagerWin').textContent = (d.villagerWin ?? '—') + ' 勝';
+      document.getElementById('villagerRate').textContent = d.villagerRate ?? '—';
+      document.getElementById('werewolfWin').textContent = (d.werewolfWin ?? '—') + ' 勝';
+      document.getElementById('werewolfRate').textContent = d.werewolfRate ?? '—';
+      document.getElementById('thirdWin').textContent = (d.thirdWin ?? '—') + ' 勝';
+      document.getElementById('thirdRate').textContent = d.thirdRate ?? '—';
+
+      // 技能正確率
+      const skillRate = d.skillRate ?? '0%';
+      document.getElementById('skillRateDisplay').textContent = skillRate;
+      const skillNum = parseFloat(skillRate) || 0;
+      document.getElementById('skillBarFill').style.width = skillNum + '%';
+
+      // 隱藏 debug，顯示個人頁
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('profileContent').style.display = 'block';
+
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  init();
+</script>
 </body>
 </html>
