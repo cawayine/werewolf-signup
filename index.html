@@ -9,7 +9,7 @@
   <title>基地狼人殺 報名櫃台</title>
   
   <script>
-    const APP_VERSION = "1.1.10";
+    const APP_VERSION = "1.1.7";
     
     (function autoUpdateCheck() {
       const savedVersion = localStorage.getItem('werewolf_app_version');
@@ -403,9 +403,9 @@
         } catch (e) {}
       }
 
-      fetchLatestPlayers(false).then(() => {
-        initLiffAsync();
-      });
+      initLiffAsync();
+      fetchLatestPlayers(false);
+    };
 
     async function initLiffAsync() {
       const nameInput = document.getElementById('userName');
@@ -430,9 +430,6 @@
         if (profile && profile.displayName) {
           verifiedLineName = profile.displayName.trim();
           verifiedUserId = profile.userId || "";
-          // 在 verifiedUserId 和 verifiedLineName 被賦值之後，加這兩行
-          localStorage.setItem('werewolf_uid', verifiedUserId);
-          localStorage.setItem('werewolf_line_name', verifiedLineName);
           nameInput.value = verifiedLineName;
           openLineBtn.style.display = "none";
           submitBtn.style.display = "block";
@@ -484,7 +481,7 @@
 
       if (!lineName) return;
 
-      const myRecordKey = `my_signup_${verifiedUserId}_${session}`;
+      const myRecordKey = `my_signup_${lineName}_${session}`;
       const localMyRecord = localStorage.getItem(myRecordKey);
 
       let record = null;
@@ -496,7 +493,8 @@
         record = allPlayersData.find(p => {
           const matchSession = (p['場次日期'] || '').trim() === session.trim();
           if (!matchSession) return false;
-          return (p['LINE_UID'] || '').trim() === verifiedUserId;
+          if (verifiedUserId && (p['LINE_UID'] || '').trim() === verifiedUserId) return true;
+          return (p['LINE暱稱'] || '').trim().toLowerCase() === lineName.toLowerCase();
         });
       }
 
@@ -545,7 +543,7 @@
       updateBtn.innerText = "更新中...";
       submitBtn.innerText = "送出中...";
 
-      localStorage.setItem(`my_signup_${verifiedUserId}_${session}`, JSON.stringify({
+      localStorage.setItem(`my_signup_${lineName}_${session}`, JSON.stringify({
         '到場時間': arrival,
         '離場時間': leave,
         'LINE暱稱': lineName,
@@ -556,7 +554,8 @@
       const existingIdx = allPlayersData.findIndex(p => {
         const matchSession = (p['場次日期'] || '').trim() === session.trim();
         if (!matchSession) return false;
-        return (p['LINE_UID'] || '').trim() === verifiedUserId;
+        if (verifiedUserId && (p['LINE_UID'] || '').trim() === verifiedUserId) return true;
+        return (p['LINE暱稱'] || '').trim().toLowerCase() === lineName.toLowerCase();
       });
 
       if (existingIdx >= 0) {
@@ -625,12 +624,13 @@
       updateBtn.disabled = true;
       cancelBtn.innerText = "取消中...";
 
-      localStorage.removeItem(`my_signup_${verifiedUserId}_${session}`);
+      localStorage.removeItem(`my_signup_${lineName}_${session}`);
 
       allPlayersData = allPlayersData.filter(p => {
         const matchSession = (p['場次日期'] || '').trim() === session.trim();
         if (!matchSession) return true;
-        return (p['LINE_UID'] || '').trim() !== verifiedUserId;
+        if (verifiedUserId && (p['LINE_UID'] || '').trim() === verifiedUserId) return false;
+        return (p['LINE暱稱'] || '').trim().toLowerCase() !== lineName.toLowerCase();
       });
       localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
 
@@ -700,9 +700,9 @@
           }).filter(p => p['場次日期'] && p['LINE暱稱']);
 
           allPlayersData = parsedData;
-         localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
+          localStorage.setItem('werewolf_players_data', JSON.stringify(allPlayersData));
           renderPlayerList();
-          if (verifiedUserId) checkUserSignupStatus();
+          checkUserSignupStatus();
 
           if (isManual && refreshBtn) {
             refreshBtn.innerText = "✅ 已是最新";
