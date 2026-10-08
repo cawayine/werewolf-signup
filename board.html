@@ -8,297 +8,414 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    .neon-card { background: #161b22; border: 1px solid #30363d; }
-    .gold-glow { text-shadow: 0 0 10px rgba(245, 158, 11, 0.4); }
-    .rotating { animation: spin 0.8s linear infinite; }
-    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .neon-border { border: 1px solid #30363d; }
+    .gold-badge { border-color: #d29922; background: rgba(210, 153, 34, 0.15); color: #f0883e; }
+    .dead-seat { text-decoration: line-through; opacity: 0.35; filter: grayscale(1); }
   </style>
 </head>
-<body class="p-3 max-w-lg mx-auto pb-44">
+<body class="p-3 max-w-xl mx-auto pb-32">
 
-  <!-- 頂部公播狀態列 (含刷新按鈕) -->
-  <header class="flex justify-between items-center py-2.5 px-3 rounded-xl neon-card mb-3 shadow-lg">
-    <div>
-      <div class="flex items-center gap-1.5">
-        <span class="text-base font-black text-gray-100 tracking-wider">🐺 基地戰術看板</span>
-        <span class="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-1.5 py-0.5 rounded font-bold">即時公播</span>
+  <!-- 頂部即時公播標題列 -->
+  <header class="flex justify-between items-center py-2.5 px-3 bg-gray-900 rounded-xl neon-border mb-3 shadow-lg">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-indigo-900/60 border border-indigo-500/50 flex items-center justify-center text-indigo-400">
+        <i class="fa-solid fa-shield-halved"></i>
       </div>
-      <div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
-        <span id="currentPhaseText">第 1 天 白天放逐投票</span>
-        <span class="text-gray-600">|</span>
-        <span id="updateTimeText" class="text-emerald-400 font-mono">剛剛更新</span>
+      <div>
+        <h1 class="text-sm font-black text-gray-100 flex items-center gap-1.5">
+          基地戰術看板 <span class="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[10px] px-1.5 py-0.2 rounded font-bold">即時公播</span>
+        </h1>
+        <span class="text-[11px] text-gray-400 font-mono" id="currentStageText">第 1 天 警長競選階段</span>
       </div>
     </div>
-
-    <!-- 手動刷新按鈕 -->
-    <button onclick="manualRefresh()" id="refreshBtn" class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-xs py-2 px-3 rounded-lg shadow-md transition-all">
-      <i class="fa-solid fa-rotate-right" id="refreshIcon"></i>
-      <span>刷新</span>
-    </button>
+    <div class="text-right">
+      <div class="text-[10px] text-gray-400">存活狀態</div>
+      <div class="text-sm font-bold text-emerald-400 font-mono" id="aliveRatioText">12 / 12 人</div>
+    </div>
   </header>
 
-  <!-- 12 席座位存活與警長狀態列 -->
-  <section class="neon-card p-3 rounded-xl mb-3 shadow">
-    <div class="flex justify-between items-center mb-2">
-      <span class="text-xs font-bold text-gray-300">席位存活狀態</span>
-      <span class="text-[11px] text-gray-400" id="aliveRatioText">存活：11 / 12 人</span>
+  <!-- 階段 A：警長競選專屬面版 (警上 / 警下 雙區塊) -->
+  <section id="policeSection" class="space-y-3 mb-3">
+    <!-- 警上候選人區 -->
+    <div class="bg-gray-900 rounded-xl neon-border p-3 border-amber-500/40">
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-crown text-amber-400"></i> 🔥 警上競選區 (候選人)
+        </span>
+        <span class="text-[10px] text-gray-400" id="candidateCountLabel">0 人上警</span>
+      </div>
+      <div class="grid grid-cols-6 gap-1.5" id="candidatesGrid">
+        <!-- 動態列出上警玩家 -->
+      </div>
     </div>
-    <div class="grid grid-cols-6 gap-1.5 text-center text-xs" id="seatStatusGrid">
-      <!-- 1~12 座位由 JS 渲染 -->
+
+    <!-- 警下投票人區 -->
+    <div class="bg-gray-900 rounded-xl neon-border p-3 border-blue-500/40">
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-check-to-slot text-blue-400"></i> 🛡️ 警下好人區 (擁有投票權)
+        </span>
+        <span class="text-[10px] text-gray-400" id="votersCountLabel">12 人在警下</span>
+      </div>
+      <div class="grid grid-cols-6 gap-1.5" id="votersGrid">
+        <!-- 動態列出警下玩家 -->
+      </div>
+    </div>
+
+    <!-- 警長投票即時開票結果 -->
+    <div class="bg-gray-900 rounded-xl neon-border p-3">
+      <div class="flex justify-between items-center mb-2 pb-1.5 border-b border-gray-800">
+        <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+          <i class="fa-solid fa-square-poll-vertical text-amber-400"></i> 警長競選開票票型
+        </span>
+        <span id="policeWinnerBadge" class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded font-bold">
+          競選進行中
+        </span>
+      </div>
+      <div id="policeVotesSummary" class="space-y-1.5 text-xs font-mono">
+        <div class="text-gray-500 text-center py-2">尚未開始計票，等待警下投票...</div>
+      </div>
     </div>
   </section>
 
-  <!-- 票型公播卡片區 -->
-  <main class="space-y-3" id="voteCardsContainer">
-
-    <!-- 警長競選票型卡 -->
-    <div class="neon-card p-3 rounded-xl shadow" id="sheriffVoteCard">
-      <div class="flex justify-between items-center mb-2 pb-1.5 border-b border-gray-800">
-        <span class="text-xs font-bold text-amber-400 flex items-center gap-1">
-          <i class="fa-solid fa-crown text-amber-400"></i> 首日警長競選結果
+  <!-- 階段 B：白天放逐討論與公投面板 (警長選出後切換顯示) -->
+  <section id="daySection" class="space-y-3 mb-3 hidden">
+    <!-- 12 席標準座位存活點陣 -->
+    <div class="bg-gray-900 rounded-xl neon-border p-3">
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+          <i class="fa-solid fa-users"></i> 全場席位存活狀態
         </span>
-        <span class="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-1.5 py-0.5 rounded font-bold">
-          03 號當選
-        </span>
+        <span class="text-[10px] text-amber-400 font-bold" id="badgeHolderLabel">警長：未指定</span>
       </div>
-      
-      <div class="space-y-1.5 text-xs">
-        <div class="bg-gray-800/80 p-2 rounded flex justify-between items-center border border-gray-700">
-          <span class="font-bold text-blue-300">03 號候選人 (3 票)</span>
-          <span class="text-gray-300 font-mono">04, 07, 12</span>
-        </div>
-        <div class="bg-gray-800/80 p-2 rounded flex justify-between items-center border border-gray-700">
-          <span class="font-bold text-emerald-300">02 號候選人 (2 票)</span>
-          <span class="text-gray-300 font-mono">05, 10</span>
-        </div>
-        <div class="bg-gray-800/40 p-1.5 rounded flex justify-between items-center text-gray-500">
-          <span>棄票 / 廢票</span>
-          <span>無</span>
-        </div>
+      <div class="grid grid-cols-6 gap-1.5" id="standardSeatsGrid">
+        <!-- 1~12 號座位 -->
       </div>
     </div>
 
-    <!-- 白天放逐即時票型卡 -->
-    <div class="neon-card p-3 rounded-xl border-blue-900 shadow">
+    <!-- 白天放逐投票票型 -->
+    <div class="bg-gray-900 rounded-xl neon-border p-3">
       <div class="flex justify-between items-center mb-2 pb-1.5 border-b border-gray-800">
-        <span class="text-xs font-bold text-blue-400 flex items-center gap-1">
-          <i class="fa-solid fa-scale-balanced"></i> 當前放逐投票票型
+        <span class="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-gavel"></i> 當前放逐投票票型
         </span>
-        <span class="text-[10px] text-gray-400">警長票權 1.5 票</span>
+        <span class="text-[10px] text-amber-400 font-bold">警長票權 1.5 票</span>
       </div>
+      <div id="exileVotesSummary" class="space-y-1.5 text-xs font-mono">
+        <div class="text-gray-500 text-center py-2">等待計票員輸入票型...</div>
+      </div>
+    </div>
+  </section>
 
-      <div class="space-y-1.5 text-xs" id="publicExileVoteDisplay">
-        <div class="text-gray-500 text-center py-2">等待計票員或上帝送出票型...</div>
+  <!-- 底部固定：計票員操作彈窗呼叫按鈕 -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-40">
+    <div class="max-w-xl mx-auto flex justify-between items-center">
+      <span class="text-xs text-gray-400 font-mono">現場計票控制端</span>
+      <button onclick="toggleControlDrawer()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow transition">
+        <i class="fa-solid fa-pen-to-square"></i> 開啟計票面板
+      </button>
+    </div>
+  </footer>
+
+  <!-- 計票員操作抽屜 (可收合彈窗) -->
+  <div id="controlDrawer" class="fixed inset-x-0 bottom-0 bg-gray-900 border-t border-gray-700 p-3 z-50 rounded-t-2xl shadow-2xl max-w-xl mx-auto hidden max-h-[85vh] overflow-y-auto">
+    <div class="flex justify-between items-center pb-2 mb-2 border-b border-gray-800">
+      <h3 class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+        <i class="fa-solid fa-calculator"></i> 現場計票員快捷控制台
+      </h3>
+      <button onclick="toggleControlDrawer()" class="text-gray-400 hover:text-white text-sm px-2">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- 步驟 1: 上警名單登記 -->
+    <div class="mb-3 bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
+      <div class="flex justify-between items-center mb-1.5">
+        <span class="text-xs font-bold text-gray-200">步驟 1：點選號碼切換上警 (橘底為警上)</span>
+      </div>
+      <div class="grid grid-cols-6 gap-1" id="drawerCandidateToggleGrid">
+        <!-- 1~12 切換按鈕 -->
       </div>
     </div>
 
-  </main>
-
-  <!-- 底部固定抽屜：協同計票操作區 (預設收合) -->
-  <div class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-50">
-    <div class="max-w-lg mx-auto">
-      
-      <!-- 展開/收合切換 -->
-      <div class="flex justify-between items-center">
-        <span class="text-xs text-gray-400">桌上記票員專區：</span>
-        <button onclick="toggleScorerPanel()" id="scorerToggleBtn" class="text-xs bg-gray-800 text-amber-300 border border-gray-700 px-3 py-1 rounded-lg font-bold hover:bg-gray-700 flex items-center gap-1 transition">
-          <i class="fa-solid fa-pen-to-square"></i> 開啟計票面板
+    <!-- 步驟 2: 警長計票器 -->
+    <div class="mb-3 bg-gray-800/60 p-2.5 rounded-lg border border-gray-700" id="policeVoteStepBox">
+      <div class="flex justify-between items-center mb-1.5">
+        <span class="text-xs font-bold text-gray-200">步驟 2：警長競選計票 (先選候選人 ➔ 再點警下選民)</span>
+      </div>
+      <div class="text-[11px] text-amber-300 mb-1">選擇受票候選人：</div>
+      <div class="flex flex-wrap gap-1.5 mb-2" id="drawerTargetCandidatesContainer">
+        <!-- 動態列出警上未退水候選人 -->
+      </div>
+      <div class="text-[11px] text-blue-300 mb-1">警下投票人點擊投票：</div>
+      <div class="grid grid-cols-6 gap-1 mb-2" id="drawerEligibleVotersGrid">
+        <!-- 只允許警下投票 -->
+      </div>
+      <div class="flex gap-2">
+        <button onclick="confirmPoliceResult()" class="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-1.5 rounded text-xs">
+          確認警長當選
         </button>
       </div>
+    </div>
 
-      <!-- 計票控制本體 -->
-      <div id="scorerPanel" class="hidden mt-2.5 pt-2.5 border-t border-gray-800 space-y-2">
-        <div class="text-[11px] text-gray-400 font-semibold">第一步：點選目標候選人</div>
-        <div class="flex flex-wrap gap-1.5" id="scorerCandidateList"></div>
-
-        <div class="text-[11px] text-gray-400 font-semibold mt-1">第二步：點擊選民號碼完成歸票</div>
-        <div class="flex flex-wrap gap-1.5" id="scorerVoterBadgeList"></div>
-
-        <button onclick="broadcastCurrentVote()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg text-xs shadow mt-2 flex items-center justify-center gap-1.5 transition">
-          <i class="fa-solid fa-tower-broadcast"></i> 送出票型廣播至全場
-        </button>
+    <!-- 步驟 3: 進入白天與宣告死訊 -->
+    <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
+      <div class="text-xs font-bold text-gray-200 mb-1.5">步驟 3：進入白天放逐討論</div>
+      <div class="text-[11px] text-gray-400 mb-2">
+        警長確認後切換為白天，若首夜有死訊可勾選倒牌號碼：
       </div>
-
+      <div class="grid grid-cols-6 gap-1 mb-2.5" id="drawerNightDeathGrid">
+        <!-- 倒牌標記 -->
+      </div>
+      <button onclick="switchToDayDiscussion()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 rounded text-xs">
+        確認警長並進入白天放逐階段 ➔
+      </button>
     </div>
   </div>
 
   <script>
-    let boardData = {
+    // 全場核心對局狀態 (預設全員 12 人存活)
+    let boardState = {
+      stage: "POLICE_ELECTION", // POLICE_ELECTION | DAY_DISCUSSION
       round: 1,
-      phaseText: "第 1 天 白天放逐投票",
-      policeSeat: 3,
-      seats: [
-        { seat: 1, alive: true }, { seat: 2, alive: true }, { seat: 3, alive: true },
-        { seat: 4, alive: true }, { seat: 5, alive: true }, { seat: 6, alive: true },
-        { seat: 7, alive: true }, { seat: 8, alive: false }, { seat: 9, alive: true },
-        { seat: 10, alive: true }, { seat: 11, alive: true }, { seat: 12, alive: true }
-      ],
-      votes: {}
+      policeSeat: null,
+      players: Array.from({ length: 12 }, (_, i) => ({
+        seat: i + 1,
+        isAlive: true,
+        isCandidate: false, // 是否上警
+        hasDropped: false   // 是否退水
+      })),
+      selectedCandidateForVote: null,
+      policeVotes: {}, // { candidateSeat: [voterSeats...] }
+      nightDeaths: []
     };
 
-    let activeCandidate = null;
+    // 渲染整個看板介面
+    function renderBoard() {
+      // 1. 存活比例
+      const aliveCount = boardState.players.filter(p => p.isAlive).length;
+      document.getElementById("aliveRatioText").innerText = `${aliveCount} / 12 人`;
 
-    function renderSeatGrid() {
-      const grid = document.getElementById("seatStatusGrid");
-      grid.innerHTML = "";
-      let aliveCount = 0;
+      // 2. 警上與警下名單
+      const candidates = boardState.players.filter(p => p.isCandidate);
+      const voters = boardState.players.filter(p => !p.isCandidate && p.isAlive);
 
-      boardData.seats.forEach(p => {
-        if (p.alive) aliveCount++;
-        const isPolice = (p.seat === boardData.policeSeat);
-        const card = document.createElement("div");
-        
-        if (!p.alive) {
-          card.className = "p-1 rounded bg-rose-950/40 border border-rose-900 text-rose-500 line-through opacity-50";
-          card.innerText = p.seat < 10 ? '0' + p.seat : p.seat;
-        } else if (isPolice) {
-          card.className = "p-1 rounded bg-amber-950 border border-amber-500 text-amber-200 font-bold gold-glow relative";
-          card.innerHTML = `${p.seat < 10 ? '0' + p.seat : p.seat} <span class="absolute -top-1 -right-1 text-[10px]">👑</span>`;
-        } else {
-          card.className = "p-1 rounded bg-gray-800 border border-gray-700 text-gray-200";
-          card.innerText = p.seat < 10 ? '0' + p.seat : p.seat;
-        }
-        grid.appendChild(card);
-      });
+      document.getElementById("candidateCountLabel").innerText = `${candidates.length} 人上警`;
+      document.getElementById("votersCountLabel").innerText = `${voters.length} 人在警下`;
 
-      document.getElementById("aliveRatioText").innerText = `存活：${aliveCount} / 12 人`;
-    }
-
-    function manualRefresh() {
-      const icon = document.getElementById('refreshIcon');
-      const timeText = document.getElementById('updateTimeText');
-      
-      icon.classList.add('rotating');
-      timeText.innerText = "同步中...";
-
-      setTimeout(() => {
-        icon.classList.remove('rotating');
-        const now = new Date();
-        timeText.innerText = `${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} 更新`;
-        renderSeatGrid();
-        renderPublicVotes();
-      }, 400);
-    }
-
-    function toggleScorerPanel() {
-      const panel = document.getElementById('scorerPanel');
-      const btn = document.getElementById('scorerToggleBtn');
-      if (panel.classList.contains('hidden')) {
-        panel.classList.remove('hidden');
-        btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> 收合面板`;
-        initScorerControls();
+      // 渲染警上按鈕
+      const candGrid = document.getElementById("candidatesGrid");
+      if (candidates.length === 0) {
+        candGrid.innerHTML = `<div class="col-span-6 text-gray-500 text-xs text-center py-2">目前無人上警</div>`;
       } else {
-        panel.classList.add('hidden');
-        btn.innerHTML = `<i class="fa-solid fa-pen-to-square"></i> 開啟計票面板`;
+        candGrid.innerHTML = candidates.map(p => `
+          <div class="h-10 rounded-lg border ${p.hasDropped ? 'border-gray-700 bg-gray-800/40 text-gray-500' : 'border-amber-500/70 bg-amber-950/30 text-amber-300 font-bold'} flex flex-col items-center justify-center text-xs relative">
+            ${boardState.policeSeat === p.seat ? '<span class="absolute -top-1.5 -right-1 text-xs">👑</span>' : ''}
+            <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
+            <span class="text-[9px] ${p.hasDropped ? 'text-gray-600' : 'text-amber-400'}">${p.hasDropped ? '已退水' : '競選中'}</span>
+          </div>
+        `).join('');
       }
+
+      // 渲染警下按鈕
+      const voterGrid = document.getElementById("votersGrid");
+      if (voters.length === 0) {
+        voterGrid.innerHTML = `<div class="col-span-6 text-gray-500 text-xs text-center py-2">全員上警</div>`;
+      } else {
+        voterGrid.innerHTML = voters.map(p => `
+          <div class="h-10 rounded-lg border border-blue-500/50 bg-blue-950/20 text-blue-200 flex flex-col items-center justify-center text-xs font-mono font-bold">
+            ${boardState.policeSeat === p.seat ? '<span class="absolute -top-1.5 -right-1 text-xs">👑</span>' : ''}
+            <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
+            <span class="text-[9px] text-blue-400 font-normal">投票人</span>
+          </div>
+        `).join('');
+      }
+
+      // 3. 渲染白天 12 席標準座位
+      const stdGrid = document.getElementById("standardSeatsGrid");
+      stdGrid.innerHTML = boardState.players.map(p => `
+        <div class="h-11 rounded-lg border ${p.isAlive ? (boardState.policeSeat === p.seat ? 'border-amber-500 bg-amber-950/40 text-amber-300' : 'border-gray-700 bg-gray-800 text-gray-200') : 'dead-seat border-rose-900 bg-rose-950/20 text-rose-500'} flex flex-col items-center justify-center text-xs font-bold relative">
+          ${boardState.policeSeat === p.seat ? '<span class="absolute -top-1.5 -right-1 text-xs">👑</span>' : ''}
+          <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
+          <span class="text-[9px] font-normal ${p.isAlive ? 'text-gray-400' : 'text-rose-400'}">${p.isAlive ? '存活' : '出局'}</span>
+        </div>
+      `).join('');
+
+      // 4. 警長標籤
+      document.getElementById("badgeHolderLabel").innerText = boardState.policeSeat ? `警長：${boardState.policeSeat} 號` : "警長：未指定";
+
+      // 5. 渲染抽屜控制器內容
+      renderDrawerControls();
     }
 
-    function initScorerControls() {
-      const aliveSeats = boardData.seats.filter(p => p.alive).map(p => p.seat);
-      activeCandidate = aliveSeats[0];
-
-      const candContainer = document.getElementById("scorerCandidateList");
-      candContainer.innerHTML = aliveSeats.map(s => `
-        <button onclick="setCandidateTarget(${s})" id="candBtn-${s}" class="py-1 px-2 rounded text-xs font-bold border border-gray-700 bg-gray-800 text-gray-300">
-          投 ${s}號
-        </button>
-      `).join('') + `
-        <button onclick="setCandidateTarget(0)" id="candBtn-0" class="py-1 px-2 rounded text-xs font-bold border border-gray-700 bg-gray-800 text-gray-400">
-          棄票
-        </button>
-      `;
-
-      const voterContainer = document.getElementById("scorerVoterBadgeList");
-      voterContainer.innerHTML = aliveSeats.map(s => `
-        <button onclick="assignVoter(${s})" id="voterBadgeBtn-${s}" class="w-11 h-9 rounded bg-gray-800 border border-gray-700 text-gray-300 text-xs font-mono font-bold flex flex-col items-center justify-center">
-          ${s}號 <span class="text-[8px] text-gray-500 font-normal">未投</span>
+    // 渲染抽屜內部的按鈕
+    function renderDrawerControls() {
+      // 上警開關
+      const toggleGrid = document.getElementById("drawerCandidateToggleGrid");
+      toggleGrid.innerHTML = boardState.players.map(p => `
+        <button onclick="toggleCandidate(${p.seat})" class="h-8 rounded text-xs font-bold border ${p.isCandidate ? 'bg-amber-600 border-amber-400 text-white' : 'bg-gray-800 border-gray-700 text-gray-300'}">
+          ${p.seat}號
         </button>
       `).join('');
 
-      setCandidateTarget(activeCandidate);
-    }
-
-    function setCandidateTarget(target) {
-      activeCandidate = target;
-      document.querySelectorAll("[id^='candBtn-']").forEach(btn => {
-        btn.className = "py-1 px-2 rounded text-xs font-bold border border-gray-700 bg-gray-800 text-gray-300";
-      });
-      const active = document.getElementById(`candBtn-${target}`);
-      if (active) {
-        active.className = "py-1 px-2 rounded text-xs font-bold border border-blue-500 bg-blue-950 text-blue-200";
-      }
-    }
-
-    function assignVoter(voterSeat) {
-      if (activeCandidate === null) return;
-      if (boardData.votes[voterSeat] === activeCandidate) {
-        delete boardData.votes[voterSeat];
+      // 受票候選人清單 (警上且未退水)
+      const candContainer = document.getElementById("drawerTargetCandidatesContainer");
+      const activeCandidates = boardState.players.filter(p => p.isCandidate && !p.hasDropped);
+      
+      if (activeCandidates.length === 0) {
+        candContainer.innerHTML = `<span class="text-xs text-gray-500">無有效候選人</span>`;
       } else {
-        boardData.votes[voterSeat] = activeCandidate;
+        candContainer.innerHTML = activeCandidates.map(p => `
+          <button onclick="selectCandidateForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border ${boardState.selectedCandidateForVote === p.seat ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
+            投給 ${p.seat}號
+          </button>
+        `).join('') + `
+          <button onclick="selectCandidateForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border ${boardState.selectedCandidateForVote === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
+            棄票
+          </button>
+        `;
       }
-      updateScorerVoterUI();
+
+      // 警下合格選民 (只允許警下玩家點擊投票)
+      const votersGrid = document.getElementById("drawerEligibleVotersGrid");
+      const eligibleVoters = boardState.players.filter(p => !p.isCandidate && p.isAlive);
+      
+      votersGrid.innerHTML = eligibleVoters.map(p => {
+        // 尋找投給誰
+        let votedTarget = null;
+        Object.entries(boardState.policeVotes).forEach(([cand, list]) => {
+          if (list.includes(p.seat)) votedTarget = cand;
+        });
+
+        return `
+          <button onclick="assignPoliceVote(${p.seat})" class="h-9 rounded text-xs border font-mono flex flex-col items-center justify-center ${votedTarget !== null ? 'bg-indigo-950 border-indigo-400 text-indigo-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
+            <span>${p.seat}號</span>
+            <span class="text-[8px] text-amber-300">${votedTarget !== null ? (votedTarget == 0 ? '棄' : '➔' + votedTarget) : '未投'}</span>
+          </button>
+        `;
+      }).join('');
+
+      // 昨夜倒牌標記按鈕 (抽屜內)
+      const deathGrid = document.getElementById("drawerNightDeathGrid");
+      deathGrid.innerHTML = boardState.players.map(p => `
+        <button onclick="toggleNightDeath(${p.seat})" class="h-8 rounded text-xs font-bold border ${boardState.nightDeaths.includes(p.seat) ? 'bg-rose-700 border-rose-400 text-white' : 'bg-gray-800 border-gray-700 text-gray-300'}">
+          ${p.seat}號
+        </button>
+      `).join('');
     }
 
-    function updateScorerVoterUI() {
-      boardData.seats.filter(p => p.alive).forEach(p => {
-        const btn = document.getElementById(`voterBadgeBtn-${p.seat}`);
-        if (!btn) return;
-        const target = boardData.votes[p.seat];
-        if (target === undefined) {
-          btn.className = "w-11 h-9 rounded bg-gray-800 border border-gray-700 text-gray-300 text-xs font-mono font-bold flex flex-col items-center justify-center";
-          btn.innerHTML = `${p.seat}號 <span class="text-[8px] text-gray-500 font-normal">未投</span>`;
-        } else if (target === 0) {
-          btn.className = "w-11 h-9 rounded bg-gray-700 border border-gray-500 text-gray-200 text-xs font-mono font-bold flex flex-col items-center justify-center";
-          btn.innerHTML = `${p.seat}號 <span class="text-[8px] text-gray-400 font-normal">棄票</span>`;
-        } else {
-          btn.className = "w-11 h-9 rounded bg-indigo-950 border border-indigo-500 text-indigo-100 text-xs font-mono font-bold flex flex-col items-center justify-center";
-          btn.innerHTML = `${p.seat}號 <span class="text-[8px] text-amber-300 font-normal">投 ${target}</span>`;
+    // 操作抽屜開關
+    function toggleControlDrawer() {
+      const drawer = document.getElementById("controlDrawer");
+      drawer.classList.toggle("hidden");
+    }
+
+    // 切換是否上警
+    function toggleCandidate(seat) {
+      const p = boardState.players.find(x => x.seat === seat);
+      p.isCandidate = !p.isCandidate;
+      p.hasDropped = false;
+      renderBoard();
+    }
+
+    // 選擇受票目標
+    function selectCandidateForVote(candidateSeat) {
+      boardState.selectedCandidateForVote = candidateSeat;
+      renderDrawerControls();
+    }
+
+    // 選民投票
+    function assignPoliceVote(voterSeat) {
+      if (boardState.selectedCandidateForVote === null) {
+        alert("請先在上方點選要投給哪位候選人！");
+        return;
+      }
+      const target = boardState.selectedCandidateForVote;
+      
+      // 先清除該選民過去的票
+      Object.keys(boardState.policeVotes).forEach(k => {
+        boardState.policeVotes[k] = boardState.policeVotes[k].filter(s => s !== voterSeat);
+      });
+
+      if (!boardState.policeVotes[target]) boardState.policeVotes[target] = [];
+      boardState.policeVotes[target].push(voterSeat);
+
+      updatePoliceVotesSummary();
+      renderBoard();
+    }
+
+    // 更新警長票型統計看板
+    function updatePoliceVotesSummary() {
+      const box = document.getElementById("policeVotesSummary");
+      let html = "";
+      Object.entries(boardState.policeVotes).forEach(([cand, voters]) => {
+        if (voters.length > 0) {
+          const label = cand == 0 ? "棄票" : `${cand} 號候選人 (${voters.length} 票)`;
+          html += `
+            <div class="bg-gray-800/70 p-2 rounded border border-gray-700 flex justify-between items-center">
+              <span class="font-bold ${cand == 0 ? 'text-gray-400' : 'text-amber-300'}">${label}</span>
+              <span class="text-gray-300 font-mono">${voters.map(s => s < 10 ? '0' + s : s).join(', ')}</span>
+            </div>
+          `;
         }
       });
+      box.innerHTML = html || `<div class="text-gray-500 text-center py-2">尚未開始計票，等待警下投票...</div>`;
     }
 
-    function broadcastCurrentVote() {
-      renderPublicVotes();
-      alert("✅ 票型已同步廣播至戰術看板！");
-    }
+    // 確認警長當選
+    function confirmPoliceResult() {
+      let maxVotes = 0;
+      let winnerSeat = null;
 
-    function renderPublicVotes() {
-      const container = document.getElementById("publicExileVoteDisplay");
-      let groups = {};
-
-      Object.entries(boardData.votes).forEach(([voter, target]) => {
-        if (!groups[target]) groups[target] = [];
-        groups[target].push(parseInt(voter));
+      Object.entries(boardState.policeVotes).forEach(([cand, voters]) => {
+        if (cand != 0 && voters.length > maxVotes) {
+          maxVotes = voters.length;
+          winnerSeat = parseInt(cand);
+        }
       });
 
-      if (Object.keys(groups).length === 0) {
-        container.innerHTML = `<div class="text-gray-500 text-center py-2">尚未送出票型</div>`;
+      if (!winnerSeat) {
+        alert("平票或無有效得票，請組織發言再行投票！");
         return;
       }
 
-      let html = "";
-      Object.keys(groups).forEach(target => {
-        const voters = groups[target];
-        let score = 0;
-        voters.forEach(v => {
-          score += (v === boardData.policeSeat ? 1.5 : 1.0);
-        });
+      boardState.policeSeat = winnerSeat;
+      document.getElementById("policeWinnerBadge").innerText = `🎉 ${winnerSeat} 號當選警長`;
+      document.getElementById("policeWinnerBadge").className = "text-xs bg-amber-950 text-amber-300 border border-amber-700 px-2 py-0.5 rounded font-bold";
+      alert(`👑 恭喜 ${winnerSeat} 號玩家當選警長！`);
+      renderBoard();
+    }
 
-        const label = target == 0 ? "棄票" : `${target < 10 ? '0' + target : target} 號 (${score} 票)`;
-        const voterListText = voters.map(v => v === boardData.policeSeat ? `${v}(👑)` : `${v}`).join(', ');
+    // 勾選昨夜死訊
+    function toggleNightDeath(seat) {
+      if (boardState.nightDeaths.includes(seat)) {
+        boardState.nightDeaths = boardState.nightDeaths.filter(s => s !== seat);
+      } else {
+        boardState.nightDeaths.push(seat);
+      }
+      renderDrawerControls();
+    }
 
-        html += `
-          <div class="bg-gray-800/80 p-2 rounded flex justify-between items-center border border-gray-700">
-            <span class="font-bold ${target == 0 ? 'text-gray-400' : 'text-blue-300'}">${label}</span>
-            <span class="text-gray-200 font-mono">${voterListText}</span>
-          </div>
-        `;
+    // 切換為白天放逐討論
+    function switchToDayDiscussion() {
+      // 結算昨夜倒牌
+      boardState.nightDeaths.forEach(s => {
+        const p = boardState.players.find(x => x.seat === s);
+        if (p) p.isAlive = false;
       });
-      container.innerHTML = html;
+
+      boardState.stage = "DAY_DISCUSSION";
+      document.getElementById("currentStageText").innerText = `第 1 天 白天發言與放逐`;
+      document.getElementById("policeSection").classList.add("hidden");
+      document.getElementById("daySection").classList.remove("hidden");
+
+      toggleControlDrawer();
+      renderBoard();
+      alert("☀️ 已進入白天環節！死訊已公布並更新席位狀態。");
     }
 
     window.onload = () => {
-      renderSeatGrid();
+      renderBoard();
     };
   </script>
 </body>
