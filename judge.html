@@ -21,16 +21,17 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   
-  <!-- 載入乾淨板型設定檔 -->
+  <!-- 載入板型設定檔 -->
   <script src="rules_config.js"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .neon-border { border: 1px solid #30363d; }
     .gold-glow { border: 1px solid #d29922; box-shadow: 0 0 10px rgba(210, 153, 34, 0.2); }
+    .dead-badge { background-color: #450a0a; color: #f87171; border: 1px solid #7f1d1d; }
   </style>
 </head>
-<body class="p-3 max-w-xl mx-auto pb-28">
+<body class="p-3 max-w-xl mx-auto pb-32">
 
   <!-- 頂部狀態列 -->
   <header class="flex justify-between items-center py-2.5 px-3 bg-gray-900 rounded-xl neon-border mb-3 shadow">
@@ -46,16 +47,40 @@
         </select>
       </div>
     </div>
-    <div class="flex items-center gap-2">
-      <span id="gamePhaseBadge" class="bg-indigo-950 text-indigo-300 border border-indigo-800 text-xs px-2 py-0.5 rounded font-bold">第 1 夜</span>
-      <button onclick="resetGame()" class="text-xs text-gray-400 hover:text-white border border-gray-700 px-2 py-0.5 rounded">重置</button>
+    <div class="flex items-center gap-1.5">
+      <!-- 雙重防呆流局按鈕 -->
+      <button onclick="voidCurrentGame()" class="text-xs bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-700/80 font-bold px-2 py-1 rounded transition flex items-center gap-1">
+        <i class="fa-solid fa-ban"></i> 流局抄掉
+      </button>
+      <button onclick="resetGame()" class="text-xs text-gray-400 hover:text-white border border-gray-700 px-2 py-1 rounded">
+        常規重置
+      </button>
     </div>
   </header>
 
   <!-- 12 席座位核心控制網格 -->
-  <main class="grid grid-cols-2 gap-2 mb-4" id="seatsGrid">
-    <!-- 動態生成 12 席 -->
-  </main>
+  <section class="mb-4">
+    <div class="text-xs font-bold text-gray-300 mb-2 flex justify-between items-center">
+      <span>12 席玩家與身份配置</span>
+      <span class="text-[11px] text-gray-500">點擊 👑 設警長 / 點擊存活切換死訊</span>
+    </div>
+    <div class="grid grid-cols-2 gap-2" id="seatsGrid">
+      <!-- 動態生成 12 席 -->
+    </div>
+  </section>
+
+  <!-- 夜間專屬動態引導面板 -->
+  <section class="bg-gray-900 rounded-xl neon-border p-3 mb-4">
+    <div class="flex justify-between items-center mb-2 pb-1.5 border-b border-gray-800">
+      <h2 class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+        <i class="fa-solid fa-moon"></i> 當前板型夜間行動引導 (按順序睜眼)
+      </h2>
+      <button onclick="clearNightActions()" class="text-[10px] text-gray-400 hover:text-white border border-gray-700 px-1.5 py-0.5 rounded">清空本夜紀錄</button>
+    </div>
+    <div id="nightActionList" class="space-y-2">
+      <!-- 根據選定板型動態渲染 -->
+    </div>
+  </section>
 
   <!-- 底部固定結算欄 -->
   <footer class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-3 z-30">
@@ -65,7 +90,7 @@
         <span id="gameStatusText" class="text-emerald-400 font-bold">進行中</span>
       </div>
       <button onclick="openSettleModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow transition">
-        <i class="fa-solid fa-cloud-arrow-up"></i> 結算並寫入資料庫
+        <i class="fa-solid fa-cloud-arrow-up"></i> 正常結算並計分
       </button>
     </div>
   </footer>
@@ -94,7 +119,7 @@
   </div>
 
   <script>
-    // 基地固定 14 位玩家著名選手名單
+    // 基地 14 位固定名單
     const MOCK_MEMBERS = [
       "小前 (Chien)", "郭郭", "King", "底迪", "Lucas", "提摩", 
       "hokai", "霏霏", "慶", "崇朗", "皓晴", "貓貓", "路人甲", "路人乙"
@@ -109,9 +134,9 @@
       badge: false
     }));
 
-    // 初始化板型選單
     function initBoardSelector() {
       const selector = document.getElementById("boardSelector");
+      if (typeof BOARD_DATABASE === "undefined") return;
       selector.innerHTML = Object.keys(BOARD_DATABASE).map(key => `
         <option value="${key}" ${key === currentBoardKey ? 'selected' : ''}>
           ${BOARD_DATABASE[key].name}
@@ -119,41 +144,103 @@
       `).join('');
     }
 
-    // 切換板型
     function changeBoard(key) {
       currentBoardKey = key;
       const bData = BOARD_DATABASE[key];
-      const rolesPool = [...bData.roles];
+      if (!bData) return;
 
-      // 自動分發預設角色
+      const rolesPool = [...bData.roles];
       seatsState.forEach((s, idx) => {
         s.role = rolesPool[idx] || "平民";
+        s.isAlive = true;
+        s.badge = false;
       });
+
+      renderSeats();
+      renderNightActions(bData);
+    }
+
+    // 渲染座位席：動態追蹤已入座玩家，防止重複選取
+    function renderSeats() {
+      const grid = document.getElementById("seatsGrid");
+      const takenMap = {};
+      seatsState.forEach(s => {
+        if (s.playerName) {
+          takenMap[s.playerName] = s.seat;
+        }
+      });
+
+      grid.innerHTML = seatsState.map(s => {
+        const optionsHtml = MOCK_MEMBERS.map(m => {
+          const isCurrent = (m === s.playerName);
+          const occupiedSeat = takenMap[m];
+          const isTakenByOther = occupiedSeat && !isCurrent;
+
+          let label = m;
+          let disabledAttr = "";
+
+          if (isCurrent) {
+            label = `✓ ${m} (當前)`;
+          } else if (isTakenByOther) {
+            label = `⛔ ${m} (已入座 ${occupiedSeat < 10 ? '0' + occupiedSeat : occupiedSeat}號)`;
+            disabledAttr = "disabled class='text-gray-500 bg-gray-900'";
+          }
+
+          return `<option value="${m}" ${isCurrent ? 'selected' : ''} ${disabledAttr}>${label}</option>`;
+        }).join('');
+
+        return `
+          <div class="p-2.5 bg-gray-900 rounded-xl neon-border flex flex-col justify-between ${s.badge ? 'gold-glow' : ''}">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-xs font-mono font-bold text-amber-400">${s.seat < 10 ? '0' + s.seat : s.seat} 號</span>
+              <div class="flex gap-1 items-center">
+                <button onclick="toggleBadge(${s.seat})" class="text-xs ${s.badge ? 'text-amber-400' : 'text-gray-600 hover:text-gray-400'}">👑</button>
+                <button onclick="toggleAlive(${s.seat})" class="text-[10px] px-1.5 py-0.2 rounded font-bold ${s.isAlive ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'dead-badge'}">
+                  ${s.isAlive ? '存活' : '陣亡'}
+                </button>
+              </div>
+            </div>
+            <div class="mb-1.5">
+              <select onchange="updatePlayerName(${s.seat}, this.value)" class="w-full bg-gray-800 text-xs text-gray-200 border border-gray-700 rounded px-1 py-1 outline-none font-bold">
+                ${optionsHtml}
+              </select>
+            </div>
+            <div>
+              <span class="text-[11px] text-gray-400">身份：</span>
+              <span class="text-xs font-bold text-indigo-300 font-mono">${s.role}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updatePlayerName(seat, newName) {
+      const s = seatsState.find(x => x.seat === seat);
+      if (s) {
+        s.playerName = newName;
+      }
       renderSeats();
     }
 
-    // 渲染座位席
-    function renderSeats() {
-      const grid = document.getElementById("seatsGrid");
-      grid.innerHTML = seatsState.map(s => `
-        <div class="p-2.5 bg-gray-900 rounded-xl neon-border flex flex-col justify-between ${s.badge ? 'gold-glow' : ''}">
-          <div class="flex justify-between items-center mb-1">
-            <span class="text-xs font-mono font-bold text-amber-400">${s.seat < 10 ? '0' + s.seat : s.seat} 號</span>
-            <div class="flex gap-1 items-center">
-              <button onclick="toggleBadge(${s.seat})" class="text-xs ${s.badge ? 'text-amber-400' : 'text-gray-600 hover:text-gray-400'}">👑</button>
-              <button onclick="toggleAlive(${s.seat})" class="text-[10px] px-1.5 py-0.2 rounded font-bold ${s.isAlive ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'}">
-                ${s.isAlive ? '存活' : '陣亡'}
-              </button>
-            </div>
+    function renderNightActions(boardConfig) {
+      const container = document.getElementById("nightActionList");
+      if (!boardConfig || !boardConfig.nightOrder || boardConfig.nightOrder.length === 0) {
+        container.innerHTML = `<div class="text-xs text-gray-500">該板型無特殊夜間技能配置</div>`;
+        return;
+      }
+
+      container.innerHTML = boardConfig.nightOrder.map((step, idx) => `
+        <div class="p-2 bg-gray-800/70 rounded-lg border border-gray-700 flex flex-col gap-1.5">
+          <div class="flex justify-between items-center">
+            <span class="text-xs font-bold text-indigo-300">
+              第 ${idx + 1} 步：${step.role}
+            </span>
+            <span class="text-[10px] bg-gray-700 text-gray-300 px-1.5 py-0.2 rounded">行動步驟</span>
           </div>
-          <div class="mb-1.5">
-            <select onchange="updatePlayerName(${s.seat}, this.value)" class="w-full bg-gray-800 text-xs text-gray-200 border border-gray-700 rounded px-1 py-0.5 outline-none font-bold">
-              ${MOCK_MEMBERS.map(m => `<option value="\${m}" ${m === s.playerName ? 'selected' : ''}>${m}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <span class="text-[11px] text-gray-400">身份：</span>
-            <span class="text-xs font-bold text-indigo-300 font-mono">${s.role}</span>
+          <p class="text-[11px] text-gray-300">${step.action}</p>
+          <div class="flex items-center gap-2 mt-0.5">
+            <span class="text-[10px] text-gray-400">目標記錄：</span>
+            <input type="text" placeholder="例如：2號、5號" class="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-0.5 text-xs text-amber-300 outline-none">
           </div>
         </div>
       `).join('');
@@ -170,9 +257,23 @@
       renderSeats();
     }
 
-    function updatePlayerName(seat, name) {
-      const s = seatsState.find(x => x.seat === seat);
-      s.playerName = name;
+    function clearNightActions() {
+      document.querySelectorAll("#nightActionList input").forEach(input => input.value = "");
+    }
+
+    // 雙重確認防呆機制：流局抄掉重開 (不計入任何勝負數據)
+    function voidCurrentGame() {
+      const firstCheck = confirm("⚠️【第 1 次確認】確定要將本局遊戲【流局抄掉】嗎？\n\n• 本局將完全作廢，不計入勝率與天梯數據。\n• 即將重置所有存活狀態與夜間紀錄。");
+      if (!firstCheck) return;
+
+      const secondCheck = confirm("🚨【最終確認】請再次確認是否「確定流局」？\n\n此操作無法復原，確認後將立刻開啟全新一局！");
+      if (!secondCheck) return;
+
+      changeBoard(currentBoardKey);
+      clearNightActions();
+      document.getElementById("gameStatusText").innerText = "進行中 (已流局重開)";
+      document.getElementById("gameStatusText").className = "text-amber-400 font-bold";
+      alert("💥 本局已正式作廢流局！席位已重置完成，請重新開始。");
     }
 
     function openSettleModal() {
@@ -187,12 +288,13 @@
       closeSettleModal();
       document.getElementById("gameStatusText").innerText = winner === "GOOD" ? "好人陣營獲勝" : "狼人陣營獲勝";
       document.getElementById("gameStatusText").className = winner === "GOOD" ? "text-blue-400 font-bold" : "text-rose-400 font-bold";
-      alert(`🎉 對局結算成功！\n獲勝陣營：${winner === "GOOD" ? "好人陣營" : "狼人陣營"}\n戰績已寫入本地儲存庫。`);
+      alert(`🎉 對局正常結算成功！\n獲勝陣營：${winner === "GOOD" ? "好人陣營" : "狼人陣營"}`);
     }
 
     function resetGame() {
-      if (confirm("確定要重置當前對局嗎？")) {
+      if (confirm("確定要進行常規重置嗎？")) {
         changeBoard(currentBoardKey);
+        clearNightActions();
       }
     }
 
