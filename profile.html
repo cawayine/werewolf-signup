@@ -44,6 +44,7 @@
     .faction-values { display: flex; gap: 12px; align-items: center; }
     .faction-win { font-weight: bold; font-size: 15px; }
     .faction-rate { font-size: 12px; color: var(--text-sub); background: #151922; border-radius: 4px; padding: 2px 6px; }
+    .faction-rate-label { color: var(--text-sub); font-size: 11px; }
     .skill-bar-bg { background: #151922; border-radius: 20px; height: 10px; overflow: hidden; border: 1px solid var(--border); margin-top: 8px; }
     .skill-bar-fill { height: 100%; border-radius: 20px; background: linear-gradient(90deg, #e53935, #ecc94b); transition: width 0.6s ease; }
     .skill-rate-value { font-size: 28px; font-weight: bold; color: var(--gold); margin-bottom: 6px; }
@@ -51,6 +52,16 @@
     .error-msg { color: #fc8181; }
     .btn-back { width: 100%; padding: 14px; background: #2d3748; border: none; border-radius: 8px; color: var(--text-main); font-size: 15px; font-weight: bold; cursor: pointer; }
     .btn-back:active { background: #4a5568; }
+    .recent-game-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .recent-game-row:last-child { border-bottom: none; }
+    .recent-role { color: var(--text-main); font-weight: bold; min-width: 60px; }
+    .recent-result { font-size: 13px; font-weight: bold; padding: 2px 8px; border-radius: 4px; }
+    .recent-result.win { background: rgba(104,211,145,0.15); color: #68d391; }
+    .recent-result.lose { background: rgba(229,57,53,0.15); color: #e53935; }
+    .recent-score { font-size: 14px; font-weight: bold; min-width: 55px; text-align: right; }
+    .recent-score.positive { color: #68d391; }
+    .recent-score.negative { color: #e53935; }
+    .no-record { text-align: center; color: var(--text-sub); font-size: 13px; padding: 16px 0; }
   </style>
 </head>
 <body>
@@ -119,32 +130,31 @@
       <div class="faction-row">
         <div class="faction-label">🟢 好人陣營</div>
         <div class="faction-values">
-          <span class="faction-win green" id="villagerWin">—</span>
-          <span class="faction-rate" id="villagerRate">—</span>
+          <span class="faction-win green"><span id="villagerWin">—</span>勝</span>
+          <span class="faction-rate"><span class="faction-rate-label">好人勝率 </span><span id="villagerRate">—</span></span>
         </div>
       </div>
       <div class="faction-row">
         <div class="faction-label">🔴 狼人陣營</div>
         <div class="faction-values">
-          <span class="faction-win accent" id="werewolfWin">—</span>
-          <span class="faction-rate" id="werewolfRate">—</span>
+          <span class="faction-win accent"><span id="werewolfWin">—</span>勝</span>
+          <span class="faction-rate"><span class="faction-rate-label">狼人勝率 </span><span id="werewolfRate">—</span></span>
         </div>
       </div>
       <div class="faction-row">
         <div class="faction-label">🟣 第三方</div>
         <div class="faction-values">
-          <span class="faction-win purple" id="thirdWin">—</span>
-          <span class="faction-rate" id="thirdRate">—</span>
+          <span class="faction-win purple"><span id="thirdWin">—</span>勝</span>
+          <span class="faction-rate"><span class="faction-rate-label">第三方勝率 </span><span id="thirdRate">—</span></span>
         </div>
       </div>
     </div>
 
-    <!-- 技能正確率 -->
+    <!-- 近十場戰績 -->
     <div class="card">
-      <div class="section-divider">🎯 技能使用正確率</div>
-      <div class="skill-rate-value" id="skillRateDisplay">—</div>
-      <div class="skill-bar-bg">
-        <div class="skill-bar-fill" id="skillBarFill" style="width:0%"></div>
+      <div class="section-divider">📜 近十場戰績</div>
+      <div id="recentGamesList">
+        <div class="no-record">尚無對局紀錄</div>
       </div>
     </div>
 
@@ -166,45 +176,58 @@
     document.getElementById('profileContent').style.display = 'block';
 
     // 頭像
-    const avatarBox = document.getElementById('avatarBox');
     if (lineProfile && lineProfile.pictureUrl) {
-      avatarBox.outerHTML = `<img class="avatar" id="avatarBox" src="${lineProfile.pictureUrl}" alt="avatar">`;
+      const img = document.createElement('img');
+      img.src = lineProfile.pictureUrl;
+      img.className = 'avatar';
+      img.onerror = () => { img.replaceWith(document.getElementById('avatarBox')); };
+      document.getElementById('avatarBox').replaceWith(img);
     }
 
-    // 名稱與積分
-    document.getElementById('displayName').textContent = res.lineName || '未知玩家';
+    // 基本資料
+    document.getElementById('displayName').textContent = lineProfile ? lineProfile.displayName : (res.name || '—');
     document.getElementById('ladderScore').textContent = res.ladderScore ?? '—';
 
     // 場次紀錄
     document.getElementById('monthlyGames').textContent = res.monthlyGames ?? '—';
-    document.getElementById('monthlyRate').textContent = res.monthlyRate ?? '—';
     document.getElementById('monthlyWin').textContent = res.monthlyWin ?? '—';
     document.getElementById('monthlyLose').textContent = res.monthlyLose ?? '—';
-    document.getElementById('skillRateNum').textContent = res.skillRate ?? '—';
+    document.getElementById('monthlyRate').textContent = res.monthlyRate != null ? res.monthlyRate + '%' : '—';
+    document.getElementById('skillRateNum').textContent = res.skillRate != null ? res.skillRate + '%' : '—';
 
     // 陣營戰績
     document.getElementById('villagerWin').textContent = res.villagerWin ?? '—';
-    document.getElementById('villagerRate').textContent = res.villagerRate ?? '—';
+    document.getElementById('villagerRate').textContent = res.villagerRate != null ? res.villagerRate + '%' : '—';
     document.getElementById('werewolfWin').textContent = res.werewolfWin ?? '—';
-    document.getElementById('werewolfRate').textContent = res.werewolfRate ?? '—';
+    document.getElementById('werewolfRate').textContent = res.werewolfRate != null ? res.werewolfRate + '%' : '—';
     document.getElementById('thirdWin').textContent = res.thirdWin ?? '—';
-    document.getElementById('thirdRate').textContent = res.thirdRate ?? '—';
+    document.getElementById('thirdRate').textContent = res.thirdRate != null ? res.thirdRate + '%' : '—';
 
-    // 技能正確率
-    const skillRateStr = res.skillRate || '0%';
-    document.getElementById('skillRateDisplay').textContent = skillRateStr;
-    const skillNum = parseFloat(skillRateStr);
-    document.getElementById('skillBarFill').style.width = (isNaN(skillNum) ? 0 : skillNum) + '%';
+    // 近十場戰績
+    const list = document.getElementById('recentGamesList');
+    if (res.recentGames && res.recentGames.length > 0) {
+      list.innerHTML = '';
+      res.recentGames.forEach(game => {
+        const score = parseFloat(game.score);
+        const isPositive = score >= 0;
+        const row = document.createElement('div');
+        row.className = 'recent-game-row';
+        row.innerHTML = `
+          <span class="recent-role">${game.role}</span>
+          <span class="recent-result ${game.result === '勝' ? 'win' : 'lose'}">${game.result}</span>
+          <span class="recent-score ${isPositive ? 'positive' : 'negative'}">${isPositive ? '+' : ''}${score}</span>
+        `;
+        list.appendChild(row);
+      });
+    } else {
+      list.innerHTML = '<div class="no-record">尚無對局紀錄</div>';
+    }
   }
 
   async function init() {
     try {
       await liff.init({ liffId: LIFF_ID });
-
-      if (!liff.isLoggedIn()) {
-        liff.login();
-        return;
-      }
+      if (!liff.isLoggedIn()) { liff.login(); return; }
 
       const lineProfile = await liff.getProfile();
       const uid = lineProfile.userId;
@@ -212,15 +235,13 @@
       const res = await fetch(`${GAS_URL}?action=getProfile&uid=${uid}`);
       const data = await res.json();
 
-      if (!data.success) {
+      if (data.status === 'success') {
+        renderProfile(data.data, lineProfile);
+      } else {
         showError();
-        return;
       }
-
-      renderProfile(data, lineProfile);
-
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
       showError();
     }
   }
