@@ -6,6 +6,10 @@
   <title>基地狼人殺 - 上帝專屬記分台</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  
+  <!-- 核心：引入外部規則與板型獨立設定檔 -->
+  <script src="rules_config.js"></script>
+
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .neon-border { border: 1px solid #30363d; }
@@ -22,7 +26,7 @@
       <h1 class="text-base font-black text-gray-100 flex items-center gap-1.5">
         <i class="fa-solid fa-gavel text-amber-400"></i> 上帝記分主控台
       </h1>
-      <span class="text-[11px] text-gray-400" id="currentBoardLabel">預女獵白混 (12人局)</span>
+      <span class="text-[11px] text-amber-300 font-bold" id="currentBoardLabel">讀取中...</span>
     </div>
     <div class="flex items-center gap-2">
       <span id="roundBadge" class="bg-indigo-950 text-indigo-300 border border-indigo-800 text-xs px-2 py-0.5 rounded font-bold">
@@ -34,23 +38,23 @@
     </div>
   </header>
 
-  <!-- 區塊 2：存活坑位即時監控面板 (依 seatType 計算) -->
+  <!-- 區塊：存活坑位即時監控面板 (依 seatType 計算) -->
   <section class="grid grid-cols-3 gap-2 mb-3 text-center text-xs font-semibold">
     <div class="bg-gray-900 p-2 rounded-xl border border-blue-900/60">
       <div class="text-blue-400">神職存活 (GOD)</div>
-      <div class="text-lg font-bold text-blue-200 mt-0.5" id="godCountDisplay">4 / 4</div>
+      <div class="text-lg font-bold text-blue-200 mt-0.5" id="godCountDisplay">0 / 0</div>
     </div>
     <div class="bg-gray-900 p-2 rounded-xl border border-emerald-900/60">
-      <div class="text-emerald-400">民坑存活 (民+混)</div>
-      <div class="text-lg font-bold text-emerald-200 mt-0.5" id="villagerCountDisplay">4 / 4</div>
+      <div class="text-emerald-400">民坑存活 (民/混)</div>
+      <div class="text-lg font-bold text-emerald-200 mt-0.5" id="villagerCountDisplay">0 / 0</div>
     </div>
     <div class="bg-gray-900 p-2 rounded-xl border border-rose-900/60">
       <div class="text-rose-400">狼坑存活 (WOLF)</div>
-      <div class="text-lg font-bold text-rose-200 mt-0.5" id="wolfCountDisplay">4 / 4</div>
+      <div class="text-lg font-bold text-rose-200 mt-0.5" id="wolfCountDisplay">0 / 0</div>
     </div>
   </section>
 
-  <!-- 區塊 1：開局座位與名單配置 (可收合) -->
+  <!-- 區塊：開局座位與名單配置 (可收合) -->
   <details open id="setupPanel" class="bg-gray-900 rounded-xl neon-border mb-3 overflow-hidden">
     <summary class="px-3 py-2.5 font-bold text-xs bg-gray-800/80 cursor-pointer flex justify-between items-center text-gray-200">
       <span><i class="fa-solid fa-users-gear mr-1.5 text-blue-400"></i> 開局配置：選擇板型與指派 12 席座位</span>
@@ -60,21 +64,21 @@
     <div class="p-3 space-y-2.5">
       <div class="flex gap-2">
         <div class="flex-1">
-          <label class="text-[10px] text-gray-400 block mb-0.5">板型選擇</label>
-          <select id="boardSelect" onchange="changeBoard()" class="w-full text-xs rounded p-1.5 border outline-none">
-            <option value="預女獵白混">標準：預女獵白混 (12人)</option>
+          <label class="text-[10px] text-amber-400 font-bold block mb-0.5">選擇遊戲板型 (動態載入)</label>
+          <select id="boardSelect" onchange="onBoardSelectChange()" class="w-full text-xs rounded p-1.5 border border-amber-500/50 bg-gray-800 text-amber-200 font-bold outline-none">
+            <!-- 由 rules_config.js 動態渲染 -->
           </select>
         </div>
         <div class="flex-1">
           <label class="text-[10px] text-gray-400 block mb-0.5">匯入簽到名單來源</label>
           <select id="sessionSelect" class="w-full text-xs rounded p-1.5 border outline-none">
-            <option>當日簽到名單 (16人已到場)</option>
+            <option>當日簽到名單 (現場已簽到)</option>
           </select>
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-2 text-xs" id="seatAssignmentGrid">
-        <!-- 由 JS 動態生成 1~12 號座位卡片 -->
+        <!-- 依選擇板型動態生成 1~12 席位與該板型限定角色下拉選單 -->
       </div>
 
       <button onclick="confirmSetup()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-xs shadow mt-2 transition">
@@ -83,7 +87,7 @@
     </div>
   </details>
 
-  <!-- 區塊 3：夜間行動流程引導 (卡片式) -->
+  <!-- 區塊：夜間行動流程引導 (卡片式) -->
   <section id="nightPanel" class="bg-gray-900 rounded-xl neon-border p-3 mb-3 active-card">
     <div class="flex justify-between items-center mb-2.5 pb-2 border-b border-gray-800">
       <h2 class="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
@@ -93,10 +97,10 @@
     </div>
 
     <div class="space-y-2 text-xs" id="nightActionsContainer">
-      <!-- 1. 混血兒 (首夜限定) -->
+      <!-- 混血兒卡片 (有混血兒板型才顯示) -->
       <div class="p-2.5 bg-gray-800/70 rounded-lg border border-purple-900/60" id="step-hybrid">
         <div class="flex justify-between items-center mb-1">
-          <span class="font-bold text-purple-300">1. 混血兒請睜眼</span>
+          <span class="font-bold text-purple-300">混血兒請睜眼</span>
           <span class="text-[10px] text-gray-400">首夜選擇榜樣</span>
         </div>
         <div class="flex items-center gap-2">
@@ -107,10 +111,10 @@
         </div>
       </div>
 
-      <!-- 2. 狼人 -->
+      <!-- 狼人 -->
       <div class="p-2.5 bg-gray-800/70 rounded-lg border border-rose-900/60" id="step-wolf">
         <div class="flex justify-between items-center mb-1">
-          <span class="font-bold text-rose-400">2. 狼人請睜眼</span>
+          <span class="font-bold text-rose-400">狼人請睜眼</span>
           <span class="text-[10px] text-gray-400">夜間落刀</span>
         </div>
         <div class="flex items-center gap-2">
@@ -121,10 +125,10 @@
         </div>
       </div>
 
-      <!-- 3. 女巫 -->
+      <!-- 女巫 -->
       <div class="p-2.5 bg-gray-800/70 rounded-lg border border-emerald-900/60" id="step-witch">
         <div class="flex justify-between items-center mb-1">
-          <span class="font-bold text-emerald-400">3. 女巫請睜眼</span>
+          <span class="font-bold text-emerald-400">女巫請睜眼</span>
           <span class="text-[10px] text-amber-400 font-mono" id="witchHint">昨夜倒牌：等待落刀</span>
         </div>
         <div class="grid grid-cols-2 gap-2 mt-1.5">
@@ -143,10 +147,10 @@
         </div>
       </div>
 
-      <!-- 4. 預言家 -->
+      <!-- 預言家 -->
       <div class="p-2.5 bg-gray-800/70 rounded-lg border border-blue-900/60" id="step-seer">
         <div class="flex justify-between items-center mb-1">
-          <span class="font-bold text-blue-300">4. 預言家請睜眼</span>
+          <span class="font-bold text-blue-300">預言家請睜眼</span>
           <span class="text-[10px] text-gray-400">查驗陣營</span>
         </div>
         <div class="flex items-center gap-2">
@@ -168,7 +172,7 @@
     </div>
   </section>
 
-  <!-- 區塊 4：天亮死訊與白天票決 -->
+  <!-- 區塊：天亮死訊與白天票決 -->
   <section id="dayPanel" class="bg-gray-900 rounded-xl neon-border p-3 mb-3 hidden">
     <div class="flex justify-between items-center mb-2 pb-2 border-b border-gray-800">
       <h2 class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
@@ -202,27 +206,17 @@
         <span class="text-[10px] text-gray-400">點選目標 ➔ 點選投票人</span>
       </div>
 
-      <!-- 候選目標標籤 -->
-      <div class="flex flex-wrap gap-1.5" id="voteTargetsContainer">
-        <!-- 動態生成存活者為候選人 -->
-      </div>
+      <div class="flex flex-wrap gap-1.5" id="voteTargetsContainer"></div>
 
-      <!-- 選民分配按鈕 -->
       <div class="text-[11px] text-gray-400 mt-2 mb-1">存活選民點擊歸票：</div>
-      <div class="flex flex-wrap gap-1.5" id="votersBadgeContainer">
-        <!-- 動態生成選民按鈕 -->
-      </div>
+      <div class="flex flex-wrap gap-1.5" id="votersBadgeContainer"></div>
 
-      <!-- 即時票型文字匯總 -->
       <div class="bg-gray-950 p-2 rounded border border-gray-800 text-[11px] font-mono space-y-0.5" id="voteSummaryBox">
         票型統計即時顯示於此...
       </div>
 
       <div class="flex justify-between items-center pt-2 border-t border-gray-700">
-        <button onclick="broadcastVoteToPublic()" class="bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs py-1 px-3 rounded font-bold">
-          <i class="fa-solid fa-tower-broadcast mr-1"></i> 推播票型至公播看板
-        </button>
-        <button onclick="confirmExile()" class="bg-rose-600 hover:bg-rose-500 text-white text-xs py-1 px-3 rounded font-bold shadow">
+        <button onclick="confirmExile()" class="w-full bg-rose-600 hover:bg-rose-500 text-white text-xs py-2 px-3 rounded-lg font-bold shadow">
           確認放逐出局
         </button>
       </div>
@@ -252,37 +246,66 @@
   </footer>
 
   <script>
-    // 預設名單
     const MOCK_MEMBERS = [
       "小前 (Chien)", "郭郭", "King", "底迪", "Lucas", "提摩", 
       "hokai", "霏霏", "慶", "崇朗", "皓晴", "貓貓", "路人甲", "路人乙"
-    ];
+    ]; 
 
-    const BOARD_ROLES = ["預言家", "女巫", "獵人", "白痴", "混血兒", "平民", "狼人"];
+    let currentBoardKey = "";
 
-    // 遊戲狀態核心物件
     let gameState = {
       round: 1,
-      phase: "SETUP", // SETUP, NIGHT, DAY, GAME_OVER
+      phase: "SETUP",
       winner: null,
       policeSeat: null,
       players: []
     };
 
-    // 票型暫存
     let currentVoteTarget = null;
-    let votesMap = {}; // { voterSeat: targetSeat }
+    let votesMap = {};
 
-    // 初始化 12 席座位
+    // 1. 初始化板型選單 (直接從外部 rules_config.js 讀取)
+    function initBoardSelector() {
+      if (typeof BOARD_DATABASE === 'undefined') {
+        alert("找不到 rules_config.js 設定檔，請確認該檔案已上傳至同層目錄！");
+        return;
+      }
+
+      const select = document.getElementById("boardSelect");
+      const boardKeys = Object.keys(BOARD_DATABASE);
+      select.innerHTML = boardKeys.map(key => `
+        <option value="${key}">
+          ${BOARD_DATABASE[key].name}
+        </option>
+      `).join('');
+
+      currentBoardKey = boardKeys[0];
+      onBoardSelectChange();
+    }
+
+    // 2. 切換板型時連動重置
+    function onBoardSelectChange() {
+      currentBoardKey = document.getElementById("boardSelect").value;
+      const config = BOARD_DATABASE[currentBoardKey];
+      document.getElementById("currentBoardLabel").innerText = config.name;
+      
+      // 判斷該板型是否有混血兒
+      const hasHybrid = config.availableRoles.includes("混血兒");
+      document.getElementById("step-hybrid").style.display = hasHybrid ? "block" : "none";
+
+      initSeats();
+    }
+
+    // 3. 根據板型動態渲染 12 席座位與專屬角色清單
     function initSeats() {
+      const config = BOARD_DATABASE[currentBoardKey];
       const container = document.getElementById("seatAssignmentGrid");
       container.innerHTML = "";
       gameState.players = [];
 
-      const defaultRoles = ["預言家", "女巫", "獵人", "白痴", "混血兒", "平民", "平民", "平民", "狼人", "狼人", "狼人", "狼人"];
-
-      for (let i = 1; i <= 12; i++) {
-        const assignedRole = defaultRoles[i - 1];
+      for (let i = 1; i <= config.playerCount; i++) {
+        const assignedRole = config.defaultSlots[i - 1] || config.availableRoles[0];
+        
         gameState.players.push({
           seat: i,
           name: MOCK_MEMBERS[i - 1] || `玩家 ${i}`,
@@ -304,8 +327,8 @@
           <select id="userSelect-${i}" class="w-full text-[11px] rounded p-1 mb-1 border outline-none">
             ${MOCK_MEMBERS.map((m, idx) => `<option value="\${m}" ${idx === (i-1) ? 'selected' : ''}>${m}</option>`).join('')}
           </select>
-          <select id="roleSelect-${i}" onchange="onRoleChange(${i})" class="w-full text-[11px] rounded p-1 border outline-none">
-            ${BOARD_ROLES.map(r => `<option value="\${r}" ${r === assignedRole ? 'selected' : ''}>${r}</option>`).join('')}
+          <select id="roleSelect-${i}" onchange="onRoleChange(${i})" class="w-full text-[11px] rounded p-1 border outline-none font-bold text-indigo-300">
+            ${config.availableRoles.map(r => `<option value="\${r}" ${r === assignedRole ? 'selected' : ''}>${r}</option>`).join('')}
           </select>
         `;
         container.appendChild(card);
@@ -313,16 +336,18 @@
       updateCounts();
     }
 
-    function getSeatType(role) {
-      if (["預言家", "女巫", "獵人", "白痴"].includes(role)) return "GOD";
-      if (["平民", "混血兒"].includes(role)) return "VILLAGER";
-      if (["狼人"].includes(role)) return "WEREWOLF";
+    // 調用 rules_config.js 字典屬性
+    function getSeatType(roleName) {
+      if (typeof ROLE_DEFINITIONS !== 'undefined' && ROLE_DEFINITIONS[roleName]) {
+        return ROLE_DEFINITIONS[roleName].seatType;
+      }
       return "VILLAGER";
     }
 
-    function getVictoryFaction(role) {
-      if (role === "狼人") return "werewolf";
-      if (role === "混血兒") return null; // 首夜決定
+    function getVictoryFaction(roleName) {
+      if (typeof ROLE_DEFINITIONS !== 'undefined' && ROLE_DEFINITIONS[roleName]) {
+        return ROLE_DEFINITIONS[roleName].faction;
+      }
       return "villager";
     }
 
@@ -342,17 +367,24 @@
       const villagers = alive.filter(p => p.seatType === "VILLAGER").length;
       const wolves = alive.filter(p => p.seatType === "WEREWOLF").length;
 
-      document.getElementById("godCountDisplay").innerText = `${gods} / 4`;
-      document.getElementById("villagerCountDisplay").innerText = `${villagers} / 4`;
-      document.getElementById("wolfCountDisplay").innerText = `${wolves} / 4`;
-      checkGameOver(gods, villagers, wolves);
+      const totalGods = gameState.players.filter(p => p.seatType === "GOD").length;
+      const totalVillagers = gameState.players.filter(p => p.seatType === "VILLAGER").length;
+      const totalWolves = gameState.players.filter(p => p.seatType === "WEREWOLF").length;
+
+      document.getElementById("godCountDisplay").innerText = `${gods} / ${totalGods}`;
+      document.getElementById("villagerCountDisplay").innerText = `${villagers} / ${totalVillagers}`;
+      document.getElementById("wolfCountDisplay").innerText = `${wolves} / ${totalWolves}`;
+      
+      if (gameState.phase !== "SETUP") {
+        checkGameOver(gods, villagers, wolves);
+      }
     }
 
     function confirmSetup() {
       document.getElementById("setupPanel").removeAttribute("open");
       gameState.phase = "NIGHT";
       populateNightDropdowns();
-      alert("✅ 開局配置鎖定，進入第 1 夜流程！");
+      alert(`✅ 板型【${BOARD_DATABASE[currentBoardKey].name}】已鎖定，進入第 1 夜！`);
     }
 
     function populateNightDropdowns() {
@@ -363,10 +395,9 @@
       document.getElementById("wolfTarget").innerHTML = `<option value="">請選擇刀殺目標</option>` + optionsHtml;
       document.getElementById("poisonTarget").innerHTML = `<option value="">不使用毒藥</option>` + optionsHtml;
       document.getElementById("seerTarget").innerHTML = `<option value="">請選擇查驗目標</option>` + optionsHtml;
-      
-      // 非首夜隱藏混血兒卡片
-      if (gameState.round > 1) {
-        document.getElementById("step-hybrid").classList.add("hidden");
+
+      if (gameState.round > 1 || !BOARD_DATABASE[currentBoardKey].availableRoles.includes("混血兒")) {
+        document.getElementById("step-hybrid").style.display = "none";
       }
     }
 
@@ -379,8 +410,8 @@
         return;
       }
       const target = gameState.players.find(p => p.seat === targetSeat);
-      // 混血兒查驗永遠為好人
-      if (target.role === "狼人") {
+      // 定稿：第三方/特異角色預設查驗規則
+      if (["狼人", "狼王", "白狼王", "狼兄", "狼弟", "夢魘", "狼美人", "覺醒石像鬼"].includes(target.role)) {
         badge.innerText = "查殺 (狼人)";
         badge.className = "bg-rose-950 text-rose-300 border border-rose-700 px-2 py-0.5 rounded font-bold";
       } else {
@@ -407,38 +438,31 @@
       const poisonTarget = parseInt(document.getElementById("poisonTarget").value);
       const hybridTarget = parseInt(document.getElementById("hybridTarget").value);
 
-      // 混血兒榜樣設定 (首夜)
       if (gameState.round === 1 && hybridTarget) {
         const hybrid = gameState.players.find(p => p.role === "混血兒");
-        const target = gameState.players.find(p => p.seat === hybridTarget);
-        hybrid.hybridTarget = hybridTarget;
-        hybrid.victoryFaction = (target.role === "狼人") ? "werewolf" : "villager";
+        if (hybrid) {
+          const target = gameState.players.find(p => p.seat === hybridTarget);
+          hybrid.hybridTarget = hybridTarget;
+          hybrid.victoryFaction = (target.seatType === "WEREWOLF") ? "werewolf" : "villager";
+        }
       }
 
       let deaths = [];
-      if (wolfTarget && !antidoteUsedThisNight) {
-        deaths.push(wolfTarget);
-      }
-      if (poisonTarget && !deaths.includes(poisonTarget)) {
-        deaths.push(poisonTarget);
-      }
+      if (wolfTarget && !antidoteUsedThisNight) deaths.push(wolfTarget);
+      if (poisonTarget && !deaths.includes(poisonTarget)) deaths.push(poisonTarget);
 
-      // 套用死亡
       deaths.forEach(seat => {
         const p = gameState.players.find(x => x.seat === seat);
         p.isAlive = false;
       });
 
-      // 獵人吃刀判定開槍
       const hunter = gameState.players.find(p => p.role === "獵人");
       if (hunter && deaths.includes(hunter.seat) && poisonTarget !== hunter.seat) {
-        // 吃刀且沒吃毒，可開槍
         setupHunterShotBox();
       }
 
       updateCounts();
 
-      // 切換白天
       document.getElementById("nightPanel").classList.add("hidden");
       document.getElementById("dayPanel").classList.remove("hidden");
       document.getElementById("roundBadge").innerText = `第 ${gameState.round} 天 白天`;
@@ -473,7 +497,6 @@
       votesMap = {};
       currentVoteTarget = alive[0] ? alive[0].seat : null;
 
-      // 產生候選人按鈕
       const targetsContainer = document.getElementById("voteTargetsContainer");
       targetsContainer.innerHTML = alive.map(p => `
         <button onclick="setVoteTarget(${p.seat})" id="targetBtn-${p.seat}" class="py-1 px-2.5 rounded text-xs font-bold border border-gray-700 bg-gray-800 text-gray-300">
@@ -485,7 +508,6 @@
         </button>
       `;
 
-      // 產生選民標籤
       const votersContainer = document.getElementById("votersBadgeContainer");
       votersContainer.innerHTML = alive.map(p => `
         <button onclick="assignVote(${p.seat})" id="voterBadge-${p.seat}" class="w-11 h-9 rounded bg-gray-800 border border-gray-700 text-gray-300 text-xs font-mono font-bold flex flex-col items-center justify-center">
@@ -534,7 +556,6 @@
         }
       });
 
-      // 統計
       let tallies = {};
       Object.entries(votesMap).forEach(([voter, target]) => {
         if (!tallies[target]) tallies[target] = [];
@@ -550,7 +571,6 @@
     }
 
     function confirmExile() {
-      // 找出得票最高者
       let tallies = {};
       Object.entries(votesMap).forEach(([voter, target]) => {
         if (target != 0) tallies[target] = (tallies[target] || 0) + 1;
@@ -615,20 +635,17 @@
       }
     }
 
-    function broadcastVoteToPublic() {
-      alert("📡 票型已推播至公播看板 (全桌與大螢幕已同步)");
-    }
-
     function commitMatchResults() {
       if (!gameState.winner) {
         if (!confirm("遊戲尚未判定勝負，確定要提前強制結算存檔嗎？")) return;
       }
-      alert("✅ 對局結算完成！已同步呼叫 updateMatch 寫入會員資料庫與天梯分！");
+      alert("✅ 對局結算完成！已同步寫入資料庫！");
     }
 
     function resetMatch() {
       if (confirm("確定要重置目前對局嗎？所有資料將清空。")) {
         gameState.round = 1;
+        gameState.phase = "SETUP";
         document.getElementById("setupPanel").setAttribute("open", "true");
         document.getElementById("dayPanel").classList.add("hidden");
         document.getElementById("nightPanel").classList.remove("hidden");
@@ -637,8 +654,9 @@
       }
     }
 
-    // 啟動初始化
-    window.onload = initSeats;
+    window.onload = () => {
+      initBoardSelector();
+    };
   </script>
 </body>
 </html>
