@@ -3,7 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>基地狼人殺 - 現場公播戰術看板</title>
+  <title>基地狼人殺 - 現場公播看板</title>
+
+  <!-- 強制瀏覽器不使用快取 -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
@@ -23,7 +29,7 @@
       </div>
       <div>
         <h1 class="text-sm font-black text-gray-100 flex items-center gap-1.5">
-          基地戰術看板 <span class="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[10px] px-1.5 py-0.2 rounded font-bold">即時公播</span>
+          基地公播看板 <span class="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[10px] px-1.5 py-0.2 rounded font-bold">即時公播</span>
         </h1>
         <span class="text-[11px] text-gray-400 font-mono" id="currentStageText">第 1 天 警長競選階段</span>
       </div>
@@ -49,7 +55,7 @@
       </div>
     </div>
 
-    <!-- 警下投票區 (已修正名稱) -->
+    <!-- 警下投票區 -->
     <div class="bg-gray-900 rounded-xl neon-border p-3 border-blue-500/40">
       <div class="flex justify-between items-center mb-2">
         <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
@@ -174,36 +180,31 @@
   </div>
 
   <script>
-    // 全場核心對局狀態 (預設全員 12 人存活)
     let boardState = {
-      stage: "POLICE_ELECTION", // POLICE_ELECTION | DAY_DISCUSSION
+      stage: "POLICE_ELECTION",
       round: 1,
       policeSeat: null,
       players: Array.from({ length: 12 }, (_, i) => ({
         seat: i + 1,
         isAlive: true,
-        isCandidate: false, // 是否上警
-        hasDropped: false   // 是否退水
+        isCandidate: false,
+        hasDropped: false
       })),
       selectedCandidateForVote: null,
-      policeVotes: {}, // { candidateSeat: [voterSeats...] }
+      policeVotes: {},
       nightDeaths: []
     };
 
-    // 渲染整個看板介面
     function renderBoard() {
-      // 1. 存活比例
       const aliveCount = boardState.players.filter(p => p.isAlive).length;
       document.getElementById("aliveRatioText").innerText = `${aliveCount} / 12 人`;
 
-      // 2. 警上與警下名單
       const candidates = boardState.players.filter(p => p.isCandidate);
       const voters = boardState.players.filter(p => !p.isCandidate && p.isAlive);
 
       document.getElementById("candidateCountLabel").innerText = `${candidates.length} 人上警`;
       document.getElementById("votersCountLabel").innerText = `${voters.length} 人在警下`;
 
-      // 渲染警上按鈕
       const candGrid = document.getElementById("candidatesGrid");
       if (candidates.length === 0) {
         candGrid.innerHTML = `<div class="col-span-6 text-gray-500 text-xs text-center py-2">目前無人上警</div>`;
@@ -217,7 +218,6 @@
         `).join('');
       }
 
-      // 渲染警下按鈕
       const voterGrid = document.getElementById("votersGrid");
       if (voters.length === 0) {
         voterGrid.innerHTML = `<div class="col-span-6 text-gray-500 text-xs text-center py-2">全員上警</div>`;
@@ -231,7 +231,6 @@
         `).join('');
       }
 
-      // 3. 渲染白天 12 席標準座位
       const stdGrid = document.getElementById("standardSeatsGrid");
       stdGrid.innerHTML = boardState.players.map(p => `
         <div class="h-11 rounded-lg border ${p.isAlive ? (boardState.policeSeat === p.seat ? 'border-amber-500 bg-amber-950/40 text-amber-300' : 'border-gray-700 bg-gray-800 text-gray-200') : 'dead-seat border-rose-900 bg-rose-950/20 text-rose-500'} flex flex-col items-center justify-center text-xs font-bold relative">
@@ -241,16 +240,12 @@
         </div>
       `).join('');
 
-      // 4. 警長標籤
       document.getElementById("badgeHolderLabel").innerText = boardState.policeSeat ? `警長：${boardState.policeSeat} 號` : "警長：未指定";
 
-      // 5. 渲染抽屜控制器內容
       renderDrawerControls();
     }
 
-    // 渲染抽屜內部的按鈕
     function renderDrawerControls() {
-      // 上警開關
       const toggleGrid = document.getElementById("drawerCandidateToggleGrid");
       toggleGrid.innerHTML = boardState.players.map(p => `
         <button onclick="toggleCandidate(${p.seat})" class="h-8 rounded text-xs font-bold border ${p.isCandidate ? 'bg-amber-600 border-amber-400 text-white' : 'bg-gray-800 border-gray-700 text-gray-300'}">
@@ -258,7 +253,6 @@
         </button>
       `).join('');
 
-      // 受票候選人清單 (警上且未退水)
       const candContainer = document.getElementById("drawerTargetCandidatesContainer");
       const activeCandidates = boardState.players.filter(p => p.isCandidate && !p.hasDropped);
       
@@ -276,7 +270,6 @@
         `;
       }
 
-      // 警下合格選民 (只允許警下玩家點擊投票)
       const votersGrid = document.getElementById("drawerEligibleVotersGrid");
       const eligibleVoters = boardState.players.filter(p => !p.isCandidate && p.isAlive);
       
@@ -294,7 +287,6 @@
         `;
       }).join('');
 
-      // 昨夜倒牌標記按鈕 (抽屜內)
       const deathGrid = document.getElementById("drawerNightDeathGrid");
       deathGrid.innerHTML = boardState.players.map(p => `
         <button onclick="toggleNightDeath(${p.seat})" class="h-8 rounded text-xs font-bold border ${boardState.nightDeaths.includes(p.seat) ? 'bg-rose-700 border-rose-400 text-white' : 'bg-gray-800 border-gray-700 text-gray-300'}">
@@ -303,13 +295,11 @@
       `).join('');
     }
 
-    // 操作抽屜開關
     function toggleControlDrawer() {
       const drawer = document.getElementById("controlDrawer");
       drawer.classList.toggle("hidden");
     }
 
-    // 切換是否上警
     function toggleCandidate(seat) {
       const p = boardState.players.find(x => x.seat === seat);
       p.isCandidate = !p.isCandidate;
@@ -317,13 +307,11 @@
       renderBoard();
     }
 
-    // 選擇受票目標
     function selectCandidateForVote(candidateSeat) {
       boardState.selectedCandidateForVote = candidateSeat;
       renderDrawerControls();
     }
 
-    // 選民投票
     function assignPoliceVote(voterSeat) {
       if (boardState.selectedCandidateForVote === null) {
         alert("請先在上方點選要投給哪位候選人！");
@@ -342,7 +330,6 @@
       renderBoard();
     }
 
-    // 更新警長票型統計看板
     function updatePoliceVotesSummary() {
       const box = document.getElementById("policeVotesSummary");
       let html = "";
@@ -360,7 +347,6 @@
       box.innerHTML = html || `<div class="text-gray-500 text-center py-2">尚未開始計票，等待警下投票...</div>`;
     }
 
-    // 確認警長當選
     function confirmPoliceResult() {
       let maxVotes = 0;
       let winnerSeat = null;
@@ -384,7 +370,6 @@
       renderBoard();
     }
 
-    // 勾選昨夜死訊
     function toggleNightDeath(seat) {
       if (boardState.nightDeaths.includes(seat)) {
         boardState.nightDeaths = boardState.nightDeaths.filter(s => s !== seat);
@@ -394,7 +379,6 @@
       renderDrawerControls();
     }
 
-    // 切換為白天放逐討論
     function switchToDayDiscussion() {
       boardState.nightDeaths.forEach(s => {
         const p = boardState.players.find(x => x.seat === s);
