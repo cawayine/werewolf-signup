@@ -14,6 +14,7 @@
       --text-sub: #9aa5b1;
       --border: #2d3748;
       --gold: #ecc94b;
+      --success: #48bb78;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
     body { background-color: var(--bg); color: var(--text-main); padding: 16px; min-height: 100vh; padding-bottom: 70px; }
@@ -21,13 +22,19 @@
     .header { text-align: center; margin-bottom: 16px; }
     .header h1 { font-size: 20px; letter-spacing: 1px; color: #fff; }
     .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    
+    /* 個人頂部 */
     .profile-top { display: flex; align-items: center; gap: 16px; }
     .avatar { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; flex-shrink: 0; }
     .avatar-placeholder { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--accent); background: #2d3748; display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; }
     .profile-name { font-size: 20px; font-weight: bold; color: #fff; }
     .profile-sub { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
     .ladder-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(236,201,75,0.15); border: 1px solid rgba(236,201,75,0.4); color: var(--gold); font-size: 13px; font-weight: bold; padding: 4px 10px; border-radius: 20px; margin-top: 8px; }
+    
+    /* 區塊標題 */
     .section-divider { background: #151922; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; border-left: 3px solid var(--accent); font-size: 13px; font-weight: bold; color: var(--text-main); }
+    
+    /* 數據網格 */
     .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
     .stat-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 10px; }
     .stat-box { background: #151922; border: 1px solid var(--border); border-radius: 8px; padding: 12px 8px; text-align: center; }
@@ -38,18 +45,31 @@
     .stat-value.green { color: #68d391; }
     .stat-value.blue { color: #63b3ed; }
     .stat-value.purple { color: #b794f4; }
-    .faction-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+    
+    /* 陣營戰績 */
+    .faction-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
     .faction-row:last-child { border-bottom: none; }
-    .faction-label { color: var(--text-sub); }
-    .faction-values { display: flex; gap: 12px; align-items: center; }
+    .faction-label { color: #e2e8f0; font-weight: 500; }
+    .faction-values { display: flex; gap: 10px; align-items: center; }
     .faction-win { font-weight: bold; font-size: 15px; }
-    .faction-rate { font-size: 12px; color: var(--text-sub); background: #151922; border-radius: 4px; padding: 2px 6px; }
-    .skill-bar-bg { background: #151922; border-radius: 20px; height: 10px; overflow: hidden; border: 1px solid var(--border); margin-top: 8px; }
-    .skill-bar-fill { height: 100%; border-radius: 20px; background: linear-gradient(90deg, #e53935, #ecc94b); transition: width 0.6s ease; }
-    .skill-rate-value { font-size: 28px; font-weight: bold; color: var(--gold); margin-bottom: 6px; }
+    .faction-rate-badge { font-size: 12px; color: var(--text-sub); background: #151922; border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; display: flex; align-items: center; gap: 4px; }
+    .faction-rate-badge span { color: #e2e8f0; font-weight: 600; }
+
+    /* 近十場戰績 */
+    .match-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .match-item { display: flex; align-items: center; justify-content: space-between; background: #151922; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; }
+    .match-role { font-weight: bold; color: #f0f3f6; display: flex; align-items: center; gap: 6px; }
+    .match-result-group { display: flex; align-items: center; gap: 12px; }
+    .badge-result { font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: bold; }
+    .badge-win { background: rgba(72, 187, 120, 0.2); color: #48bb78; border: 1px solid rgba(72, 187, 120, 0.4); }
+    .badge-lose { background: rgba(229, 57, 53, 0.2); color: #fc8181; border: 1px solid rgba(229, 57, 53, 0.4); }
+    .match-points { font-size: 14px; font-weight: bold; min-width: 52px; text-align: right; }
+    .points-plus { color: #ecc94b; }
+    .points-minus { color: #fc8181; }
+
     .state-msg { text-align: center; padding: 40px 0; color: var(--text-sub); font-size: 14px; }
     .error-msg { color: #fc8181; }
-    .btn-back { width: 100%; padding: 14px; background: #2d3748; border: none; border-radius: 8px; color: var(--text-main); font-size: 15px; font-weight: bold; cursor: pointer; }
+    .btn-back { width: 100%; padding: 14px; background: #2d3748; border: none; border-radius: 8px; color: var(--text-main); font-size: 15px; font-weight: bold; cursor: pointer; margin-top: 4px; }
     .btn-back:active { background: #4a5568; }
   </style>
 </head>
@@ -66,7 +86,7 @@
   <div id="errorState" class="card" style="display:none;">
     <div class="state-msg error-msg">
       ⚠️ 找不到會員資料<br>
-      <span style="font-size:12px; margin-top:6px; display:block;">請先透過 LINE Bot 完成報名以建立會員。</span>
+      <span style="font-size:12px; margin-top:6px; display:block;">請先透過報名系統登記以建立會員身分。</span>
     </div>
   </div>
 
@@ -84,7 +104,7 @@
       </div>
     </div>
 
-    <!-- 場次紀錄 -->
+    <!-- 場次紀錄（保留技能正確率於 6 宮格中） -->
     <div class="card">
       <div class="section-divider">📊 場次紀錄</div>
       <div class="stat-grid-2">
@@ -120,32 +140,31 @@
         <div class="faction-label">🟢 好人陣營</div>
         <div class="faction-values">
           <span class="faction-win green" id="villagerWin">—</span>
-          <span class="faction-rate" id="villagerRate">—</span>
+          <div class="faction-rate-badge">好人勝率 <span id="villagerRate">—</span></div>
         </div>
       </div>
       <div class="faction-row">
         <div class="faction-label">🔴 狼人陣營</div>
         <div class="faction-values">
           <span class="faction-win accent" id="werewolfWin">—</span>
-          <span class="faction-rate" id="werewolfRate">—</span>
+          <div class="faction-rate-badge">狼人勝率 <span id="werewolfRate">—</span></div>
         </div>
       </div>
       <div class="faction-row">
         <div class="faction-label">🟣 第三方</div>
         <div class="faction-values">
           <span class="faction-win purple" id="thirdWin">—</span>
-          <span class="faction-rate" id="thirdRate">—</span>
+          <div class="faction-rate-badge">第三方勝率 <span id="thirdRate">—</span></div>
         </div>
       </div>
     </div>
 
-    <!-- 技能正確率 -->
+    <!-- 📜 近十場戰績 -->
     <div class="card">
-      <div class="section-divider">🎯 技能使用正確率</div>
-      <div class="skill-rate-value" id="skillRateDisplay">—</div>
-      <div class="skill-bar-bg">
-        <div class="skill-bar-fill" id="skillBarFill" style="width:0%"></div>
-      </div>
+      <div class="section-divider">📜 近十場戰績</div>
+      <ul class="match-list" id="matchListContainer">
+        <!-- 戰績動態產生 -->
+      </ul>
     </div>
 
     <button class="btn-back" onclick="history.back()">← 返回</button>
@@ -156,6 +175,20 @@
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbzkW2ALKbEmErYZPXzn5yqzFZcx7tI_6dL4zEDouYAj5_mylskzA8mNsG-jlzaH1Vmtdg/exec';
   const LIFF_ID = '2011803898-YnV0gXZI';
 
+  // 10 筆示範對局資料
+  const DEFAULT_RECENT_MATCHES = [
+    { role: '女巫', isWin: false, delta: -3.5 },
+    { role: '平民', isWin: true,  delta: 5 },
+    { role: '狼王', isWin: true,  delta: 10.5 },
+    { role: '平民', isWin: false, delta: -3 },
+    { role: '平民', isWin: false, delta: -3.5 },
+    { role: '夢魘', isWin: true,  delta: 9.5 },
+    { role: '狼人', isWin: true,  delta: 10 },
+    { role: '預言家', isWin: false, delta: -5 },
+    { role: '預言家', isWin: true,  delta: 5 },
+    { role: '平民', isWin: true,  delta: 3.5 }
+  ];
+
   function showError() {
     document.getElementById('loadingState').style.display = 'none';
     document.getElementById('errorState').style.display = 'block';
@@ -165,14 +198,14 @@
     document.getElementById('loadingState').style.display = 'none';
     document.getElementById('profileContent').style.display = 'block';
 
-    // 頭像
+    // 優先帶入 LINE 官方頭像
     const avatarBox = document.getElementById('avatarBox');
     if (lineProfile && lineProfile.pictureUrl) {
       avatarBox.outerHTML = `<img class="avatar" id="avatarBox" src="${lineProfile.pictureUrl}" alt="avatar">`;
     }
 
-    // 名稱與積分
-    document.getElementById('displayName').textContent = res.lineName || '未知玩家';
+    // 個人名稱固定以 LINE 暱稱為主
+    document.getElementById('displayName').textContent = res.lineName || (lineProfile ? lineProfile.displayName : '未知玩家');
     document.getElementById('ladderScore').textContent = res.ladderScore ?? '—';
 
     // 場次紀錄
@@ -182,19 +215,61 @@
     document.getElementById('monthlyLose').textContent = res.monthlyLose ?? '—';
     document.getElementById('skillRateNum').textContent = res.skillRate ?? '—';
 
-    // 陣營戰績
-    document.getElementById('villagerWin').textContent = res.villagerWin ?? '—';
+    // 陣營戰績：確保數值後方加上「勝」字
+    const formatWinText = (val) => {
+      if (val === undefined || val === null || val === '—') return '—';
+      const str = String(val).trim();
+      return str.includes('勝') ? str : `${str} 勝`;
+    };
+
+    document.getElementById('villagerWin').textContent = formatWinText(res.villagerWin);
     document.getElementById('villagerRate').textContent = res.villagerRate ?? '—';
-    document.getElementById('werewolfWin').textContent = res.werewolfWin ?? '—';
+
+    document.getElementById('werewolfWin').textContent = formatWinText(res.werewolfWin);
     document.getElementById('werewolfRate').textContent = res.werewolfRate ?? '—';
-    document.getElementById('thirdWin').textContent = res.thirdWin ?? '—';
+
+    document.getElementById('thirdWin').textContent = formatWinText(res.thirdWin);
     document.getElementById('thirdRate').textContent = res.thirdRate ?? '—';
 
-    // 技能正確率
-    const skillRateStr = res.skillRate || '0%';
-    document.getElementById('skillRateDisplay').textContent = skillRateStr;
-    const skillNum = parseFloat(skillRateStr);
-    document.getElementById('skillBarFill').style.width = (isNaN(skillNum) ? 0 : skillNum) + '%';
+    // 渲染近十場戰績清單
+    renderRecentMatches(res.recentMatches || DEFAULT_RECENT_MATCHES);
+  }
+
+  function renderRecentMatches(matches) {
+    const container = document.getElementById('matchListContainer');
+    if (!matches || matches.length === 0) {
+      container.innerHTML = '<li class="match-item" style="justify-content:center; color:var(--text-sub);">尚無近期戰績紀錄</li>';
+      return;
+    }
+
+    container.innerHTML = matches.map(m => {
+      const isWin = m.isWin;
+      const badgeClass = isWin ? 'badge-win' : 'badge-lose';
+      const resultText = isWin ? '勝' : '負';
+
+      const deltaNum = Number(m.delta);
+      const isPlus = deltaNum > 0;
+      const pointsClass = isPlus ? 'points-plus' : 'points-minus';
+      const sign = isPlus ? '+' : '';
+      const pointsText = `${sign}${deltaNum}`;
+
+      return `
+        <li class="match-item">
+          <div class="match-role">✦ ${escapeHtml(m.role)}</div>
+          <div class="match-result-group">
+            <span class="badge-result ${badgeClass}">${resultText}</span>
+            <span class="match-points ${pointsClass}">${pointsText}</span>
+          </div>
+        </li>
+      `;
+    }).join('');
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    return String(text).replace(/[&<>"']/g, function(m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    });
   }
 
   async function init() {
