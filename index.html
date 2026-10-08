@@ -105,10 +105,10 @@
 
   </main>
 
-  <!-- 底部：法官 (上帝) 後台專屬登入口 -->
+  <!-- 底部：法官 (上帝) 後台專屬登入口 (純按鈕無連結，防止誤跳) -->
   <footer class="pt-4 pb-2">
     <div class="border-t border-gray-800/80 pt-3">
-      <button onclick="openJudgeLogin()" class="w-full p-3 rounded-xl gold-card flex items-center justify-between text-left transition group">
+      <button type="button" onclick="openJudgeLogin(event)" class="w-full p-3 rounded-xl gold-card flex items-center justify-between text-left transition group">
         <div class="flex items-center">
           <div class="w-9 h-9 rounded-lg bg-amber-950/80 border border-amber-600/50 flex items-center justify-center text-amber-400 mr-3">
             <i class="fa-solid fa-gavel"></i>
@@ -134,11 +134,13 @@
       alert(`【${featureName}】正在建置中，第一賽季即將正式開放結算！`);
     }
 
-    function openJudgeLogin() {
+    function openJudgeLogin(e) {
+      if (e) e.preventDefault();
       const pwd = prompt("請輸入法官管理密碼：", "");
       if (pwd === null) return;
 
       if (pwd.trim() === "3q9527") {
+        sessionStorage.setItem("judge_auth", "authorized_3q9527");
         window.location.href = "judge.html";
       } else {
         alert("❌ 密碼錯誤，僅限工作人員進入！");
