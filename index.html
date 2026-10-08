@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>基地狼人殺 - 官方入口系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #0b0f17;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .neon-border {
+      border: 1px solid #30363d;
+      transition: all 0.25s ease;
+    }
+    .neon-border:hover {
+      border-color: #58a6ff;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(88, 166, 255, 0.12);
+    }
+    .gold-card {
+      border: 1px solid rgba(217, 119, 6, 0.4);
+      background: linear-gradient(145deg, rgba(30, 27, 24, 0.8) 0%, rgba(17, 24, 39, 0.9) 100%);
+    }
+    .gold-card:hover {
+      border-color: #f59e0b;
+      box-shadow: 0 4px 16px rgba(245, 158, 11, 0.2);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-4 max-w-md mx-auto">
+
+  <!-- 頂部品牌形象 -->
+  <header class="text-center pt-6 pb-4">
+    <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-900 via-gray-900 to-gray-950 border border-indigo-500/40 shadow-xl mb-3">
+      <i class="fa-solid fa-moon text-2xl text-indigo-400"></i>
+    </div>
+    <h1 class="text-2xl font-black tracking-wider text-gray-100 flex items-center justify-center gap-2">
+      基地狼人殺 <span class="text-xs bg-indigo-950 text-indigo-300 border border-indigo-800 px-2 py-0.5 rounded font-mono font-bold">BASE</span>
+    </h1>
+    <p class="text-xs text-gray-400 mt-1">現場實體賽事 ✕ 即時戰況天梯系統</p>
+  </header>
+
+  <!-- 核心四大功能按鈕 -->
+  <main class="space-y-3 flex-1 flex flex-col justify-center py-2">
+    
+    <!-- 1. 活動報名處 -->
+    <a href="signup.html" class="flex items-center p-3.5 bg-gray-900 rounded-xl neon-border group">
+      <div class="w-11 h-11 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-lg mr-3 group-hover:scale-105 transition">
+        <i class="fa-solid fa-calendar-check"></i>
+      </div>
+      <div class="flex-1">
+        <div class="text-sm font-bold text-gray-100 group-hover:text-emerald-300 transition">活動報名處</div>
+        <div class="text-[11px] text-gray-400">查看每週場次、即時登記開局</div>
+      </div>
+      <i class="fa-solid fa-chevron-right text-gray-600 text-xs group-hover:text-gray-300"></i>
+    </a>
+
+    <!-- 2. 天梯總榜 (尚未製作，預留點擊提示) -->
+    <div onclick="showUpcomingAlert('天梯總榜')" class="flex items-center p-3.5 bg-gray-900/60 rounded-xl border border-gray-800 cursor-pointer hover:border-gray-700 transition group">
+      <div class="w-11 h-11 rounded-lg bg-purple-950/40 border border-purple-900/40 flex items-center justify-center text-purple-400/80 text-lg mr-3">
+        <i class="fa-solid fa-trophy"></i>
+      </div>
+      <div class="flex-1">
+        <div class="text-sm font-bold text-gray-300 flex items-center gap-1.5">
+          天梯總榜 <span class="text-[9px] bg-gray-800 text-gray-400 px-1.5 py-0.2 rounded border border-gray-700">即將開放</span>
+        </div>
+        <div class="text-[11px] text-gray-500">賽季勝率、MVP與積分排行榜</div>
+      </div>
+      <i class="fa-solid fa-lock text-gray-600 text-xs"></i>
+    </div>
+
+    <!-- 3. 個人資訊 -->
+    <a href="profile.html" class="flex items-center p-3.5 bg-gray-900 rounded-xl neon-border group">
+      <div class="w-11 h-11 rounded-lg bg-blue-950/60 border border-blue-500/40 flex items-center justify-center text-blue-400 text-lg mr-3 group-hover:scale-105 transition">
+        <i class="fa-solid fa-id-card"></i>
+      </div>
+      <div class="flex-1">
+        <div class="text-sm font-bold text-gray-100 group-hover:text-blue-300 transition">個人戰績資訊</div>
+        <div class="text-[11px] text-gray-400">查看歷史參賽次數、勝率與勝場徽章</div>
+      </div>
+      <i class="fa-solid fa-chevron-right text-gray-600 text-xs group-hover:text-gray-300"></i>
+    </a>
+
+    <!-- 4. 公播看板 -->
+    <a href="board.html" class="flex items-center p-3.5 bg-gray-900 rounded-xl neon-border group">
+      <div class="w-11 h-11 rounded-lg bg-indigo-950/60 border border-indigo-500/40 flex items-center justify-center text-indigo-400 text-lg mr-3 group-hover:scale-105 transition">
+        <i class="fa-solid fa-display"></i>
+      </div>
+      <div class="flex-1">
+        <div class="text-sm font-bold text-gray-100 group-hover:text-indigo-300 transition">現場公播戰術看板</div>
+        <div class="text-[11px] text-gray-400">全場席位存活、警上警下與即時開票票型</div>
+      </div>
+      <i class="fa-solid fa-chevron-right text-gray-600 text-xs group-hover:text-gray-300"></i>
+    </a>
+
+  </main>
+
+  <!-- 底部：法官 (上帝) 後台專屬登入口 -->
+  <footer class="pt-4 pb-2">
+    <div class="border-t border-gray-800/80 pt-3">
+      <button onclick="openJudgeLogin()" class="w-full p-3 rounded-xl gold-card flex items-center justify-between text-left transition group">
+        <div class="flex items-center">
+          <div class="w-9 h-9 rounded-lg bg-amber-950/80 border border-amber-600/50 flex items-center justify-center text-amber-400 mr-3">
+            <i class="fa-solid fa-gavel"></i>
+          </div>
+          <div>
+            <div class="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+              法官專屬後台 (上帝主控台)
+              <span class="text-[9px] bg-amber-950 text-amber-400 border border-amber-800 px-1 rounded">STAFF</span>
+            </div>
+            <div class="text-[10px] text-gray-400">板型選擇、夜間主持引導與對局記分結算</div>
+          </div>
+        </div>
+        <i class="fa-solid fa-arrow-right-to-bracket text-amber-500 text-xs group-hover:translate-x-1 transition"></i>
+      </button>
+      <div class="text-center text-[10px] text-gray-600 mt-2 font-mono">
+        BASE WEREWOLF SYSTEM © 2026
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function showUpcomingAlert(featureName) {
+      alert(`【${featureName}】正在建置中，第一賽季即將正式開放結算！`);
+    }
+
+    function openJudgeLogin() {
+      // 簡易防呆密碼驗證（可直接設定店內密碼，預設留空或輸入 8888 即可通過）
+      const pwd = prompt("請輸入法官管理密碼 (直接按確定進入)：", "");
+      if (pwd !== null) {
+        window.location.href = "judge.html";
+      }
+    }
+  </script>
+</body>
+</html>
