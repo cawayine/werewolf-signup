@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>基地狼人殺 - 上帝專屬記分台</title>
 
-  <!-- 門禁驗證：未持有 3q9527 通行證直接彈出並踢回首頁 -->
+  <!-- 門禁驗證 -->
   <script>
     if (sessionStorage.getItem("judge_auth") !== "authorized_3q9527") {
       alert("❌ 未經授權！請從首頁輸入法官密碼進入。");
@@ -78,7 +78,7 @@
       <button onclick="clearNightActions()" class="text-[10px] text-gray-400 hover:text-white border border-gray-700 px-1.5 py-0.5 rounded">清空本夜紀錄</button>
     </div>
     <div id="nightActionList" class="space-y-2">
-      <!-- 根據選定板型動態渲染 -->
+      <!-- 動態渲染 -->
     </div>
   </section>
 
@@ -119,11 +119,32 @@
   </div>
 
   <script>
-    // 基地 14 位固定名單
     const MOCK_MEMBERS = [
       "小前 (Chien)", "郭郭", "King", "底迪", "Lucas", "提摩", 
       "hokai", "霏霏", "慶", "崇朗", "皓晴", "貓貓", "路人甲", "路人乙"
     ];
+
+    // 本地預設備援板型，避免外部 rules_config.js 載入失敗時整個畫面空白
+    const FALLBACK_BOARDS = {
+      "預女獵白混": {
+        name: "預女獵白混 (12人)",
+        roles: ["混血兒", "預言家", "女巫", "獵人", "白癡", "平民", "平民", "平民", "狼人", "狼人", "狼人", "狼人"],
+        nightOrder: [
+          { role: "混血兒", action: "選擇支持榜樣 (僅首夜)" },
+          { role: "狼人", action: "狼人請睜眼，確認隊友並選擇襲擊目標" },
+          { role: "女巫", action: "女巫請睜眼，使用解藥或毒藥" },
+          { role: "預言家", action: "預言家請睜眼，查驗一名玩家身份" },
+          { role: "獵人", action: "獵人請睜眼，確認開槍狀態" }
+        ]
+      }
+    };
+
+    function getActiveBoards() {
+      if (typeof BOARD_DATABASE !== "undefined" && Object.keys(BOARD_DATABASE).length > 0) {
+        return BOARD_DATABASE;
+      }
+      return FALLBACK_BOARDS;
+    }
 
     let currentBoardKey = "預女獵白混";
     let seatsState = Array.from({ length: 12 }, (_, i) => ({
@@ -135,21 +156,21 @@
     }));
 
     function initBoardSelector() {
+      const db = getActiveBoards();
       const selector = document.getElementById("boardSelector");
-      if (typeof BOARD_DATABASE === "undefined") return;
-      selector.innerHTML = Object.keys(BOARD_DATABASE).map(key => `
+      selector.innerHTML = Object.keys(db).map(key => `
         <option value="${key}" ${key === currentBoardKey ? 'selected' : ''}>
-          ${BOARD_DATABASE[key].name}
+          ${db[key].name || key}
         </option>
       `).join('');
     }
 
     function changeBoard(key) {
       currentBoardKey = key;
-      const bData = BOARD_DATABASE[key];
-      if (!bData) return;
+      const db = getActiveBoards();
+      const bData = db[key] || Object.values(db)[0];
+      const rolesPool = (bData && bData.roles) ? [...bData.roles] : [];
 
-      const rolesPool = [...bData.roles];
       seatsState.forEach((s, idx) => {
         s.role = rolesPool[idx] || "平民";
         s.isAlive = true;
@@ -160,9 +181,10 @@
       renderNightActions(bData);
     }
 
-    // 渲染座位席：動態追蹤已入座玩家，防止重複選取
     function renderSeats() {
       const grid = document.getElementById("seatsGrid");
+      if (!grid) return;
+
       const takenMap = {};
       seatsState.forEach(s => {
         if (s.playerName) {
@@ -182,7 +204,7 @@
           if (isCurrent) {
             label = `✓ ${m} (當前)`;
           } else if (isTakenByOther) {
-            label = `⛔ ${m} (已入座 ${occupiedSeat < 10 ? '0' + occupiedSeat : occupiedSeat}號)`;
+            label = `⛔ ${m} (已在 ${occupiedSeat < 10 ? '0' + occupiedSeat : occupiedSeat}號)`;
             disabledAttr = "disabled class='text-gray-500 bg-gray-900'";
           }
 
@@ -224,12 +246,17 @@
 
     function renderNightActions(boardConfig) {
       const container = document.getElementById("nightActionList");
-      if (!boardConfig || !boardConfig.nightOrder || boardConfig.nightOrder.length === 0) {
-        container.innerHTML = `<div class="text-xs text-gray-500">該板型無特殊夜間技能配置</div>`;
-        return;
-      }
+      if (!container) return;
 
-      container.innerHTML = boardConfig.nightOrder.map((step, idx) => `
+      // 預設標準睜眼引導（當板型沒有設定 nightOrder 時自動採用）
+      let steps = (boardConfig && Array.isArray(boardConfig.nightOrder)) ? boardConfig.nightOrder : [
+        { role: "狼人", action: "狼人請睜眼，選擇襲擊目標" },
+        { role: "女巫", action: "女巫請睜眼，使用解藥或毒藥" },
+        { role: "預言家", action: "預言家請睜眼，查驗一名玩家身份" },
+        { role: "獵人", action: "獵人請睜眼，確認開槍狀態" }
+      ];
+
+      container.innerHTML = steps.map((step, idx) => `
         <div class="p-2 bg-gray-800/70 rounded-lg border border-gray-700 flex flex-col gap-1.5">
           <div class="flex justify-between items-center">
             <span class="text-xs font-bold text-indigo-300">
@@ -261,7 +288,6 @@
       document.querySelectorAll("#nightActionList input").forEach(input => input.value = "");
     }
 
-    // 雙重確認防呆機制：流局抄掉重開 (不計入任何勝負數據)
     function voidCurrentGame() {
       const firstCheck = confirm("⚠️【第 1 次確認】確定要將本局遊戲【流局抄掉】嗎？\n\n• 本局將完全作廢，不計入勝率與天梯數據。\n• 即將重置所有存活狀態與夜間紀錄。");
       if (!firstCheck) return;
