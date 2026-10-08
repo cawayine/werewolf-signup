@@ -74,7 +74,7 @@
         <div class="text-sm font-bold text-gray-300 flex items-center gap-1.5">
           天梯總榜 <span class="text-[9px] bg-gray-800 text-gray-400 px-1.5 py-0.2 rounded border border-gray-700">即將開放</span>
         </div>
-        <div class="text-[11px] text-gray-500">賽季勝率與積分排行榜</div>
+        <div class="text-[11px] text-gray-500">賽季勝率、MVP與積分排行榜</div>
       </div>
       <i class="fa-solid fa-lock text-gray-600 text-xs"></i>
     </div>
@@ -86,7 +86,7 @@
       </div>
       <div class="flex-1">
         <div class="text-sm font-bold text-gray-100 group-hover:text-blue-300 transition">個人戰績資訊</div>
-        <div class="text-[11px] text-gray-400">查看歷史遊戲記錄、勝率數據</div>
+        <div class="text-[11px] text-gray-400">查看歷史參賽次數、勝率與勝場徽章</div>
       </div>
       <i class="fa-solid fa-chevron-right text-gray-600 text-xs group-hover:text-gray-300"></i>
     </a>
@@ -135,9 +135,13 @@
     }
 
     function openJudgeLogin() {
-      const pwd = prompt("請輸入法官管理密碼 (直接按確定進入)：", "");
-      if (pwd !== null) {
+      const pwd = prompt("請輸入法官管理密碼：", "");
+      if (pwd === null) return;
+
+      if (pwd.trim() === "3q9527") {
         window.location.href = "judge.html";
+      } else {
+        alert("❌ 密碼錯誤，僅限工作人員進入！");
       }
     }
   </script>
