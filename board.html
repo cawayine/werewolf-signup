@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>基地狼人殺 - 現場公播戰術看板</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .neon-card { background: #161b22; border: 1px solid #30363d; }
+    .gold-glow { text-shadow: 0 0 10px rgba(245, 158, 11, 0.4); }
+    .rotating { animation: spin 0.8s linear infinite; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="p-3 max-w-lg mx-auto pb-44">
+
+  <!-- 頂部公播狀態列 (含刷新按鈕) -->
+  <header class="flex justify-between items-center py-2.5 px-3 rounded-xl neon-card mb-3 shadow-lg">
+    <div>
+      <div class="flex items-center gap-1.5">
+        <span class="text-base font-black text-gray-100 tracking-wider">🐺 基地戰術看板</span>
+        <span class="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-1.5 py-0.5 rounded font-bold">即時公播</span>
+      </div>
+      <div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
+        <span id="currentPhaseText">第 1 天 白天放逐投票</span>
+        <span class="text-gray-600">|</span>
+        <span id="updateTimeText" class="text-emerald-400 font-mono">剛剛更新</span>
+      </div>
+    </div>
+
+    <!-- 手動刷新按鈕 -->
+    <button onclick="manualRefresh()" id="refreshBtn" class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-xs py-2 px-3 rounded-lg shadow-md transition-all">
+      <i class="fa-solid fa-rotate-right" id="refreshIcon"></i>
+      <span>刷新</span>
+    </button>
+  </header>
+
+  <!-- 12 席座位存活與警長狀態列 -->
+  <section class="neon-card p-3 rounded-xl mb-3 shadow">
+    <div class="flex justify-between items-center mb-2">
+      <span class="text-xs font-bold text-gray-300">席位存活狀態</span>
+      <span class="text-[11px] text-gray-400" id="aliveRatioText">存活：11 / 12 人</span>
+    </div>
+    <div class="grid grid-cols-6 gap-1.5 text-center text-xs" id="seatStatusGrid">
+      <!-- 1~12 座位由 JS 渲染 -->
+    </div>
+  </section>
+
+  <!-- 票型公播卡片區 -->
+  <main class="space-y-3" id="voteCardsContainer">
+
+    <!-- 警長競選票型卡 -->
+    <div class="neon-card p-3 rounded-xl shadow" id="sheriffVoteCard">
+      <div class="flex justify-between items-center mb-2 pb-1.5 border-b border-gray-800">
+        <span class="text-xs font-bold text-amber-400 flex items-center gap-1">
+          <i class="fa-solid fa-crown text-amber-400"></i> 首日警長競選結果
+        </span>
+        <span class="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-1.5 py-0.5 rounded font-bold">
+          03 號當選
+        </span>
+      </div>
+      
+      <div class="space-y-1.5 text-xs">
+        <div class="bg-gray-800/80 p-2 rounded flex justify-between items-center border border-gray-700">
+          <span class="font-bold text-blue-300">03 號候選人 (3 票)</span>
+          <span class="text-gray-300 font-mono">04, 07, 12</span>
+        </div>
+        <div class="bg-gray-800/80 p-2 rounded flex justify-between items-center border border-gray-700">
+          <span class="font-bold text-emerald-300">02 號候選人 (2 票)</span>
+          <span class="text-gray-300 font-mono">05, 10</span>
+        </div>
+        <div class="bg-gray-800/40 p-1.5 rounded flex justify-between items-center text-gray-500">
+          <span>棄票 / 廢票</span>
+          <span>無</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 白天放逐即時票型卡 -->
+    <div class="neon-card p-3 rounded-xl border-blue-900 shadow">
+      <div class="flex justify-between items-center mb-2 pb-1.5 border-b border-gray-800">
+        <span class="text-xs font-bold text-blue-400 flex items-center gap-1">
+          <i class="fa-solid fa-scale-balanced"></i> 當前放逐投票票型
+        </span>
+        <span class="text-[10px] text-gray-400">警長票權 1.5 票</span>
+      </div>
+
+      <div class="space-y-1.5 text-xs" id="publicExileVoteDisplay">
+        <div class="text-gray-500 text-center py-2">等待計票員或上帝送出票型...</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 底部固定抽屜：協同計票操作區 (預設收合) -->
+  <div class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-50">
+    <div class="max-w-lg mx-auto">
+      
+      <!-- 展開/收合切換 -->
+      <div class="flex justify-between items-center">
+        <span class="text-xs text-gray-400">桌上記票員專區：</span>
+        <button onclick="toggleScorerPanel()" id="scorerToggleBtn" class="text-xs bg-gray-800 text-amber-300 border border-gray-700 px-3 py-1 rounded-lg font-bold hover:bg-gray-700 flex items-center gap-1 transition">
+          <i class="fa-solid fa-pen-to-square"></i> 開啟計票面板
+        </button>
+      </div>
+
+      <!-- 計票控制本體 -->
+      <div id="scorerPanel" class="hidden mt-2.5 pt-2.5 border-t border-gray-800 space-y-2">
+        <div class="text-[11px] text-gray-400 font-semibold">第一步：點選目標候選人</div>
+        <div class="flex flex-wrap gap-1.5" id="scorerCandidateList"></div>
+
+        <div class="text-[11px] text-gray-400 font-semibold mt-1">第二步：點擊選民號碼完成歸票</div>
+        <div class="flex flex-wrap gap-1.5" id="scorerVoterBadgeList"></div>
+
+        <button onclick="broadcastCurrentVote()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg text-xs shadow mt-2 flex items-center justify-center gap-1.5 transition">
+          <i class="fa-solid fa-tower-broadcast"></i> 送出票型廣播至全場
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let boardData = {
+      round: 1,
+      phaseText: "第 1 天 白天放逐投票",
+      policeSeat: 3,
+      seats: [
+        { seat: 1, alive: true }, { seat: 2, alive: true }, { seat: 3, alive: true },
+        { seat: 4, alive: true }, { seat: 5, alive: true }, { seat: 6, alive: true },
+        { seat: 7, alive: true }, { seat: 8, alive: false }, { seat: 9, alive: true },
+        { seat: 10, alive: true }, { seat: 11, alive: true }, { seat: 12, alive: true }
+      ],
+      votes: {}
+    };
+
+    let activeCandidate = null;
+
+    function renderSeatGrid() {
+      const grid = document.getElementById("seatStatusGrid");
+      grid.innerHTML = "";
+      let aliveCount = 0;
+
+      boardData.seats.forEach(p => {
+        if (p.alive) aliveCount++;
+        const isPolice = (p.seat === boardData.policeSeat);
+        const card = document.createElement("div");
+        
+        if (!p.alive) {
+          card.className = "p-1 rounded bg-rose-950/40 border border-rose-900 text-rose-500 line-through opacity-50";
+          card.innerText = p.seat < 10 ? '0' + p.seat : p.seat;
+        } else if (isPolice) {
+          card.className = "p-1 rounded bg-amber-950 border border-amber-500 text-amber-200 font-bold gold-glow relative";
+          card.innerHTML = `${p.seat < 10 ? '0' + p.seat : p.seat} <span class="absolute -top-1 -right-1 text-[10px]">👑</span>`;
+        } else {
+          card.className = "p-1 rounded bg-gray-800 border border-gray-700 text-gray-200";
+          card.innerText = p.seat < 10 ? '0' + p.seat : p.seat;
+        }
+        grid.appendChild(card);
+      });
+
+      document.getElementById("aliveRatioText").innerText = `存活：${aliveCount} / 12 人`;
+    }
+
+    function manualRefresh() {
+      const icon = document.getElementById('refreshIcon');
+      const timeText = document.getElementById('updateTimeText');
+      
+      icon.classList.add('rotating');
+      timeText.innerText = "同步中...";
+
+      setTimeout(() => {
+        icon.classList.remove('rotating');
+        const now = new Date();
+        timeText.innerText = `${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} 更新`;
+        renderSeatGrid();
+        renderPublicVotes();
+      }, 400);
+    }
+
+    function toggleScorerPanel() {
+      const panel = document.getElementById('scorerPanel');
+      const btn = document.getElementById('scorerToggleBtn');
+      if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> 收合面板`;
+        initScorerControls();
+      } else {
+        panel.classList.add('hidden');
+        btn.innerHTML = `<i class="fa-solid fa-pen-to-square"></i> 開啟計票面板`;
+      }
+    }
+
+    function initScorerControls() {
+      const aliveSeats = boardData.seats.filter(p => p.alive).map(p => p.seat);
+      activeCandidate = aliveSeats[0];
+
+      const candContainer = document.getElementById("scorerCandidateList");
+      candContainer.innerHTML = aliveSeats.map(s => `
+        <button onclick="setCandidateTarget(${s})" id="candBtn-${s}" class="py-1 px-2 rounded text-xs font-bold border border-gray-700 bg-gray-800 text-gray-300">
+          投 ${s}號
+        </button>
+      `).join('') + `
+        <button onclick="setCandidateTarget(0)" id="candBtn-0" class="py-1 px-2 rounded text-xs font-bold border border-gray-700 bg-gray-800 text-gray-400">
+          棄票
+        </button>
+      `;
+
+      const voterContainer = document.getElementById("scorerVoterBadgeList");
+      voterContainer.innerHTML = aliveSeats.map(s => `
+        <button onclick="assignVoter(${s})" id="voterBadgeBtn-${s}" class="w-11 h-9 rounded bg-gray-800 border border-gray-700 text-gray-300 text-xs font-mono font-bold flex flex-col items-center justify-center">
+          ${s}號 <span class="text-[8px] text-gray-500 font-normal">未投</span>
+        </button>
+      `).join('');
+
+      setCandidateTarget(activeCandidate);
+    }
+
+    function setCandidateTarget(target) {
+      activeCandidate = target;
+      document.querySelectorAll("[id^='candBtn-']").forEach(btn => {
+        btn.className = "py-1 px-2 rounded text-xs font-bold border border-gray-700 bg-gray-800 text-gray-300";
+      });
+      const active = document.getElementById(`candBtn-${target}`);
+      if (active) {
+        active.className = "py-1 px-2 rounded text-xs font-bold border border-blue-500 bg-blue-950 text-blue-200";
+      }
+    }
+
+    function assignVoter(voterSeat) {
+      if (activeCandidate === null) return;
+      if (boardData.votes[voterSeat] === activeCandidate) {
+        delete boardData.votes[voterSeat];
+      } else {
+        boardData.votes[voterSeat] = activeCandidate;
+      }
+      updateScorerVoterUI();
+    }
+
+    function updateScorerVoterUI() {
+      boardData.seats.filter(p => p.alive).forEach(p => {
+        const btn = document.getElementById(`voterBadgeBtn-${p.seat}`);
+        if (!btn) return;
+        const target = boardData.votes[p.seat];
+        if (target === undefined) {
+          btn.className = "w-11 h-9 rounded bg-gray-800 border border-gray-700 text-gray-300 text-xs font-mono font-bold flex flex-col items-center justify-center";
+          btn.innerHTML = `${p.seat}號 <span class="text-[8px] text-gray-500 font-normal">未投</span>`;
+        } else if (target === 0) {
+          btn.className = "w-11 h-9 rounded bg-gray-700 border border-gray-500 text-gray-200 text-xs font-mono font-bold flex flex-col items-center justify-center";
+          btn.innerHTML = `${p.seat}號 <span class="text-[8px] text-gray-400 font-normal">棄票</span>`;
+        } else {
+          btn.className = "w-11 h-9 rounded bg-indigo-950 border border-indigo-500 text-indigo-100 text-xs font-mono font-bold flex flex-col items-center justify-center";
+          btn.innerHTML = `${p.seat}號 <span class="text-[8px] text-amber-300 font-normal">投 ${target}</span>`;
+        }
+      });
+    }
+
+    function broadcastCurrentVote() {
+      renderPublicVotes();
+      alert("✅ 票型已同步廣播至戰術看板！");
+    }
+
+    function renderPublicVotes() {
+      const container = document.getElementById("publicExileVoteDisplay");
+      let groups = {};
+
+      Object.entries(boardData.votes).forEach(([voter, target]) => {
+        if (!groups[target]) groups[target] = [];
+        groups[target].push(parseInt(voter));
+      });
+
+      if (Object.keys(groups).length === 0) {
+        container.innerHTML = `<div class="text-gray-500 text-center py-2">尚未送出票型</div>`;
+        return;
+      }
+
+      let html = "";
+      Object.keys(groups).forEach(target => {
+        const voters = groups[target];
+        let score = 0;
+        voters.forEach(v => {
+          score += (v === boardData.policeSeat ? 1.5 : 1.0);
+        });
+
+        const label = target == 0 ? "棄票" : `${target < 10 ? '0' + target : target} 號 (${score} 票)`;
+        const voterListText = voters.map(v => v === boardData.policeSeat ? `${v}(👑)` : `${v}`).join(', ');
+
+        html += `
+          <div class="bg-gray-800/80 p-2 rounded flex justify-between items-center border border-gray-700">
+            <span class="font-bold ${target == 0 ? 'text-gray-400' : 'text-blue-300'}">${label}</span>
+            <span class="text-gray-200 font-mono">${voterListText}</span>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    window.onload = () => {
+      renderSeatGrid();
+    };
+  </script>
+</body>
+</html>
