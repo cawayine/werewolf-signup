@@ -49,11 +49,11 @@
       </div>
     </div>
 
-    <!-- 警下投票人區 -->
+    <!-- 警下投票區 (已修正名稱) -->
     <div class="bg-gray-900 rounded-xl neon-border p-3 border-blue-500/40">
       <div class="flex justify-between items-center mb-2">
         <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
-          <i class="fa-solid fa-check-to-slot text-blue-400"></i> 🛡️ 警下好人區 (擁有投票權)
+          <i class="fa-solid fa-check-to-slot text-blue-400"></i> 🛡️ 警下投票區 (擁有投票權)
         </span>
         <span class="text-[10px] text-gray-400" id="votersCountLabel">12 人在警下</span>
       </div>
@@ -281,7 +281,6 @@
       const eligibleVoters = boardState.players.filter(p => !p.isCandidate && p.isAlive);
       
       votersGrid.innerHTML = eligibleVoters.map(p => {
-        // 尋找投給誰
         let votedTarget = null;
         Object.entries(boardState.policeVotes).forEach(([cand, list]) => {
           if (list.includes(p.seat)) votedTarget = cand;
@@ -332,7 +331,6 @@
       }
       const target = boardState.selectedCandidateForVote;
       
-      // 先清除該選民過去的票
       Object.keys(boardState.policeVotes).forEach(k => {
         boardState.policeVotes[k] = boardState.policeVotes[k].filter(s => s !== voterSeat);
       });
@@ -398,7 +396,6 @@
 
     // 切換為白天放逐討論
     function switchToDayDiscussion() {
-      // 結算昨夜倒牌
       boardState.nightDeaths.forEach(s => {
         const p = boardState.players.find(x => x.seat === s);
         if (p) p.isAlive = false;
