@@ -12,7 +12,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-  <!-- LINE LIFF SDK (若在 LINE 內可一鍵自動帶出資料) -->
+  <!-- LINE LIFF SDK -->
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 
   <style>
@@ -64,7 +64,7 @@
   <!-- 核心功能按鈕區塊 -->
   <main class="space-y-2.5 flex-1 flex flex-col justify-center py-1">
     
-    <!-- 🌟 新增：一鍵建立 / 綁定會員 -->
+    <!-- 🌟 一鍵建立 / 綁定會員 -->
     <div onclick="openQuickRegisterModal()" class="flex items-center p-3 rounded-xl vip-card cursor-pointer transition group">
       <div class="w-11 h-11 rounded-lg bg-purple-950/80 border border-purple-500/50 flex items-center justify-center text-purple-300 text-lg mr-3 group-hover:scale-105 transition shadow-lg">
         <i class="fa-solid fa-user-plus"></i>
@@ -175,17 +175,17 @@
         <div>
           <label class="block text-gray-400 mb-1">玩家性別：</label>
           <div class="grid grid-cols-2 gap-2">
-            <button type="button" onclick="selectGender('M')" id="genderBtnM" class="p-2 rounded-lg border border-gray-700 bg-gray-800 text-gray-300 font-bold transition">
-              男生 (M)
+            <button type="button" onclick="selectGender('M')" id="genderBtnM" class="p-2 rounded-lg border border-blue-500 bg-blue-950/60 text-blue-300 font-bold transition">
+              男生 (男)
             </button>
-            <button type="button" onclick="selectGender('F')" id="genderBtnF" class="p-2 rounded-lg border border-gray-700 bg-gray-800 text-gray-300 font-bold transition">
-              女生 (F)
+            <button type="button" onclick="selectGender('F')" id="genderBtnF" class="p-2 rounded-lg border border-gray-700 bg-gray-800 text-gray-400 font-bold transition">
+              女生 (女)
             </button>
           </div>
         </div>
 
         <div class="text-[11px] text-gray-500 bg-gray-950/60 p-2 rounded border border-gray-800">
-          💡 提示：建立後將連動本團 Google 試算表戰績庫，日後參賽即可自動累計勝率與天梯榜！
+          💡 提示：建立後將連動 Google 試算表會員資料庫，獲得初始天梯積分 1000 分並自動累計勝率！
         </div>
       </div>
 
@@ -201,14 +201,14 @@
   </div>
 
   <script>
-    // 你的會員系統 GAS Web App URL (填入原本會員系統的 GAS 部署網址)
-    const MEMBER_GAS_URL = "https://script.google.com/macros/s/AKfycbz_替換成你的會員GAS網址/exec";
+    // 請將此處替換為你會員系統 Apps Script 的 Web 應用程式網址 (結尾為 /exec)
+    const MEMBER_GAS_URL = "https://script.google.com/macros/s/AKfycbzkW2ALKbEmErYZPXzn5yqzFZcx7tI_6dL4zEDouYAj5_mylskzA8mNsG-jlzaH1Vmtdg/exec";
     
     let currentGender = "M";
     let currentUserProfile = null;
 
-    // 初始化 LIFF (若有設定過 LIFF ID 可填入，沒有亦可手動輸入註冊)
-    const LIFF_ID = ""; // 可選填
+    // 若有 LIFF ID 可填入，沒有亦可手動輸入
+    const LIFF_ID = "";
 
     window.onload = async () => {
       if (LIFF_ID && typeof liff !== 'undefined') {
@@ -240,7 +240,6 @@
       }
     }
 
-    // 打開快速建立會員彈窗
     function openQuickRegisterModal() {
       if (currentUserProfile && currentUserProfile.displayName) {
         document.getElementById("regNameInput").value = currentUserProfile.displayName;
@@ -266,7 +265,7 @@
       }
     }
 
-    // 送出建立會員
+    // 送出建立會員：完全對齊會員系統 GAS 之 upsertMember 介面
     async function submitQuickRegister() {
       const name = document.getElementById("regNameInput").value.trim();
       if (!name) {
@@ -284,11 +283,11 @@
 
       try {
         const payload = {
-          action: "registerMember",
+          action: "upsertMember",
           uid: uid,
-          name: name,
-          gender: currentGender,
-          source: "INDEX_QUICK_REGISTER"
+          lineName: name,
+          customNick: name,
+          gender: currentGender === "M" ? "男" : "女"
         };
 
         const res = await fetch(MEMBER_GAS_URL, {
@@ -298,16 +297,19 @@
         });
         const result = await res.json();
 
-        if (result.success || result.status === "success") {
-          alert(`🎉 恭喜【${name}】會員建立成功！戰績庫已同步建立。`);
+        if (result.success) {
+          if (result.action === "created") {
+            alert(`🎉 恭喜【${name}】會員建立成功！已分配初始天梯積分 1000 分。`);
+          } else {
+            alert(`✅【${name}】會員檔案已存在，資料已為您更新同步！`);
+          }
           closeQuickRegisterModal();
         } else {
-          alert("建立回報：" + (result.message || "已登記或請聯絡上帝！"));
-          closeQuickRegisterModal();
+          alert("建立失敗：" + (result.message || "請稍候再試"));
         }
       } catch (err) {
         console.error(err);
-        alert("資料已傳送建立（或伺服器非同步處理中）！");
+        alert("資料已傳送至後台（或請檢查網路連線）！");
         closeQuickRegisterModal();
       } finally {
         submitBtn.disabled = false;
