@@ -9,7 +9,7 @@
   <title>基地狼人殺 報名櫃台</title>
   
   <script>
-    const APP_VERSION = "1.1.8";
+    const APP_VERSION = "1.2.0";
     
     (function autoUpdateCheck() {
       const savedVersion = localStorage.getItem('werewolf_app_version');
@@ -196,6 +196,7 @@
     .player-item:last-child { border-bottom: none; }
     .player-idx { font-size: 14px; font-weight: bold; color: var(--accent); width: 28px; }
     .player-info { flex: 1; }
+    .player-name-row { display: flex; align-items: center; gap: 6px; }
     .player-name { font-size: 15px; font-weight: 500; }
     .player-time { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
     .player-badges { display: flex; gap: 4px; }
@@ -205,6 +206,13 @@
     .badge-free { background: rgba(236, 201, 75, 0.2); color: #ecc94b; border: 1px solid rgba(236, 201, 75, 0.4); }
     .badge-checked { background: rgba(66, 153, 225, 0.2); color: #63b3ed; border: 1px solid rgba(66, 153, 225, 0.4); }
     .badge-unchecked { background: rgba(160, 174, 192, 0.15); color: #a0aec0; border: 1px solid rgba(160, 174, 192, 0.3); }
+
+    /* 性別標籤樣式 */
+    .gender-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; display: inline-flex; align-items: center; gap: 2px; }
+    .gender-male { background: rgba(49, 130, 206, 0.2); color: #63b3ed; border: 1px solid rgba(49, 130, 206, 0.5); }
+    .gender-female { background: rgba(237, 100, 166, 0.2); color: #f687b3; border: 1px solid rgba(237, 100, 166, 0.5); }
+    .gender-unknown { background: rgba(160, 174, 192, 0.15); color: #a0aec0; border: 1px solid rgba(160, 174, 192, 0.3); }
+
     .empty-state { text-align: center; color: var(--text-sub); padding: 24px 0; font-size: 13px; }
     .status-msg { text-align: center; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 14px; display: none; }
     .status-msg.success { background: rgba(56, 161, 105, 0.2); color: #48bb78; display: block; }
@@ -348,7 +356,7 @@
     let currentSelectedSession = CURRENT_SESSIONS[0];
     let isFetching = false;
     let verifiedLineName = "";
-    let verifiedUserId = ""; // 🌟 唯一身分識別
+    let verifiedUserId = "";
 
     function isGodUser(name) {
       return (name || '').trim().toLowerCase() === 'ean';
@@ -471,7 +479,6 @@
       renderPlayerList();
     }
 
-    // 🔒 核心身分判定：100% 依據 LINE_UID 比對報名狀態
     function checkUserSignupStatus() {
       const session = document.getElementById('sessionDate').value;
       const submitBtn = document.getElementById('submitBtn');
@@ -481,7 +488,6 @@
 
       if (!verifiedUserId) return;
 
-      // 本機快取 Key 以 verifiedUserId 綁定
       const myRecordKey = `my_signup_${verifiedUserId}_${session}`;
       const localMyRecord = localStorage.getItem(myRecordKey);
 
@@ -490,7 +496,6 @@
         try { record = JSON.parse(localMyRecord); } catch(e) {}
       }
 
-      // 若快取沒有，直接從最新名單中以 LINE_UID 比對
       if (!record && allPlayersData.length > 0) {
         record = allPlayersData.find(p => 
           (p['場次日期'] || '').trim() === session.trim() && 
@@ -515,6 +520,17 @@
         submitBtn.style.display = 'block';
         editGroup.style.display = 'none';
         noticeBox.style.display = 'none';
+      }
+    }
+
+    function renderGenderBadge(genderStr) {
+      const g = (genderStr || '').trim();
+      if (g === '男') {
+        return `<span class="gender-badge gender-male">♂ 男</span>`;
+      } else if (g === '女') {
+        return `<span class="gender-badge gender-female">♀ 女</span>`;
+      } else {
+        return `<span class="gender-badge gender-unknown">未知</span>`;
       }
     }
 
@@ -543,20 +559,21 @@
       updateBtn.innerText = "更新中...";
       submitBtn.innerText = "送出中...";
 
-      // 以 verifiedUserId 儲存本機登記狀態
+      const existingIdx = allPlayersData.findIndex(p => 
+        (p['場次日期'] || '').trim() === session.trim() && 
+        (p['LINE_UID'] || '').trim() === verifiedUserId
+      );
+
+      const existingGender = existingIdx >= 0 ? (allPlayersData[existingIdx]['性別'] || '未知') : '未知';
+
       localStorage.setItem(`my_signup_${verifiedUserId}_${session}`, JSON.stringify({
         '到場時間': arrival,
         '離場時間': leave,
         'LINE暱稱': lineName,
         '自訂暱稱': customNick,
-        'LINE_UID': verifiedUserId
+        'LINE_UID': verifiedUserId,
+        '性別': existingGender
       }));
-
-      // 比對本機名單陣列（以 LINE_UID 判定）
-      const existingIdx = allPlayersData.findIndex(p => 
-        (p['場次日期'] || '').trim() === session.trim() && 
-        (p['LINE_UID'] || '').trim() === verifiedUserId
-      );
 
       if (existingIdx >= 0) {
         allPlayersData[existingIdx]['LINE暱稱'] = lineName;
@@ -569,6 +586,7 @@
           'LINE暱稱': lineName,
           'LINE_UID': verifiedUserId,
           '自訂暱稱': customNick,
+          '性別': '未知',
           '到場時間': arrival,
           '離場時間': leave,
           '簽到狀態': '未簽到',
@@ -662,7 +680,7 @@
       } catch (err) {}
     }
 
-    // ⚡ 8 欄 GVIZ 讀取（C欄為 LINE_UID）
+    // ⚡ 9 欄 GVIZ 讀取（E欄為性別）
     async function fetchLatestPlayers(isManual = false) {
       if (isFetching) return;
       isFetching = true;
@@ -693,10 +711,11 @@
               'LINE暱稱': getVal(1), // B欄
               'LINE_UID': getVal(2), // C欄
               '自訂暱稱': getVal(3), // D欄
-              '到場時間': getVal(4), // E欄
-              '離場時間': getVal(5), // F欄
-              '簽到狀態': getVal(6), // G欄
-              '收款狀態': getVal(7)  // H欄
+              '性別':     getVal(4) || '未知', // E欄（新增）
+              '到場時間': getVal(5), // F欄
+              '離場時間': getVal(6), // G欄
+              '簽到狀態': getVal(7), // H欄
+              '收款狀態': getVal(8)  // I欄
             };
           }).filter(p => p['場次日期'] && (p['LINE暱稱'] || p['LINE_UID']));
 
@@ -855,9 +874,10 @@
           ? `<span class="badge badge-checked">已到場</span>` 
           : `<span class="badge badge-unchecked">未到場</span>`;
         const godDisplayName = getPlayerDisplayName(godUser);
+        const godGenderBadge = renderGenderBadge(godUser['性別']);
         html += `
           <div class="god-banner">
-            <div><strong>👑 場主 / 法官：</strong>${escapeHtml(godDisplayName)} <span style="font-size:11px; opacity:0.8;">(🕒 ${godUser['到場時間'] || '14:00'})</span></div>
+            <div><strong>👑 場主 / 法官：</strong>${escapeHtml(godDisplayName)} ${godGenderBadge} <span style="font-size:11px; opacity:0.8;">(🕒 ${godUser['到場時間'] || '14:00'})</span></div>
             <div class="player-badges">
               ${checkBadge}
               <span class="badge badge-free">免收費</span>
@@ -911,12 +931,16 @@
 
       const displayArrivalTime = (p['到場時間'] || '-').replace('準時 ', '');
       const displayName = getPlayerDisplayName(p);
+      const genderBadge = renderGenderBadge(p['性別']);
 
       return `
         <li class="player-item">
           <div class="player-idx">${displayIdx}</div>
           <div class="player-info">
-            <div class="player-name">${escapeHtml(displayName)}</div>
+            <div class="player-name-row">
+              <span class="player-name">${escapeHtml(displayName)}</span>
+              ${genderBadge}
+            </div>
             <div class="player-time">🕒 ${escapeHtml(displayArrivalTime)} ｜ 🏃 ${escapeHtml(p['離場時間'] || '-')}</div>
           </div>
           <div class="player-badges">
