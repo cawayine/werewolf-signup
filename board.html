@@ -15,7 +15,28 @@
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .neon-border { border: 1px solid #30363d; }
-    .dead-seat { text-decoration: line-through; opacity: 0.35; filter: grayscale(1); }
+
+    /* 存活與出局樣式分流 (做法 B) */
+    .seat-alive {
+      border: 1px solid #374151;
+      background-color: #1f2937;
+      color: #f3f4f6;
+    }
+    .seat-police {
+      border: 1px solid #f59e0b;
+      background-color: rgba(120, 53, 15, 0.4);
+      color: #fde047;
+    }
+    .seat-night-dead {
+      border: 1px solid #7c3aed;
+      background-color: rgba(76, 29, 149, 0.25);
+      color: #c4b5fd;
+    }
+    .seat-exile-dead {
+      border: 1px solid #dc2626;
+      background-color: rgba(127, 29, 29, 0.3);
+      color: #fca5a5;
+    }
 
     /* 樂透彩球專屬立體視覺 */
     .lotto-ball {
@@ -108,7 +129,7 @@
     </div>
   </section>
 
-  <!-- 階段 B：席位即時存活點陣 -->
+  <!-- 階段 B：席位即時存活點陣 (支援 做法B 死亡原因角標分流) -->
   <section id="seatStatusSection" class="space-y-3 mb-3">
     <div class="bg-gray-900 rounded-xl neon-border p-3">
       <div class="flex justify-between items-center mb-2">
@@ -188,7 +209,7 @@
       <!-- 夜間死訊更新 -->
       <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
         <div class="flex justify-between items-center mb-1">
-          <span class="text-xs font-bold text-rose-300">更新夜間倒牌死訊 (點選出局)</span>
+          <span class="text-xs font-bold text-purple-300">更新夜間倒牌死訊 (點選出局)</span>
           <span class="text-[10px] text-gray-400">平安夜則無需點選</span>
         </div>
         <div class="grid grid-cols-6 gap-1" id="drawerNightDeathGrid"></div>
@@ -222,6 +243,7 @@
       players: Array.from({ length: 12 }, (_, i) => ({
         seat: i + 1,
         isAlive: true,
+        deathReason: null, // null | "NIGHT" (夜間倒牌) | "EXILE" (白天放逐)
         isCandidate: false,
         hasDropped: false
       })),
@@ -291,6 +313,7 @@
       renderAll();
     }
 
+    // 渲染全場標準席位點陣 (實作做法 B：角標流)
     function renderSeatsStatus() {
       const candidates = gameState.players.filter(p => p.isCandidate);
       const voters = gameState.players.filter(p => !p.isCandidate && p.isAlive);
@@ -298,6 +321,7 @@
       document.getElementById("candidateCountLabel").innerText = `${candidates.length} 人上警`;
       document.getElementById("votersCountLabel").innerText = `${voters.length} 人在警下`;
 
+      // 警上候選人
       const candGrid = document.getElementById("candidatesGrid");
       if (candidates.length === 0) {
         candGrid.innerHTML = `<div class="col-span-6 text-gray-500 text-xs text-center py-2">目前無人上警</div>`;
@@ -311,6 +335,7 @@
         `).join('');
       }
 
+      // 警下選民
       const voterGrid = document.getElementById("votersGrid");
       if (voters.length === 0) {
         voterGrid.innerHTML = `<div class="col-span-6 text-gray-500 text-xs text-center py-2">全員上警</div>`;
@@ -324,17 +349,50 @@
         `).join('');
       }
 
+      // 1~12 席位點陣：實作做法 B (右上角標 + 顏色分流)
       const stdGrid = document.getElementById("standardSeatsGrid");
-      stdGrid.innerHTML = gameState.players.map(p => `
-        <div class="h-11 rounded-lg border ${p.isAlive ? (gameState.policeSeat === p.seat ? 'border-amber-500 bg-amber-950/40 text-amber-300' : 'border-gray-700 bg-gray-800 text-gray-200') : 'dead-seat border-rose-900 bg-rose-950/20 text-rose-500'} flex flex-col items-center justify-center text-xs font-bold relative">
-          ${gameState.policeSeat === p.seat ? '<span class="absolute -top-1.5 -right-1 text-xs">👑</span>' : ''}
-          <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
-          <span class="text-[9px] font-normal ${p.isAlive ? 'text-gray-400' : 'text-rose-400'}">${p.isAlive ? '存活' : '出局'}</span>
-        </div>
-      `).join('');
+      stdGrid.innerHTML = gameState.players.map(p => {
+        let cardStyle = "seat-alive";
+        let badgeHtml = "";
+        let statusText = "存活";
+        let textStyle = "text-gray-400";
+        let seatNumStyle = "";
+
+        if (p.isAlive) {
+          if (gameState.policeSeat === p.seat) {
+            cardStyle = "seat-police";
+            badgeHtml = '<span class="absolute -top-2 -right-1 text-xs">👑</span>';
+            statusText = "警長";
+            textStyle = "text-amber-300 font-bold";
+          }
+        } else {
+          if (p.deathReason === "NIGHT") {
+            cardStyle = "seat-night-dead";
+            badgeHtml = '<span class="absolute -top-1.5 -right-1 text-[11px] bg-purple-950 border border-purple-600 rounded-full w-4 h-4 flex items-center justify-center">🌙</span>';
+            statusText = "夜亡";
+            textStyle = "text-purple-400 font-bold";
+          } else {
+            cardStyle = "seat-exile-dead";
+            badgeHtml = '<span class="absolute -top-1.5 -right-1 text-[11px] bg-rose-950 border border-rose-600 rounded-full w-4 h-4 flex items-center justify-center">❌</span>';
+            statusText = "放逐";
+            textStyle = "text-rose-400 font-bold";
+            seatNumStyle = "line-through opacity-60";
+          }
+        }
+
+        const seatLabel = p.seat < 10 ? '0' + p.seat : p.seat;
+
+        return `
+          <div class="h-11 rounded-lg ${cardStyle} flex flex-col items-center justify-center text-xs font-bold relative transition">
+            ${badgeHtml}
+            <span class="${seatNumStyle}">${seatLabel}</span>
+            <span class="text-[9px] ${textStyle}">${statusText}</span>
+          </div>
+        `;
+      }).join('');
     }
 
-    // 核心修復：乾淨安全的樂透彩球字串渲染
+    // 樂透彩球票型渲染
     function renderLottoVoteDisplay() {
       const container = document.getElementById("lottoVotesContainer");
       const titleEl = document.getElementById("voteSummaryTitle");
@@ -478,13 +536,18 @@
     }
 
     function renderExileDrawerControls() {
+      // 夜間死訊 (點選標記為 NIGHT)
       const deathGrid = document.getElementById("drawerNightDeathGrid");
-      deathGrid.innerHTML = gameState.players.map(p => `
-        <button onclick="togglePlayerDeath(${p.seat})" class="h-8 rounded text-xs font-bold border ${!p.isAlive ? 'bg-rose-900 border-rose-500 text-rose-200 line-through' : 'bg-gray-800 border-gray-700 text-gray-300'}">
-          ${p.seat}號
-        </button>
-      `).join('');
+      deathGrid.innerHTML = gameState.players.map(p => {
+        const isNightDead = (!p.isAlive && p.deathReason === "NIGHT");
+        return `
+          <button onclick="togglePlayerNightDeath(${p.seat})" class="h-8 rounded text-xs font-bold border ${isNightDead ? 'bg-purple-900 border-purple-500 text-purple-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
+            ${p.seat}號 ${isNightDead ? '🌙' : ''}
+          </button>
+        `;
+      }).join('');
 
+      // 受票目標 (存活玩家)
       const targetContainer = document.getElementById("drawerExileTargetContainer");
       const alivePlayers = gameState.players.filter(p => p.isAlive);
 
@@ -498,6 +561,7 @@
         </button>
       `;
 
+      // 投票選民 (存活玩家)
       const votersGrid = document.getElementById("drawerExileVotersGrid");
       votersGrid.innerHTML = alivePlayers.map(p => {
         let votedTarget = null;
@@ -545,9 +609,16 @@
       renderAll();
     }
 
-    function togglePlayerDeath(seat) {
+    // 切換夜間死亡狀態 (NIGHT)
+    function togglePlayerNightDeath(seat) {
       const p = gameState.players.find(x => x.seat === seat);
-      p.isAlive = !p.isAlive;
+      if (p.isAlive) {
+        p.isAlive = false;
+        p.deathReason = "NIGHT";
+      } else {
+        p.isAlive = true;
+        p.deathReason = null;
+      }
       renderAll();
     }
 
@@ -602,7 +673,10 @@
 
       if (exiledSeat) {
         const p = gameState.players.find(x => x.seat === exiledSeat);
-        if (p) p.isAlive = false;
+        if (p) {
+          p.isAlive = false;
+          p.deathReason = "EXILE"; // 標記為放逐出局
+        }
       }
 
       gameState.history.push({
