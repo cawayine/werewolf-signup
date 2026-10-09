@@ -17,14 +17,14 @@
     .gold-glow { text-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
     select, input { background-color: #161b22; border-color: #30363d; color: #f0f6fc; }
     
-    /* 重複玩家警示樣式（強制最高優先權） */
-    .duplicate-warning {
+    /* 重複玩家警示樣式（最高優先權） */
+    .seat-duplicate-box {
       border: 2px solid #ef4444 !important;
-      background-color: rgba(127, 29, 29, 0.35) !important;
+      background-color: rgba(127, 29, 29, 0.3) !important;
       box-shadow: 0 0 10px rgba(239, 68, 68, 0.4) !important;
     }
-    .duplicate-select {
-      border-color: #ef4444 !important;
+    .seat-duplicate-select {
+      border: 1px solid #ef4444 !important;
       background-color: #450a0a !important;
       color: #fca5a5 !important;
       font-weight: bold !important;
@@ -310,6 +310,47 @@
       initSeats();
     }
 
+    // 核心：全域重複檢查函式（直接讀取 DOM，確保 100% 同步觸發）
+    function checkSeatDuplicates() {
+      const selects = document.querySelectorAll("select[id^='userSelect-']");
+      const counts = {};
+
+      // 1. 統計所有非空的選取名稱次數
+      selects.forEach(sel => {
+        const val = sel.value.trim();
+        if (val !== "") {
+          counts[val] = (counts[val] || 0) + 1;
+        }
+      });
+
+      let hasDup = false;
+
+      // 2. 針對每個座位進行樣式與標籤切換
+      selects.forEach(sel => {
+        const seat = sel.id.replace("userSelect-", "");
+        const card = document.getElementById("seatCard-" + seat);
+        const dupTag = document.getElementById("seatDupTag-" + seat);
+        const val = sel.value.trim();
+
+        if (val !== "" && counts[val] > 1) {
+          hasDup = true;
+          if (card) card.classList.add("seat-duplicate-box");
+          sel.classList.add("seat-duplicate-select");
+          if (dupTag) dupTag.style.display = "inline-block";
+        } else {
+          if (card) card.classList.remove("seat-duplicate-box");
+          sel.classList.remove("seat-duplicate-select");
+          if (dupTag) dupTag.style.display = "none";
+        }
+
+        // 同步寫入 gameState
+        const p = gameState.players.find(x => x.seat === parseInt(seat));
+        if (p) p.name = val;
+      });
+
+      return { hasDup, counts };
+    }
+
     function initSeats() {
       const config = BOARD_DATABASE[currentBoardKey];
       const container = document.getElementById("seatAssignmentGrid");
@@ -351,11 +392,11 @@
           <div class="flex justify-between items-center mb-1">
             <span class="font-bold text-amber-400">#${i < 10 ? '0' + i : i} 席位</span>
             <div class="flex items-center gap-1">
-              <span id="seatDupTag-${i}" class="text-[9px] text-rose-300 bg-rose-950 px-1 py-0.5 rounded border border-rose-700 font-bold hidden">⚠️ 玩家重複</span>
+              <span id="seatDupTag-${i}" class="text-[9px] text-rose-300 bg-rose-950 px-1 py-0.5 rounded border border-rose-700 font-bold" style="display: none;">⚠️ 玩家重複</span>
               <span class="text-[10px] text-gray-400" id="roleTag-${i}">${assignedRole}</span>
             </div>
           </div>
-          <select id="userSelect-${i}" onchange="onUserChange(${i})" class="w-full text-[11px] rounded p-1 mb-1 border outline-none">
+          <select id="userSelect-${i}" onchange="checkSeatDuplicates()" class="w-full text-[11px] rounded p-1 mb-1 border outline-none">
             ${optionsHtml}
           </select>
           <select id="roleSelect-${i}" onchange="onRoleChange(${i})" class="w-full text-[11px] rounded p-1 border outline-none font-bold text-indigo-300">
@@ -364,54 +405,10 @@
         `;
         container.appendChild(card);
       }
-      validateDuplicatePlayers();
-      updateCounts();
-    }
-
-    // 玩家選擇變更事件：即時更新與重新計算衝突
-    function onUserChange(seat) {
-      const selectEl = document.getElementById("userSelect-" + seat);
-      const selectedName = selectEl ? selectEl.value.trim() : "";
       
-      const p = gameState.players.find(x => x.seat === seat);
-      if (p) p.name = selectedName;
-
-      validateDuplicatePlayers();
-    }
-
-    // 檢查重複玩家並即時加上醒目紅框與標籤
-    function validateDuplicatePlayers() {
-      // 依據目前介面上所有的 select 值做統計
-      const nameCounts = {};
-      gameState.players.forEach(p => {
-        const selectEl = document.getElementById("userSelect-" + p.seat);
-        const currentVal = selectEl ? selectEl.value.trim() : (p.name || "");
-        p.name = currentVal; // 同步狀態
-
-        if (currentVal !== "") {
-          nameCounts[currentVal] = (nameCounts[currentVal] || 0) + 1;
-        }
-      });
-
-      let hasDuplicates = false;
-      gameState.players.forEach(p => {
-        const card = document.getElementById("seatCard-" + p.seat);
-        const selectEl = document.getElementById("userSelect-" + p.seat);
-        const dupTag = document.getElementById("seatDupTag-" + p.seat);
-
-        if (p.name && nameCounts[p.name] > 1) {
-          hasDuplicates = true;
-          if (card) card.classList.add("duplicate-warning");
-          if (selectEl) selectEl.classList.add("duplicate-select");
-          if (dupTag) dupTag.classList.remove("hidden");
-        } else {
-          if (card) card.classList.remove("duplicate-warning");
-          if (selectEl) selectEl.classList.remove("duplicate-select");
-          if (dupTag) dupTag.classList.add("hidden");
-        }
-      });
-
-      return { hasDuplicates, nameCounts };
+      // 席位建立完成後立即掃描一次
+      checkSeatDuplicates();
+      updateCounts();
     }
 
     function getSeatType(roleName) {
@@ -459,15 +456,16 @@
 
     // 開局確認防呆（檢查重複與未填空位）
     function confirmSetup() {
+      const checkResult = checkSeatDuplicates();
+
       const emptySeats = gameState.players.filter(p => !p.name);
       if (emptySeats.length > 0) {
         alert(`⚠️ 還有 ${emptySeats.length} 個席位尚未指派玩家（${emptySeats.map(s => s.seat + '號').join(', ')}），請指派完整 12 席後再開局！`);
         return;
       }
 
-      const { hasDuplicates, nameCounts } = validateDuplicatePlayers();
-      if (hasDuplicates) {
-        const dupNames = Object.keys(nameCounts).filter(name => nameCounts[name] > 1);
+      if (checkResult.hasDup) {
+        const dupNames = Object.keys(checkResult.counts).filter(name => checkResult.counts[name] > 1);
         alert(`⚠️ 檢測到有重複指派的玩家：【${dupNames.join('、')}】\n請修正為不同玩家後再開局！`);
         return;
       }
