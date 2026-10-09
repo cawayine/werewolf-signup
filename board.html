@@ -22,8 +22,8 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 34px;
-      height: 34px;
+      width: 36px;
+      height: 36px;
       border-radius: 9999px;
       font-size: 15px;
       font-weight: 900;
@@ -34,9 +34,9 @@
       flex-shrink: 0;
     }
     .lotto-ball-lg {
-      width: 44px;
-      height: 44px;
-      font-size: 18px;
+      width: 46px;
+      height: 46px;
+      font-size: 20px;
     }
     .ball-target {
       background: radial-gradient(circle at 35% 35%, #f59e0b, #b45309);
@@ -80,7 +80,7 @@
 
   <!-- 歷史投票輪次切換頁籤 -->
   <nav class="flex gap-1.5 overflow-x-auto pb-2 mb-2 text-xs scrollbar-none" id="historyTabContainer">
-    <!-- 動態生成輪次標籤 (如：D1 警長, D1 放逐, D2 放逐...) -->
+    <!-- 動態生成輪次標籤 -->
   </nav>
 
   <!-- 階段 A：警長競選專屬面板 (首輪警長競選時顯示) -->
@@ -108,7 +108,7 @@
     </div>
   </section>
 
-  <!-- 階段 B：席位即時存活點陣 (白天與日常維持顯示) -->
+  <!-- 階段 B：席位即時存活點陣 -->
   <section id="seatStatusSection" class="space-y-3 mb-3">
     <div class="bg-gray-900 rounded-xl neon-border p-3">
       <div class="flex justify-between items-center mb-2">
@@ -215,10 +215,9 @@
   </div>
 
   <script>
-    // 遊戲與公播全域狀態
     let gameState = {
       day: 1,
-      phase: "POLICE_ELECTION", // POLICE_ELECTION | DAY_EXILE
+      phase: "POLICE_ELECTION",
       policeSeat: null,
       players: Array.from({ length: 12 }, (_, i) => ({
         seat: i + 1,
@@ -226,14 +225,12 @@
         isCandidate: false,
         hasDropped: false
       })),
-      history: [], // 所有輪次的票型歷史紀錄
-      currentHistoryViewIndex: -1, // 目前大螢幕正在檢視的歷史索引 (-1 代表當前進行中)
-      // 當前輪次暫存投票
+      history: [],
+      currentHistoryViewIndex: -1,
       tempVotes: {},
       selectedTarget: null
     };
 
-    // 初始化
     window.onload = () => {
       renderAll();
     };
@@ -265,7 +262,6 @@
         : "警長：未指定";
     }
 
-    // 歷史輪次 Tab 切換列
     function renderHistoryTabs() {
       const container = document.getElementById("historyTabContainer");
       let tabsHtml = "";
@@ -279,7 +275,6 @@
         `;
       });
 
-      // 當前進行中 Tab
       const isCurrentActive = (gameState.currentHistoryViewIndex === -1);
       const currentTitle = gameState.phase === "POLICE_ELECTION" ? "即時: 警長競選" : `即時: D${gameState.day}放逐`;
       tabsHtml += `
@@ -296,7 +291,6 @@
       renderAll();
     }
 
-    // 渲染全場標準席位點陣
     function renderSeatsStatus() {
       const candidates = gameState.players.filter(p => p.isCandidate);
       const voters = gameState.players.filter(p => !p.isCandidate && p.isAlive);
@@ -304,7 +298,6 @@
       document.getElementById("candidateCountLabel").innerText = `${candidates.length} 人上警`;
       document.getElementById("votersCountLabel").innerText = `${voters.length} 人在警下`;
 
-      // 警上候選人
       const candGrid = document.getElementById("candidatesGrid");
       if (candidates.length === 0) {
         candGrid.innerHTML = `<div class="col-span-6 text-gray-500 text-xs text-center py-2">目前無人上警</div>`;
@@ -318,7 +311,6 @@
         `).join('');
       }
 
-      // 警下選民
       const voterGrid = document.getElementById("votersGrid");
       if (voters.length === 0) {
         voterGrid.innerHTML = `<div class="col-span-6 text-gray-500 text-xs text-center py-2">全員上警</div>`;
@@ -332,7 +324,6 @@
         `).join('');
       }
 
-      // 標準 1~12 座位
       const stdGrid = document.getElementById("standardSeatsGrid");
       stdGrid.innerHTML = gameState.players.map(p => `
         <div class="h-11 rounded-lg border ${p.isAlive ? (gameState.policeSeat === p.seat ? 'border-amber-500 bg-amber-950/40 text-amber-300' : 'border-gray-700 bg-gray-800 text-gray-200') : 'dead-seat border-rose-900 bg-rose-950/20 text-rose-500'} flex flex-col items-center justify-center text-xs font-bold relative">
@@ -343,7 +334,7 @@
       `).join('');
     }
 
-    // 核心亮點：樂透彩球票型渲染展示
+    // 核心修復：乾淨安全的樂透彩球字串渲染
     function renderLottoVoteDisplay() {
       const container = document.getElementById("lottoVotesContainer");
       const titleEl = document.getElementById("voteSummaryTitle");
@@ -371,65 +362,61 @@
         return;
       }
 
-      let html = "";
-      targetKeys.forEach(targetSeat => {
-        const voters = currentDisplayVotes[targetSeat] || [];
+      let cardsHtml = "";
+      targetKeys.forEach(targetKey => {
+        const voters = currentDisplayVotes[targetKey] || [];
         if (voters.length === 0) return;
 
-        const isAbstain = (targetSeat == 0);
-        let totalPoints = 0;
+        const targetSeatNum = parseInt(targetKey);
+        const isAbstain = (targetSeatNum === 0);
 
-        // 計算票數（含警長 1.5 票加權計算）
-        voters.forEach(v => {
-          if (gameState.phase !== "POLICE_ELECTION" && v === gameState.policeSeat) {
+        let totalPoints = 0;
+        let voterBallsHtml = "";
+
+        voters.forEach(vSeat => {
+          const isPolice = (vSeat === gameState.policeSeat);
+          if (gameState.phase !== "POLICE_ELECTION" && isPolice) {
             totalPoints += 1.5;
           } else {
             totalPoints += 1;
           }
+
+          const vLabel = (vSeat < 10) ? ("0" + vSeat) : String(vSeat);
+          const ballClass = isPolice ? "ball-police-voter" : "ball-voter";
+          const crownHtml = isPolice ? '<span class="absolute -top-2 -right-1 text-[11px]">👑</span>' : '';
+
+          voterBallsHtml += '<div class="lotto-ball ' + ballClass + '">' + crownHtml + vLabel + '</div>';
         });
 
         const targetBallClass = isAbstain ? "ball-abstain" : "ball-target";
-        const targetLabel = isAbstain ? "棄" : (targetSeat < 10 ? '0' + targetSeat : targetSeat);
+        const targetBallLabel = isAbstain ? "棄" : ((targetSeatNum < 10) ? ("0" + targetSeatNum) : String(targetSeatNum));
+        const targetTitle = isAbstain ? "棄票" : (targetSeatNum + " 號候選人");
 
-        html += `
-          <div class="bg-gray-800/80 p-2.5 rounded-xl border border-gray-700 flex items-center justify-between gap-3">
-            <!-- 受票人 (樂透大彩球) -->
-            <div class="flex items-center gap-2.5">
+        cardsHtml += `
+          <div class="bg-gray-800/80 p-3 rounded-xl border border-gray-700 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
               <div class="lotto-ball lotto-ball-lg ${targetBallClass}">
-                ${targetLabel}
+                ${targetBallLabel}
               </div>
               <div>
                 <div class="text-xs font-bold ${isAbstain ? 'text-gray-400' : 'text-amber-300'}">
-                  ${isAbstain ? '棄票' : `\${targetSeat} 號候選人`}
+                  ${targetTitle}
                 </div>
                 <div class="text-[11px] font-mono text-gray-400">
                   得票：<span class="text-amber-400 font-bold">${totalPoints}</span> 票 (${voters.length}人)
                 </div>
               </div>
             </div>
-
-            <!-- 投票選民清單 (並排樂透彩球) -->
             <div class="flex flex-wrap items-center justify-end gap-1.5 flex-1 pl-2">
-              ${voters.map(voterSeat => {
-                const isPolice = (voterSeat === gameState.policeSeat);
-                const voterClass = isPolice ? "ball-police-voter" : "ball-voter";
-                const vLabel = voterSeat < 10 ? '0' + voterSeat : voterSeat;
-                return `
-                  <div class="lotto-ball ${voterClass}" title="${isPolice ? '警長(1.5票)' : '選民'}">
-                    \${isPolice ? '<span class="absolute -top-1.5 -right-1 text-[10px]">👑</span>' : ''}
-                    \${vLabel}
-                  </div>
-                `;
-              }).join('')}
+              ${voterBallsHtml}
             </div>
           </div>
         `;
       });
 
-      container.innerHTML = html || `<div class="text-gray-500 text-xs text-center py-6">此輪尚無有效得票</div>`;
+      container.innerHTML = cardsHtml || `<div class="text-gray-500 text-xs text-center py-6">此輪尚無有效得票</div>`;
     }
 
-    // 抽屜控制面板
     function toggleControlDrawer() {
       const drawer = document.getElementById("controlDrawer");
       drawer.classList.toggle("hidden");
@@ -447,7 +434,6 @@
       }
     }
 
-    // 警長抽屜控制
     function renderPoliceDrawerControls() {
       const toggleGrid = document.getElementById("drawerCandidateToggleGrid");
       toggleGrid.innerHTML = gameState.players.map(p => `
@@ -491,9 +477,7 @@
       }).join('');
     }
 
-    // 放逐抽屜控制
     function renderExileDrawerControls() {
-      // 夜間死訊
       const deathGrid = document.getElementById("drawerNightDeathGrid");
       deathGrid.innerHTML = gameState.players.map(p => `
         <button onclick="togglePlayerDeath(${p.seat})" class="h-8 rounded text-xs font-bold border ${!p.isAlive ? 'bg-rose-900 border-rose-500 text-rose-200 line-through' : 'bg-gray-800 border-gray-700 text-gray-300'}">
@@ -501,7 +485,6 @@
         </button>
       `).join('');
 
-      // 受票目標 (存活玩家皆可為目標)
       const targetContainer = document.getElementById("drawerExileTargetContainer");
       const alivePlayers = gameState.players.filter(p => p.isAlive);
 
@@ -515,7 +498,6 @@
         </button>
       `;
 
-      // 投票選民 (存活玩家)
       const votersGrid = document.getElementById("drawerExileVotersGrid");
       votersGrid.innerHTML = alivePlayers.map(p => {
         let votedTarget = null;
@@ -559,7 +541,7 @@
       if (!gameState.tempVotes[target]) gameState.tempVotes[target] = [];
       gameState.tempVotes[target].push(voterSeat);
 
-      gameState.currentHistoryViewIndex = -1; // 實時更新跳回即時視圖
+      gameState.currentHistoryViewIndex = -1;
       renderAll();
     }
 
@@ -569,7 +551,6 @@
       renderAll();
     }
 
-    // 確認警長當選並封存
     function confirmPoliceElection() {
       let maxVotes = 0;
       let winnerSeat = null;
@@ -587,14 +568,12 @@
         gameState.policeSeat = winnerSeat;
       }
 
-      // 封存此輪至歷史紀錄
       gameState.history.push({
         title: `D1 警長競選`,
         badgeText: winnerSeat ? `👑 ${winnerSeat}號當選警長` : "競選結束",
         votes: JSON.parse(JSON.stringify(gameState.tempVotes))
       });
 
-      // 切換進入白天放逐階段
       gameState.phase = "DAY_EXILE";
       gameState.tempVotes = {};
       gameState.selectedTarget = null;
@@ -604,7 +583,6 @@
       alert(`🎉 警長競選完成！票型已封存，系統自動進入【第 1 天 白天放逐】階段。`);
     }
 
-    // 確認白天放逐並封存
     function confirmExileVote() {
       let maxPoints = 0;
       let exiledSeat = null;
@@ -638,7 +616,6 @@
       renderAll();
     }
 
-    // 進入下一天循環 (Day N+1)
     function enterNextDayCycle() {
       if (!confirm(`確定要結算今天並進入【第 ${gameState.day + 1} 天】嗎？`)) return;
 
