@@ -86,7 +86,7 @@
   <div id="errorState" class="card" style="display:none;">
     <div class="state-msg error-msg">
       ⚠️ 找不到會員資料<br>
-      <span style="font-size:12px; margin-top:6px; display:block;">請先透過報名系統登記以建立會員身分。</span>
+      <span style="font-size:12px; margin-top:6px; display:block;">請先透過首頁「一鍵建立會員資料」或報名開局！</span>
     </div>
   </div>
 
@@ -104,7 +104,7 @@
       </div>
     </div>
 
-    <!-- 場次紀錄（保留技能正確率於 6 宮格中） -->
+    <!-- 場次紀錄 -->
     <div class="card">
       <div class="section-divider">📊 場次紀錄</div>
       <div class="stat-grid-2">
@@ -172,7 +172,8 @@
 </div>
 
 <script>
-  const GAS_URL = 'https://script.google.com/macros/s/AKfycbzkW2ALKbEmErYZPXzn5yqzFZcx7tI_6dL4zEDouYAj5_mylskzA8mNsG-jlzaH1Vmtdg/exec';
+  // 正確生效的最新 GAS 網址
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbwo3k3IUlyEcqW0lHykmgCTKiCZ1E0aOOs_K6XqU6Mk32eBJQNMrP9iFWntPBparJDGPA/exec';
   const LIFF_ID = '2011803898-YnV0gXZI';
 
   // 10 筆示範對局資料
@@ -194,44 +195,84 @@
     document.getElementById('errorState').style.display = 'block';
   }
 
+  // JSONP 跨網域通訊，徹底杜絕 fetch 被 302 跨域封鎖問題
+  function fetchProfileJsonp(uid) {
+    return new Promise((resolve, reject) => {
+      const cbName = 'profileCb_' + Math.floor(Math.random() * 1000000);
+      let isDone = false;
+
+      const timer = setTimeout(() => {
+        if (!isDone) {
+          isDone = true;
+          cleanup();
+          reject(new Error('連線逾時'));
+        }
+      }, 8000);
+
+      function cleanup() {
+        clearTimeout(timer);
+        delete window[cbName];
+        const el = document.getElementById(cbName);
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      }
+
+      window[cbName] = function(data) {
+        if (!isDone) {
+          isDone = true;
+          cleanup();
+          resolve(data);
+        }
+      };
+
+      const script = document.createElement('script');
+      script.id = cbName;
+      script.src = `${GAS_URL}?action=getProfile&uid=${encodeURIComponent(uid)}&callback=${cbName}`;
+      script.onerror = function() {
+        if (!isDone) {
+          isDone = true;
+          cleanup();
+          reject(new Error('網路錯誤'));
+        }
+      };
+      document.body.appendChild(script);
+    });
+  }
+
   function renderProfile(res, lineProfile) {
     document.getElementById('loadingState').style.display = 'none';
     document.getElementById('profileContent').style.display = 'block';
 
-    // 優先帶入 LINE 官方頭像
     const avatarBox = document.getElementById('avatarBox');
     if (lineProfile && lineProfile.pictureUrl) {
       avatarBox.outerHTML = `<img class="avatar" id="avatarBox" src="${lineProfile.pictureUrl}" alt="avatar">`;
     }
 
-    // 個人名稱固定以 LINE 暱稱為主
     document.getElementById('displayName').textContent = res.lineName || (lineProfile ? lineProfile.displayName : '未知玩家');
-    document.getElementById('ladderScore').textContent = res.ladderScore ?? '—';
+    document.getElementById('ladderScore').textContent = res.ladderScore ?? '1000';
 
     // 場次紀錄
-    document.getElementById('monthlyGames').textContent = res.monthlyGames ?? '—';
-    document.getElementById('monthlyRate').textContent = res.monthlyRate ?? '—';
-    document.getElementById('monthlyWin').textContent = res.monthlyWin ?? '—';
-    document.getElementById('monthlyLose').textContent = res.monthlyLose ?? '—';
-    document.getElementById('skillRateNum').textContent = res.skillRate ?? '—';
+    document.getElementById('monthlyGames').textContent = res.monthlyGames ?? '0';
+    document.getElementById('monthlyRate').textContent = res.monthlyRate ?? '0%';
+    document.getElementById('monthlyWin').textContent = res.monthlyWin ?? '0';
+    document.getElementById('monthlyLose').textContent = res.monthlyLose ?? '0';
+    document.getElementById('skillRateNum').textContent = res.skillRate ?? '0%';
 
-    // 陣營戰績：確保數值後方加上「勝」字
+    // 陣營戰績
     const formatWinText = (val) => {
-      if (val === undefined || val === null || val === '—') return '—';
+      if (val === undefined || val === null || val === '—') return '0 勝';
       const str = String(val).trim();
       return str.includes('勝') ? str : `${str} 勝`;
     };
 
     document.getElementById('villagerWin').textContent = formatWinText(res.villagerWin);
-    document.getElementById('villagerRate').textContent = res.villagerRate ?? '—';
+    document.getElementById('villagerRate').textContent = res.villagerRate ?? '0%';
 
     document.getElementById('werewolfWin').textContent = formatWinText(res.werewolfWin);
-    document.getElementById('werewolfRate').textContent = res.werewolfRate ?? '—';
+    document.getElementById('werewolfRate').textContent = res.werewolfRate ?? '0%';
 
     document.getElementById('thirdWin').textContent = formatWinText(res.thirdWin);
-    document.getElementById('thirdRate').textContent = res.thirdRate ?? '—';
+    document.getElementById('thirdRate').textContent = res.thirdRate ?? '0%';
 
-    // 渲染近十場戰績清單
     renderRecentMatches(res.recentMatches || DEFAULT_RECENT_MATCHES);
   }
 
@@ -284,8 +325,8 @@
       const lineProfile = await liff.getProfile();
       const uid = lineProfile.userId;
 
-      const res = await fetch(`${GAS_URL}?action=getProfile&uid=${uid}`);
-      const data = await res.json();
+      // 使用 JSONP 取得個人戰績
+      const data = await fetchProfileJsonp(uid);
 
       if (!data.success) {
         showError();
