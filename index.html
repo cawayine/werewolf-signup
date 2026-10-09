@@ -32,16 +32,7 @@
       transform: scale(0.985);
     }
 
-    .card-purple {
-      background: linear-gradient(135deg, rgba(88, 28, 135, 0.25) 0%, rgba(15, 23, 42, 0.8) 100%);
-      border: 1px solid rgba(168, 85, 247, 0.45);
-      box-shadow: 0 4px 20px rgba(168, 85, 247, 0.12);
-    }
-    .card-purple:hover {
-      border-color: #c084fc;
-      box-shadow: 0 6px 24px rgba(168, 85, 247, 0.28);
-    }
-
+    /* 1. 報名處 - 極光翡翠綠 */
     .card-emerald {
       background: linear-gradient(135deg, rgba(6, 78, 59, 0.28) 0%, rgba(15, 23, 42, 0.8) 100%);
       border: 1px solid rgba(16, 185, 129, 0.45);
@@ -52,6 +43,7 @@
       box-shadow: 0 6px 24px rgba(16, 185, 129, 0.28);
     }
 
+    /* 2. 天梯總榜 - 榮耀琥珀金 */
     .card-amber {
       background: linear-gradient(135deg, rgba(120, 53, 15, 0.28) 0%, rgba(15, 23, 42, 0.8) 100%);
       border: 1px solid rgba(245, 158, 11, 0.45);
@@ -62,6 +54,7 @@
       box-shadow: 0 6px 24px rgba(245, 158, 11, 0.28);
     }
 
+    /* 3. 個人戰績 - 星際深邃藍 */
     .card-blue {
       background: linear-gradient(135deg, rgba(30, 58, 138, 0.28) 0%, rgba(15, 23, 42, 0.8) 100%);
       border: 1px solid rgba(59, 130, 246, 0.45);
@@ -72,6 +65,7 @@
       box-shadow: 0 6px 24px rgba(59, 130, 246, 0.28);
     }
 
+    /* 4. 現場公播 - 實況熱血玫紅 */
     .card-rose {
       background: linear-gradient(135deg, rgba(136, 19, 55, 0.28) 0%, rgba(15, 23, 42, 0.8) 100%);
       border: 1px solid rgba(244, 63, 94, 0.45);
@@ -82,19 +76,32 @@
       box-shadow: 0 6px 24px rgba(244, 63, 94, 0.28);
     }
 
-    .card-gold {
-      background: linear-gradient(135deg, rgba(69, 26, 3, 0.4) 0%, rgba(17, 24, 39, 0.95) 100%);
-      border: 1px solid rgba(217, 119, 6, 0.6);
-      box-shadow: 0 4px 20px rgba(217, 119, 6, 0.15);
+    /* 5. 會員卡片 - 炫彩霓虹紫 */
+    .card-purple {
+      background: linear-gradient(135deg, rgba(88, 28, 135, 0.25) 0%, rgba(15, 23, 42, 0.8) 100%);
+      border: 1px solid rgba(168, 85, 247, 0.45);
+      box-shadow: 0 4px 20px rgba(168, 85, 247, 0.12);
     }
-    .card-gold:hover {
-      border-color: #f59e0b;
-      box-shadow: 0 6px 24px rgba(245, 158, 11, 0.3);
+    .card-purple:hover {
+      border-color: #c084fc;
+      box-shadow: 0 6px 24px rgba(168, 85, 247, 0.28);
+    }
+
+    /* 6. 法官專屬後台 - 極簡科技冷白 */
+    .card-white {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(17, 24, 39, 0.95) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.45);
+      box-shadow: 0 4px 20px rgba(255, 255, 255, 0.1);
+    }
+    .card-white:hover {
+      border-color: #ffffff;
+      box-shadow: 0 6px 24px rgba(255, 255, 255, 0.25);
     }
   </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between p-4 max-w-md mx-auto">
 
+  <!-- 頂部品牌形象 -->
   <header class="text-center pt-5 pb-3">
     <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-900 via-purple-950 to-gray-950 border border-purple-500/50 shadow-xl mb-3">
       <i class="fa-solid fa-moon text-2xl text-purple-300"></i>
@@ -105,23 +112,10 @@
     <p class="text-xs text-gray-400 mt-1 font-medium">目標成為台中最好玩的狼人殺</p>
   </header>
 
+  <!-- 核心功能按鈕區塊 -->
   <main class="space-y-3 flex-1 flex flex-col justify-center py-1">
     
-    <!-- 1. 會員綁定 - 霓虹紫 -->
-    <div onclick="checkAndOpenRegisterModal()" class="theme-card card-purple p-3.5 flex items-center cursor-pointer group">
-      <div class="w-11 h-11 rounded-xl bg-purple-900/60 border border-purple-400/50 flex items-center justify-center text-purple-300 text-lg mr-3 shadow-inner group-hover:scale-105 transition">
-        <i class="fa-solid fa-user-plus"></i>
-      </div>
-      <div class="flex-1">
-        <div class="text-sm font-bold text-purple-100 flex items-center gap-1.5">
-          一鍵建立會員資料 <span class="text-[9px] bg-purple-950 text-purple-300 border border-purple-700 px-1.5 py-0.2 rounded font-mono">FAST</span>
-        </div>
-        <div class="text-[11px] text-purple-200/60" id="regCardDesc">未報名過？點此 3 秒綁定個人檔案與戰績庫</div>
-      </div>
-      <i class="fa-solid fa-chevron-right text-purple-400/50 text-xs group-hover:translate-x-1 group-hover:text-purple-300 transition"></i>
-    </div>
-
-    <!-- 2. 活動報名處 - 極光綠 -->
+    <!-- 1. 活動報名處 - 極光綠 -->
     <a href="signup.html" class="theme-card card-emerald p-3.5 flex items-center group">
       <div class="w-11 h-11 rounded-xl bg-emerald-900/60 border border-emerald-400/50 flex items-center justify-center text-emerald-300 text-lg mr-3 shadow-inner group-hover:scale-105 transition">
         <i class="fa-solid fa-calendar-check"></i>
@@ -133,7 +127,7 @@
       <i class="fa-solid fa-chevron-right text-emerald-400/50 text-xs group-hover:translate-x-1 group-hover:text-emerald-300 transition"></i>
     </a>
 
-    <!-- 3. 天梯總榜 - 榮耀琥珀金 -->
+    <!-- 2. 天梯總榜 - 榮耀琥珀金 -->
     <div onclick="showUpcomingAlert('天梯總榜')" class="theme-card card-amber p-3.5 flex items-center cursor-pointer group">
       <div class="w-11 h-11 rounded-xl bg-amber-950/70 border border-amber-500/50 flex items-center justify-center text-amber-300 text-lg mr-3 shadow-inner group-hover:scale-105 transition">
         <i class="fa-solid fa-trophy"></i>
@@ -147,7 +141,7 @@
       <i class="fa-solid fa-lock text-amber-400/50 text-xs group-hover:text-amber-300 transition"></i>
     </div>
 
-    <!-- 4. 個人資訊 - 星際藍 -->
+    <!-- 3. 個人資訊 - 星際藍 -->
     <a href="profile.html" class="theme-card card-blue p-3.5 flex items-center group">
       <div class="w-11 h-11 rounded-xl bg-blue-900/60 border border-blue-400/50 flex items-center justify-center text-blue-300 text-lg mr-3 shadow-inner group-hover:scale-105 transition">
         <i class="fa-solid fa-id-card"></i>
@@ -159,7 +153,7 @@
       <i class="fa-solid fa-chevron-right text-blue-400/50 text-xs group-hover:translate-x-1 group-hover:text-blue-300 transition"></i>
     </a>
 
-    <!-- 5. 公播看板 - 實況玫紅 -->
+    <!-- 4. 公播看板 - 實況玫紅 -->
     <a href="board.html" class="theme-card card-rose p-3.5 flex items-center group">
       <div class="w-11 h-11 rounded-xl bg-rose-900/60 border border-rose-400/50 flex items-center justify-center text-rose-300 text-lg mr-3 shadow-inner group-hover:scale-105 transition">
         <i class="fa-solid fa-display"></i>
@@ -171,24 +165,39 @@
       <i class="fa-solid fa-chevron-right text-rose-400/50 text-xs group-hover:translate-x-1 group-hover:text-rose-300 transition"></i>
     </a>
 
+    <!-- 5. 一鍵建立會員資料 - 霓虹紫 -->
+    <div onclick="checkAndOpenRegisterModal()" class="theme-card card-purple p-3.5 flex items-center cursor-pointer group">
+      <div class="w-11 h-11 rounded-xl bg-purple-900/60 border border-purple-400/50 flex items-center justify-center text-purple-300 text-lg mr-3 shadow-inner group-hover:scale-105 transition">
+        <i class="fa-solid fa-user-plus"></i>
+      </div>
+      <div class="flex-1">
+        <div class="text-sm font-bold text-purple-100 flex items-center gap-1.5">
+          一鍵建立會員資料 <span class="text-[9px] bg-purple-950 text-purple-300 border border-purple-700 px-1.5 py-0.2 rounded font-mono">FAST</span>
+        </div>
+        <div class="text-[11px] text-purple-200/60" id="regCardDesc">未報名過？點此 3 秒綁定個人檔案與戰績庫</div>
+      </div>
+      <i class="fa-solid fa-chevron-right text-purple-400/50 text-xs group-hover:translate-x-1 group-hover:text-purple-300 transition"></i>
+    </div>
+
   </main>
 
+  <!-- 底部：法官 (上帝) 後台專屬登入口 - 極簡冷白金屬 -->
   <footer class="pt-3 pb-2">
     <div class="border-t border-gray-800/80 pt-3">
-      <button type="button" onclick="openJudgeLogin(event)" class="w-full p-3.5 rounded-xl theme-card card-gold flex items-center justify-between text-left transition group">
+      <button type="button" onclick="openJudgeLogin(event)" class="w-full p-3.5 rounded-xl theme-card card-white flex items-center justify-between text-left transition group">
         <div class="flex items-center">
-          <div class="w-10 h-10 rounded-xl bg-amber-950/80 border border-amber-500/60 flex items-center justify-center text-amber-300 mr-3 shadow-inner">
+          <div class="w-10 h-10 rounded-xl bg-gray-800/90 border border-gray-400/80 flex items-center justify-center text-white mr-3 shadow-inner">
             <i class="fa-solid fa-gavel"></i>
           </div>
           <div>
-            <div class="text-xs font-bold text-amber-200 flex items-center gap-1.5">
+            <div class="text-xs font-bold text-white flex items-center gap-1.5 tracking-wide">
               法官專屬後台 (上帝主控台)
-              <span class="text-[9px] bg-amber-950 text-amber-300 border border-amber-700 px-1.5 py-0.2 rounded font-mono">STAFF</span>
+              <span class="text-[9px] bg-white text-gray-950 font-bold border border-white px-1.5 py-0.2 rounded font-mono">STAFF</span>
             </div>
-            <div class="text-[10px] text-amber-200/60 mt-0.5">板型選擇、夜間主持引導與對局記分結算</div>
+            <div class="text-[10px] text-gray-300 mt-0.5">板型選擇、夜間主持引導與對局記分結算</div>
           </div>
         </div>
-        <i class="fa-solid fa-arrow-right-to-bracket text-amber-400 text-xs group-hover:translate-x-1 transition"></i>
+        <i class="fa-solid fa-arrow-right-to-bracket text-gray-300 text-xs group-hover:translate-x-1 group-hover:text-white transition"></i>
       </button>
 
       <div class="text-center text-[10px] text-gray-600 mt-2 font-mono">
@@ -254,7 +263,6 @@
   </form>
 
   <script>
-    // 已更新為剛剛發布的全新 GAS 部署網址
     const MEMBER_GAS_URL = "https://script.google.com/macros/s/AKfycbwo3k3IUlyEcqW0lHykmgCTKiCZ1E0aOOs_K6XqU6Mk32eBJQNMrP9iFWntPBparJDGPA/exec";
     const LIFF_ID = "2011803898-ens7pU3H";
 
