@@ -13,7 +13,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   
-  <!-- Firebase 官方 SDK (Compat 模式，極簡輕量且相容性最佳) -->
+  <!-- Firebase 官方 SDK (Compat 模式) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -98,9 +98,15 @@
         <span class="text-[11px] text-amber-300 font-mono font-bold" id="currentStageText">讀取對局進度中...</span>
       </div>
     </div>
-    <div class="text-right">
-      <div class="text-[10px] text-gray-400">存活狀態</div>
-      <div class="text-sm font-bold text-emerald-400 font-mono" id="aliveRatioText">-- / 12 人</div>
+    <div class="text-right flex items-center gap-2">
+      <div>
+        <div class="text-[10px] text-gray-400">存活狀態</div>
+        <div class="text-sm font-bold text-emerald-400 font-mono" id="aliveRatioText">-- / 12 人</div>
+      </div>
+      <!-- 低調解鎖入口按鈕 -->
+      <button onclick="promptAdminLogin()" id="authLockBtn" class="text-gray-600 hover:text-amber-400 p-1 transition" title="計票員登入">
+        <i class="fa-solid fa-lock text-xs"></i>
+      </button>
     </div>
   </header>
 
@@ -165,12 +171,16 @@
     </div>
   </section>
 
-  <!-- 底部固定：計票員操作彈窗按鈕 (僅限管理員 ?admin=1 顯示) -->
+  <!-- 底部固定：計票員操作彈窗按鈕 (僅限輸入正確密碼後顯示) -->
   <footer id="adminFooter" class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-40 hidden">
     <div class="max-w-xl mx-auto flex justify-between items-center">
-      <div class="text-xs">
-        <span class="text-gray-400">控制台狀態：</span>
-        <span class="text-amber-400 font-bold" id="drawerStageStatusText">管理模式中</span>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-emerald-400 font-bold flex items-center gap-1">
+          <i class="fa-solid fa-circle-check"></i> 計票員權限
+        </span>
+        <button onclick="logoutAdmin()" class="text-[11px] text-gray-500 hover:text-gray-300 underline">
+          退出鎖定
+        </button>
       </div>
       <div class="flex gap-2">
         <button onclick="resetMatchData()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold px-2.5 py-1.5 rounded-lg text-xs transition">
@@ -246,6 +256,11 @@
   </div>
 
   <script>
+    // ==========================================
+    // 🔐 計票員管理密碼設定 (可自行修改)
+    // ==========================================
+    const ADMIN_PASSWORD = "8888";
+
     // 你的專屬 Firebase 配置
     const firebaseConfig = {
       apiKey: "AIzaSyD-IcZrJUj4pXYxe9ZXNxU5o5A1koSwxbc",
@@ -257,14 +272,52 @@
       appId: "1:1044529133849:web:b79bf341b1296971252d88"
     };
 
-    // 初始化 Firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     const matchRef = db.ref("currentMatch");
 
-    // 判斷是否為管理員/計票員 (網址帶有 ?admin=1)
-    const urlParams = new URLSearchParams(window.location.search);
-    const isAdmin = urlParams.get('admin') === '1';
+    // 管理員權限狀態 (支援 localStorage 持久記住)
+    let isAdmin = localStorage.getItem("werewolf_board_admin") === "true";
+
+    function updateAdminUI() {
+      const footer = document.getElementById("adminFooter");
+      const lockBtn = document.getElementById("authLockBtn");
+      if (isAdmin) {
+        footer.classList.remove("hidden");
+        lockBtn.innerHTML = '<i class="fa-solid fa-unlock-keyhole text-emerald-400 text-xs"></i>';
+      } else {
+        footer.classList.add("hidden");
+        lockBtn.innerHTML = '<i class="fa-solid fa-lock text-gray-600 text-xs"></i>';
+      }
+    }
+
+    function promptAdminLogin() {
+      if (isAdmin) {
+        if (confirm("目前已是計票員模式，要退出權限鎖定看板嗎？")) {
+          logoutAdmin();
+        }
+        return;
+      }
+      const pwd = prompt("請輸入計票員專屬解鎖密碼：");
+      if (pwd === ADMIN_PASSWORD) {
+        isAdmin = true;
+        localStorage.setItem("werewolf_board_admin", "true");
+        updateAdminUI();
+        renderAll();
+        alert("✅ 計票員身分驗證成功！已解鎖控制面板。");
+      } else if (pwd !== null) {
+        alert("❌ 密碼錯誤，無法解鎖計票面板！");
+      }
+    }
+
+    function logoutAdmin() {
+      isAdmin = false;
+      localStorage.removeItem("werewolf_board_admin");
+      document.getElementById("controlDrawer").classList.add("hidden");
+      updateAdminUI();
+      renderAll();
+      alert("🔒 已鎖定計票面板，切回純公播視圖。");
+    }
 
     // 初始狀態定義
     const defaultState = {
@@ -287,12 +340,9 @@
     let currentHistoryViewIndex = -1;
 
     window.onload = () => {
-      // 顯示管理員工具列
-      if (isAdmin) {
-        document.getElementById("adminFooter").classList.remove("hidden");
-      }
+      updateAdminUI();
 
-      // 監聽 Firebase 雲端即時變化 (全場多裝置秒級同步)
+      // 即時監聽 Firebase
       matchRef.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
@@ -301,10 +351,7 @@
           if (!gameState.history) gameState.history = [];
           if (!gameState.tempVotes) gameState.tempVotes = {};
         } else {
-          // 資料庫尚無資料，管理員主動初始化
-          if (isAdmin) {
-            pushStateToFirebase();
-          }
+          if (isAdmin) pushStateToFirebase();
         }
         
         document.getElementById("syncStatusBadge").innerText = "● 即時同步中";
@@ -318,7 +365,6 @@
       });
     };
 
-    // 同步寫入雲端
     function pushStateToFirebase() {
       if (!isAdmin) return;
       matchRef.set(gameState);
@@ -341,7 +387,6 @@
         : `第 ${gameState.day} 天 白天放逐公投`;
 
       document.getElementById("currentStageText").innerText = stageDesc;
-      document.getElementById("drawerStageStatusText").innerText = stageDesc;
 
       const isPoliceActive = (gameState.phase === "POLICE_ELECTION" && currentHistoryViewIndex === -1);
       document.getElementById("policeSection").classList.toggle("hidden", !isPoliceActive);
@@ -764,7 +809,6 @@
       alert(`☀️ 已進入第 ${gameState.day} 天白天！雲端已同步更新。`);
     }
 
-    // 重置對局
     function resetMatchData() {
       if (confirm("⚠️ 確定要將雲端整局資料歸零重置嗎？所有裝置將同步重置！")) {
         gameState = JSON.parse(JSON.stringify(defaultState));
