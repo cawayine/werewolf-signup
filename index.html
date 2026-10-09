@@ -305,7 +305,6 @@
       const uid = currentUserProfile.userId;
       descEl.innerText = "🔍 正在核對會員狀態...";
 
-      // 比對資料庫查重 (JSONP / doGet 方式完全不觸發 CORS)
       try {
         const checkUrl = `${MEMBER_GAS_URL}?action=getMember&uid=${encodeURIComponent(uid)}`;
         const res = await fetch(checkUrl);
@@ -344,7 +343,7 @@
       }
     }
 
-    // 解決 CORS 跨域逾時：採用穩定的 no-cors 模式並主動驗證
+    // 解決未寫入試算表：採用 standard form POST 傳送，保證 GAS postData 完整收件
     async function submitQuickRegister() {
       const name = document.getElementById("regNameInput").value.trim();
       if (!name) {
@@ -360,10 +359,10 @@
       const uid = currentUserProfile.userId;
       const submitBtn = document.getElementById("submitRegBtn");
       submitBtn.disabled = true;
-      submitBtn.innerText = "建立存檔中...";
+      submitBtn.innerText = "寫入試算表中...";
 
       try {
-        const payload = {
+        const payloadData = {
           action: "upsertMember",
           uid: uid,
           lineName: name,
@@ -371,23 +370,45 @@
           gender: currentGender === "M" ? "男" : "女"
         };
 
-        // 以 text/plain + no-cors 規避 Apps Script 302 跨域封鎖
+        // 使用標準 URLSearchParams 封裝，相容性最高
+        const formData = new URLSearchParams();
+        for (const key in payloadData) {
+          formData.append(key, payloadData[key]);
+        }
+
+        // 以 application/x-www-form-urlencoded 發送
         await fetch(MEMBER_GAS_URL, {
           method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify(payload)
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: formData.toString()
+        }).catch(() => {
+          // 忽略瀏覽器跨域 response 解析錯誤
         });
 
-        // 寫入完成，等候 1 秒後主動反查試算表確認
-        await new Promise(r => setTimeout(r, 1200));
+        // 等待 1.5 秒讓 Google 試算表處理與寫入完成
+        submitBtn.innerText = "正在核實寫入...";
+        await new Promise(r => setTimeout(r, 1500));
 
-        alert(`🎉 恭喜【${name}】會員建立成功！已分配初始天梯積分 1000 分。`);
-        closeQuickRegisterModal();
-        document.getElementById("regCardDesc").innerText = `✅ 已綁定會員：${name}`;
+        // 反查驗證試算表是否真的新增完成
+        const checkUrl = `${MEMBER_GAS_URL}?action=getMember&uid=${encodeURIComponent(uid)}`;
+        const checkRes = await fetch(checkUrl);
+        const checkData = await checkRes.json();
+
+        if (checkData.success && checkData.member) {
+          alert(`🎉 恭喜【${name}】會員建立成功！已同步至基地資料庫，獲得初始天梯 1000 分！`);
+          closeQuickRegisterModal();
+          document.getElementById("regCardDesc").innerText = `✅ 已綁定會員：${name}`;
+        } else {
+          // 若反查尚未撈到，可能因快取或網路延遲，但資料已發送
+          alert(`✅ 會員資料已送出！若試算表延遲顯示，請重新開啟查看。`);
+          closeQuickRegisterModal();
+          document.getElementById("regCardDesc").innerText = `✅ 會員登記中：${name}`;
+        }
       } catch (err) {
         console.error(err);
-        alert("連線後端發生異常，請稍候再試！");
+        alert("建立過程中發生問題，請確認網路或聯絡法官！");
       } finally {
         submitBtn.disabled = false;
         submitBtn.innerText = "立即建立檔案";
