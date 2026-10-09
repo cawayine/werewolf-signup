@@ -204,6 +204,29 @@
       </button>
     </div>
 
+    <!-- 警徽處置操作卡片 (當警長出局時自動彈出此區塊) -->
+    <div id="policeBadgeTransferBox" class="mb-3 p-2.5 bg-amber-950/40 border border-amber-500/80 rounded-lg hidden">
+      <div class="flex justify-between items-center mb-1.5">
+        <span class="text-xs font-bold text-amber-300 flex items-center gap-1">
+          <i class="fa-solid fa-crown text-amber-400"></i> ⚠️ 警長已出局！請處置警徽：
+        </span>
+      </div>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs text-gray-300">移交給：</span>
+        <select id="transferBadgeTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-amber-200 font-bold outline-none">
+          <!-- 動態填入存活玩家 -->
+        </select>
+        <button onclick="applyTransferBadge()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-2.5 py-1 rounded text-xs transition">
+          確認移交
+        </button>
+      </div>
+      <div class="pt-1.5 border-t border-amber-900/60 flex justify-end">
+        <button onclick="applyTearBadge()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold px-3 py-1 rounded text-xs transition">
+          🔥 撕毀警徽 (本局不再有警長)
+        </button>
+      </div>
+    </div>
+
     <!-- 模式 1：警長競選計票模組 -->
     <div id="drawerPoliceModule" class="space-y-2.5">
       <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
@@ -256,9 +279,6 @@
   </div>
 
   <script>
-    // ==========================================
-    // 🔐 計票員管理密碼設定 (可自行修改)
-    // ==========================================
     const ADMIN_PASSWORD = "8888";
 
     // 你的專屬 Firebase 配置
@@ -276,7 +296,6 @@
     const db = firebase.database();
     const matchRef = db.ref("currentMatch");
 
-    // 管理員權限狀態 (支援 localStorage 持久記住)
     let isAdmin = localStorage.getItem("werewolf_board_admin") === "true";
 
     function updateAdminUI() {
@@ -319,11 +338,11 @@
       alert("🔒 已鎖定計票面板，切回純公播視圖。");
     }
 
-    // 初始狀態定義
     const defaultState = {
       day: 1,
       phase: "POLICE_ELECTION",
       policeSeat: null,
+      isBadgeTorn: false, // 警徽是否已被撕毀
       players: Array.from({ length: 12 }, (_, i) => ({
         seat: i + 1,
         isAlive: true,
@@ -342,7 +361,6 @@
     window.onload = () => {
       updateAdminUI();
 
-      // 即時監聽 Firebase
       matchRef.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
@@ -391,9 +409,13 @@
       const isPoliceActive = (gameState.phase === "POLICE_ELECTION" && currentHistoryViewIndex === -1);
       document.getElementById("policeSection").classList.toggle("hidden", !isPoliceActive);
 
-      document.getElementById("badgeHolderLabel").innerText = gameState.policeSeat 
-        ? `警長：${gameState.policeSeat} 號 (1.5票)` 
-        : "警長：未指定";
+      let badgeLabelText = "警長：未指定";
+      if (gameState.isBadgeTorn) {
+        badgeLabelText = "警長：警徽已撕毀";
+      } else if (gameState.policeSeat) {
+        badgeLabelText = `警長：${gameState.policeSeat} 號 (1.5票)`;
+      }
+      document.getElementById("badgeHolderLabel").innerText = badgeLabelText;
     }
 
     function renderHistoryTabs() {
@@ -539,7 +561,7 @@
         let voterBallsHtml = "";
 
         voters.forEach(vSeat => {
-          const isPolice = (vSeat === gameState.policeSeat);
+          const isPolice = (!gameState.isBadgeTorn && vSeat === gameState.policeSeat);
           if (gameState.phase !== "POLICE_ELECTION" && isPolice) {
             totalPoints += 1.5;
           } else {
@@ -592,11 +614,61 @@
       document.getElementById("drawerPoliceModule").classList.toggle("hidden", !isPoliceMode);
       document.getElementById("drawerExileModule").classList.toggle("hidden", isPoliceMode);
 
+      // 檢查是否需顯示「警徽移交/撕毀」卡片
+      checkPoliceBadgeStatus();
+
       if (isPoliceMode) {
         renderPoliceDrawerControls();
       } else {
         renderExileDrawerControls();
       }
+    }
+
+    // 核心邏輯：檢查警長是否出局
+    function checkPoliceBadgeStatus() {
+      const box = document.getElementById("policeBadgeTransferBox");
+      if (!gameState.policeSeat || gameState.isBadgeTorn) {
+        box.classList.add("hidden");
+        return;
+      }
+
+      const policePlayer = gameState.players.find(p => p.seat === gameState.policeSeat);
+      if (policePlayer && !policePlayer.isAlive) {
+        box.classList.remove("hidden");
+        const alivePlayers = gameState.players.filter(p => p.isAlive);
+        const select = document.getElementById("transferBadgeTargetSelect");
+        select.innerHTML = alivePlayers.map(p => `
+          <option value="${p.seat}">${p.seat} 號玩家</option>
+        `).join('');
+      } else {
+        box.classList.add("hidden");
+      }
+    }
+
+    // 移交警徽
+    function applyTransferBadge() {
+      const select = document.getElementById("transferBadgeTargetSelect");
+      const targetSeat = parseInt(select.value);
+      if (!targetSeat) return;
+
+      const oldPolice = gameState.policeSeat;
+      gameState.policeSeat = targetSeat;
+      document.getElementById("policeBadgeTransferBox").classList.add("hidden");
+      
+      pushStateToFirebase();
+      alert(`👑 ${oldPolice} 號已將警徽順利移交給 ${targetSeat} 號！${targetSeat} 號成為新任警長。`);
+    }
+
+    // 撕毀警徽
+    function applyTearBadge() {
+      if (!confirm("⚠️ 確定要撕毀警徽嗎？撕毀後本局將不再有警長，所有人回歸 1 票權！")) return;
+      const oldPolice = gameState.policeSeat;
+      gameState.policeSeat = null;
+      gameState.isBadgeTorn = true;
+      document.getElementById("policeBadgeTransferBox").classList.add("hidden");
+
+      pushStateToFirebase();
+      alert(`🔥 ${oldPolice} 號選擇撕毀警徽！警徽作廢，本局後續投票皆為 1 票。`);
     }
 
     function renderPoliceDrawerControls() {
@@ -673,7 +745,7 @@
           if (list.includes(p.seat)) votedTarget = target;
         });
 
-        const isPolice = (p.seat === gameState.policeSeat);
+        const isPolice = (!gameState.isBadgeTorn && p.seat === gameState.policeSeat);
         return `
           <button onclick="assignVote(${p.seat})" class="h-9 rounded text-xs border font-mono flex flex-col items-center justify-center ${votedTarget !== null ? 'bg-indigo-950 border-indigo-400 text-indigo-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
             <span>${p.seat}號${isPolice ? '👑' : ''}</span>
@@ -741,6 +813,7 @@
         if (!confirm("平票或尚未產生獲勝者，確定要直接封存這輪票型嗎？")) return;
       } else {
         gameState.policeSeat = winnerSeat;
+        gameState.isBadgeTorn = false;
       }
 
       if (!gameState.history) gameState.history = [];
@@ -767,7 +840,8 @@
         if (target != 0) {
           let points = 0;
           voters.forEach(v => {
-            points += (v === gameState.policeSeat ? 1.5 : 1);
+            const isPolice = (!gameState.isBadgeTorn && v === gameState.policeSeat);
+            points += (isPolice ? 1.5 : 1);
           });
           if (points > maxPoints) {
             maxPoints = points;
