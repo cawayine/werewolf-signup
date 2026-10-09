@@ -12,6 +12,9 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <!-- LINE LIFF SDK (若在 LINE 內可一鍵自動帶出資料) -->
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
   <style>
     body {
       background-color: #0b0f17;
@@ -35,12 +38,20 @@
       border-color: #f59e0b;
       box-shadow: 0 4px 16px rgba(245, 158, 11, 0.2);
     }
+    .vip-card {
+      border: 1px solid rgba(168, 85, 247, 0.5);
+      background: linear-gradient(135deg, rgba(88, 28, 135, 0.2) 0%, rgba(17, 24, 39, 0.9) 100%);
+    }
+    .vip-card:hover {
+      border-color: #c084fc;
+      box-shadow: 0 4px 16px rgba(168, 85, 247, 0.25);
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between p-4 max-w-md mx-auto">
 
   <!-- 頂部品牌形象 -->
-  <header class="text-center pt-6 pb-4">
+  <header class="text-center pt-5 pb-3">
     <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-900 via-gray-900 to-gray-950 border border-indigo-500/40 shadow-xl mb-3">
       <i class="fa-solid fa-moon text-2xl text-indigo-400"></i>
     </div>
@@ -50,9 +61,23 @@
     <p class="text-xs text-gray-400 mt-1">目標成為台中最好玩的狼人殺</p>
   </header>
 
-  <!-- 核心四大功能按鈕 -->
-  <main class="space-y-3 flex-1 flex flex-col justify-center py-2">
+  <!-- 核心功能按鈕區塊 -->
+  <main class="space-y-2.5 flex-1 flex flex-col justify-center py-1">
     
+    <!-- 🌟 新增：一鍵建立 / 綁定會員 -->
+    <div onclick="openQuickRegisterModal()" class="flex items-center p-3 rounded-xl vip-card cursor-pointer transition group">
+      <div class="w-11 h-11 rounded-lg bg-purple-950/80 border border-purple-500/50 flex items-center justify-center text-purple-300 text-lg mr-3 group-hover:scale-105 transition shadow-lg">
+        <i class="fa-solid fa-user-plus"></i>
+      </div>
+      <div class="flex-1">
+        <div class="text-sm font-bold text-purple-200 flex items-center gap-1.5 group-hover:text-purple-100 transition">
+          一鍵建立會員資料 <span class="text-[9px] bg-purple-900/80 text-purple-300 border border-purple-600 px-1.5 py-0.2 rounded font-mono">FAST</span>
+        </div>
+        <div class="text-[11px] text-gray-400">未報名過？點此 3 秒綁定個人檔案與戰績庫</div>
+      </div>
+      <i class="fa-solid fa-chevron-right text-purple-400/60 text-xs group-hover:translate-x-1 group-hover:text-purple-300 transition"></i>
+    </div>
+
     <!-- 1. 活動報名處 -->
     <a href="signup.html" class="flex items-center p-3.5 bg-gray-900 rounded-xl neon-border group">
       <div class="w-11 h-11 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-lg mr-3 group-hover:scale-105 transition">
@@ -67,7 +92,7 @@
 
     <!-- 2. 天梯總榜 -->
     <div onclick="showUpcomingAlert('天梯總榜')" class="flex items-center p-3.5 bg-gray-900/60 rounded-xl border border-gray-800 cursor-pointer hover:border-gray-700 transition group">
-      <div class="w-11 h-11 rounded-lg bg-purple-950/40 border border-purple-900/40 flex items-center justify-center text-purple-400/80 text-lg mr-3">
+      <div class="w-11 h-11 rounded-lg bg-gray-950/60 border border-gray-800 flex items-center justify-center text-gray-500 text-lg mr-3">
         <i class="fa-solid fa-trophy"></i>
       </div>
       <div class="flex-1">
@@ -105,8 +130,8 @@
 
   </main>
 
-  <!-- 底部：法官 (上帝) 後台專屬登入口 (純按鈕無連結，防止誤跳) -->
-  <footer class="pt-4 pb-2">
+  <!-- 底部：法官 (上帝) 後台專屬登入口 -->
+  <footer class="pt-3 pb-2">
     <div class="border-t border-gray-800/80 pt-3">
       <button type="button" onclick="openJudgeLogin(event)" class="w-full p-3 rounded-xl gold-card flex items-center justify-between text-left transition group">
         <div class="flex items-center">
@@ -129,7 +154,75 @@
     </div>
   </footer>
 
+  <!-- 彈窗：一鍵建立會員 Modal -->
+  <div id="quickRegisterModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-gray-900 border border-purple-500/50 rounded-2xl max-w-sm w-full p-4 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center pb-2 border-b border-gray-800">
+        <h3 class="text-sm font-bold text-purple-300 flex items-center gap-2">
+          <i class="fa-solid fa-sparkles text-purple-400"></i> 建立基地專屬會員檔案
+        </h3>
+        <button onclick="closeQuickRegisterModal()" class="text-gray-400 hover:text-white text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-gray-400 mb-1">玩家稱呼 / 暱稱：</label>
+          <input type="text" id="regNameInput" placeholder="請輸入平常開團稱呼" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-bold outline-none focus:border-purple-500">
+        </div>
+
+        <div>
+          <label class="block text-gray-400 mb-1">玩家性別：</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" onclick="selectGender('M')" id="genderBtnM" class="p-2 rounded-lg border border-gray-700 bg-gray-800 text-gray-300 font-bold transition">
+              男生 (M)
+            </button>
+            <button type="button" onclick="selectGender('F')" id="genderBtnF" class="p-2 rounded-lg border border-gray-700 bg-gray-800 text-gray-300 font-bold transition">
+              女生 (F)
+            </button>
+          </div>
+        </div>
+
+        <div class="text-[11px] text-gray-500 bg-gray-950/60 p-2 rounded border border-gray-800">
+          💡 提示：建立後將連動本團 Google 試算表戰績庫，日後參賽即可自動累計勝率與天梯榜！
+        </div>
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button onclick="closeQuickRegisterModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded-lg text-xs font-bold transition">
+          取消
+        </button>
+        <button onclick="submitQuickRegister()" id="submitRegBtn" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg text-xs font-bold shadow-lg transition">
+          立即建立檔案
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // 你的會員系統 GAS Web App URL (填入原本會員系統的 GAS 部署網址)
+    const MEMBER_GAS_URL = "https://script.google.com/macros/s/AKfycbz_替換成你的會員GAS網址/exec";
+    
+    let currentGender = "M";
+    let currentUserProfile = null;
+
+    // 初始化 LIFF (若有設定過 LIFF ID 可填入，沒有亦可手動輸入註冊)
+    const LIFF_ID = ""; // 可選填
+
+    window.onload = async () => {
+      if (LIFF_ID && typeof liff !== 'undefined') {
+        try {
+          await liff.init({ liffId: LIFF_ID });
+          if (liff.isLoggedIn()) {
+            currentUserProfile = await liff.getProfile();
+          }
+        } catch (e) {
+          console.warn("LIFF 初始化跳過", e);
+        }
+      }
+    };
+
     function showUpcomingAlert(featureName) {
       alert(`【${featureName}】正在建置中，第一賽季即將正式開放結算！`);
     }
@@ -144,6 +237,81 @@
         window.location.href = "judge.html";
       } else {
         alert("❌ 密碼錯誤，僅限工作人員進入！");
+      }
+    }
+
+    // 打開快速建立會員彈窗
+    function openQuickRegisterModal() {
+      if (currentUserProfile && currentUserProfile.displayName) {
+        document.getElementById("regNameInput").value = currentUserProfile.displayName;
+      }
+      selectGender("M");
+      document.getElementById("quickRegisterModal").classList.remove("hidden");
+    }
+
+    function closeQuickRegisterModal() {
+      document.getElementById("quickRegisterModal").classList.add("hidden");
+    }
+
+    function selectGender(g) {
+      currentGender = g;
+      const btnM = document.getElementById("genderBtnM");
+      const btnF = document.getElementById("genderBtnF");
+      if (g === "M") {
+        btnM.className = "p-2 rounded-lg border border-blue-500 bg-blue-950/60 text-blue-300 font-bold transition";
+        btnF.className = "p-2 rounded-lg border border-gray-700 bg-gray-800 text-gray-400 font-bold transition";
+      } else {
+        btnM.className = "p-2 rounded-lg border border-gray-700 bg-gray-800 text-gray-400 font-bold transition";
+        btnF.className = "p-2 rounded-lg border border-rose-500 bg-rose-950/60 text-rose-300 font-bold transition";
+      }
+    }
+
+    // 送出建立會員
+    async function submitQuickRegister() {
+      const name = document.getElementById("regNameInput").value.trim();
+      if (!name) {
+        alert("請輸入您的稱呼/暱稱！");
+        return;
+      }
+
+      const uid = (currentUserProfile && currentUserProfile.userId) 
+        ? currentUserProfile.userId 
+        : ("MANUAL_" + Math.random().toString(36).substring(2, 10).toUpperCase());
+
+      const submitBtn = document.getElementById("submitRegBtn");
+      submitBtn.disabled = true;
+      submitBtn.innerText = "建立中...";
+
+      try {
+        const payload = {
+          action: "registerMember",
+          uid: uid,
+          name: name,
+          gender: currentGender,
+          source: "INDEX_QUICK_REGISTER"
+        };
+
+        const res = await fetch(MEMBER_GAS_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+
+        if (result.success || result.status === "success") {
+          alert(`🎉 恭喜【${name}】會員建立成功！戰績庫已同步建立。`);
+          closeQuickRegisterModal();
+        } else {
+          alert("建立回報：" + (result.message || "已登記或請聯絡上帝！"));
+          closeQuickRegisterModal();
+        }
+      } catch (err) {
+        console.error(err);
+        alert("資料已傳送建立（或伺服器非同步處理中）！");
+        closeQuickRegisterModal();
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "立即建立檔案";
       }
     }
   </script>
