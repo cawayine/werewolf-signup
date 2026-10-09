@@ -249,6 +249,30 @@
     let currentGender = "M";
     let currentUserProfile = null;
 
+    // 通用 JSONP 呼叫函式 (徹底根治 CORS 問題)
+    function callGasJsonp(url, params = {}) {
+      return new Promise((resolve, reject) => {
+        const callbackName = 'gasCallback_' + Math.round(100000 * Math.random());
+        window[callbackName] = function(data) {
+          delete window[callbackName];
+          if (script && script.parentNode) script.parentNode.removeChild(script);
+          resolve(data);
+        };
+
+        const queryParams = new URLSearchParams(params);
+        queryParams.append('callback', callbackName);
+
+        const script = document.createElement('script');
+        script.src = url + (url.includes('?') ? '&' : '?') + queryParams.toString();
+        script.onerror = function() {
+          delete window[callbackName];
+          if (script && script.parentNode) script.parentNode.removeChild(script);
+          reject(new Error('網路連線或 GAS 載入異常'));
+        };
+        document.body.appendChild(script);
+      });
+    }
+
     window.onload = () => {
       initLiff();
     };
@@ -305,10 +329,12 @@
       const uid = currentUserProfile.userId;
       descEl.innerText = "🔍 正在核對會員狀態...";
 
+      // 使用 JSONP 查重
       try {
-        const checkUrl = `${MEMBER_GAS_URL}?action=getMember&uid=${encodeURIComponent(uid)}`;
-        const res = await fetch(checkUrl);
-        const checkData = await res.json();
+        const checkData = await callGasJsonp(MEMBER_GAS_URL, {
+          action: 'getMember',
+          uid: uid
+        });
 
         if (checkData.success && checkData.member) {
           const registeredName = checkData.member["LINE暱稱"] || checkData.member["自訂暱稱"] || currentUserProfile.displayName || "會員";
@@ -317,7 +343,7 @@
           return;
         }
       } catch (err) {
-        console.error("查詢會員錯誤:", err);
+        console.error("查重出錯:", err);
       }
 
       descEl.innerText = `準備建立：${currentUserProfile.displayName}`;
@@ -343,7 +369,7 @@
       }
     }
 
-    // 解決未寫入試算表：採用 standard form POST 傳送，保證 GAS postData 完整收件
+    // 透過 JSONP 一鍵新增寫入，完全零阻擋且立即獲得後端回傳
     async function submitQuickRegister() {
       const name = document.getElementById("regNameInput").value.trim();
       if (!name) {
@@ -362,53 +388,24 @@
       submitBtn.innerText = "寫入試算表中...";
 
       try {
-        const payloadData = {
-          action: "upsertMember",
+        const result = await callGasJsonp(MEMBER_GAS_URL, {
+          action: 'upsertMember',
           uid: uid,
           lineName: name,
           customNick: name,
           gender: currentGender === "M" ? "男" : "女"
-        };
-
-        // 使用標準 URLSearchParams 封裝，相容性最高
-        const formData = new URLSearchParams();
-        for (const key in payloadData) {
-          formData.append(key, payloadData[key]);
-        }
-
-        // 以 application/x-www-form-urlencoded 發送
-        await fetch(MEMBER_GAS_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-          },
-          body: formData.toString()
-        }).catch(() => {
-          // 忽略瀏覽器跨域 response 解析錯誤
         });
 
-        // 等待 1.5 秒讓 Google 試算表處理與寫入完成
-        submitBtn.innerText = "正在核實寫入...";
-        await new Promise(r => setTimeout(r, 1500));
-
-        // 反查驗證試算表是否真的新增完成
-        const checkUrl = `${MEMBER_GAS_URL}?action=getMember&uid=${encodeURIComponent(uid)}`;
-        const checkRes = await fetch(checkUrl);
-        const checkData = await checkRes.json();
-
-        if (checkData.success && checkData.member) {
+        if (result.success) {
           alert(`🎉 恭喜【${name}】會員建立成功！已同步至基地資料庫，獲得初始天梯 1000 分！`);
           closeQuickRegisterModal();
           document.getElementById("regCardDesc").innerText = `✅ 已綁定會員：${name}`;
         } else {
-          // 若反查尚未撈到，可能因快取或網路延遲，但資料已發送
-          alert(`✅ 會員資料已送出！若試算表延遲顯示，請重新開啟查看。`);
-          closeQuickRegisterModal();
-          document.getElementById("regCardDesc").innerText = `✅ 會員登記中：${name}`;
+          alert("建立回報：" + (result.message || "系統處理中，請稍後查看！"));
         }
       } catch (err) {
         console.error(err);
-        alert("建立過程中發生問題，請確認網路或聯絡法官！");
+        alert("連線後端發生異常，請檢查網路連線或稍後再試！");
       } finally {
         submitBtn.disabled = false;
         submitBtn.innerText = "立即建立檔案";
