@@ -191,19 +191,11 @@
         <i class="fa-solid fa-arrow-right-to-bracket text-amber-400 text-xs group-hover:translate-x-1 transition"></i>
       </button>
 
-      <div class="text-center text-[10px] text-gray-600 mt-2 font-mono flex items-center justify-center gap-2">
-        <span>BASE WEREWOLF SYSTEM © 2026</span>
-        <span>•</span>
-        <button onclick="toggleDebugConsole()" class="underline text-gray-500 hover:text-gray-300">🛠️ 診斷面板</button>
+      <div class="text-center text-[10px] text-gray-600 mt-2 font-mono">
+        BASE WEREWOLF SYSTEM © 2026
       </div>
     </div>
   </footer>
-
-  <!-- 即時診斷面板 (預設隱藏，點擊底部診斷按鈕展開) -->
-  <div id="debugConsole" class="bg-gray-950 border border-gray-800 rounded-lg p-2.5 my-2 text-[10px] font-mono text-gray-400 hidden">
-    <div class="font-bold text-amber-400 mb-1">即時狀態偵測：</div>
-    <div id="debugText">讀取中...</div>
-  </div>
 
   <!-- 彈窗：一鍵建立會員 Modal -->
   <div id="quickRegisterModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
@@ -251,7 +243,7 @@
     </div>
   </div>
 
-  <!-- 終極解法：背景靜默表單與目標 iframe -->
+  <!-- 原生表單提交背景容器（零 CORS、零轉址異常） -->
   <iframe name="silentGasFrame" id="silentGasFrame" style="display:none;"></iframe>
   <form id="hiddenGasForm" method="POST" target="silentGasFrame" style="display:none;">
     <input type="hidden" name="action" value="upsertMember">
@@ -262,46 +254,30 @@
   </form>
 
   <script>
-    const MEMBER_GAS_URL = "https://script.google.com/macros/s/AKfycbzkw2ALKbEmErYZPXzn5yqzFZcx7tI_6dL4zEDouYAj5_mylskzA8mNsG-jlzaH1Vmtdg/exec";
+    // 已更新為剛剛發布的全新 GAS 部署網址
+    const MEMBER_GAS_URL = "https://script.google.com/macros/s/AKfycbwo3k3IUlyEcqW0lHykmgCTKiCZ1E0aOOs_K6XqU6Mk32eBJQNMrP9iFWntPBparJDGPA/exec";
     const LIFF_ID = "2011803898-ens7pU3H";
 
     let currentGender = "M";
     let currentUserProfile = null;
-
-    function updateDebugInfo(msg) {
-      const el = document.getElementById("debugText");
-      if (el) el.innerHTML += `<div>• ${msg}</div>`;
-      console.log("[DEBUG]", msg);
-    }
-
-    function toggleDebugConsole() {
-      const el = document.getElementById("debugConsole");
-      el.classList.toggle("hidden");
-    }
 
     window.onload = () => {
       initLiff();
     };
 
     async function initLiff() {
-      if (typeof liff === 'undefined') {
-        updateDebugInfo("LIFF SDK 尚未載入");
-        return null;
-      }
+      if (typeof liff === 'undefined') return null;
       try {
         await liff.init({ liffId: LIFF_ID });
-        updateDebugInfo("LIFF 初始化完成");
         if (liff.isLoggedIn()) {
           currentUserProfile = await liff.getProfile();
           document.getElementById("regCardDesc").innerText = `LINE身分：${currentUserProfile.displayName}`;
-          updateDebugInfo(`取得身分: ${currentUserProfile.displayName} (${currentUserProfile.userId})`);
           return currentUserProfile;
         } else {
-          updateDebugInfo("尚未登入 LINE，引導登入中");
           liff.login();
         }
       } catch (err) {
-        updateDebugInfo("LIFF 異常: " + (err.message || err));
+        console.error("LIFF Init Error:", err);
       }
       return null;
     }
@@ -323,7 +299,7 @@
       }
     }
 
-    // JSONP 查重函式
+    // 查重：比對是否已存在該會員
     function checkMemberJsonp(uid) {
       return new Promise((resolve) => {
         const callbackName = 'checkCb_' + Math.floor(Math.random() * 1000000);
@@ -413,7 +389,7 @@
       }
     }
 
-    // 🚀 一勞永逸的終極送出：原生表單背景提交
+    // 原生表單提交：保證寫入 Google 試算表
     function submitQuickRegister() {
       const name = document.getElementById("regNameInput").value.trim();
       if (!name) {
@@ -432,7 +408,6 @@
       submitBtn.innerText = "寫入試算表中...";
 
       try {
-        // 設定隱藏表單內容
         const form = document.getElementById("hiddenGasForm");
         form.action = MEMBER_GAS_URL;
         document.getElementById("formUid").value = uid;
@@ -440,11 +415,8 @@
         document.getElementById("formCustomNick").value = name;
         document.getElementById("formGender").value = (currentGender === "M" ? "男" : "女");
 
-        // 原生表單提交至隱藏 iframe，完全不受 CORS 與轉址阻擋！
         form.submit();
-        updateDebugInfo(`已送出原生表單: ${name} (${uid})`);
 
-        // 提示成功並同步畫面
         setTimeout(() => {
           alert(`🎉 恭喜【${name}】會員建立成功！已同步至基地資料庫，獲得初始天梯 1000 分！`);
           closeQuickRegisterModal();
