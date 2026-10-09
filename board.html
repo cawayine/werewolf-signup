@@ -281,7 +281,6 @@
   <script>
     const ADMIN_PASSWORD = "8888";
 
-    // 你的專屬 Firebase 配置
     const firebaseConfig = {
       apiKey: "AIzaSyD-IcZrJUj4pXYxe9ZXNxU5o5A1koSwxbc",
       authDomain: "werewolf-base.firebaseapp.com",
@@ -342,7 +341,7 @@
       day: 1,
       phase: "POLICE_ELECTION",
       policeSeat: null,
-      isBadgeTorn: false, // 警徽是否已被撕毀
+      isBadgeTorn: false,
       players: Array.from({ length: 12 }, (_, i) => ({
         seat: i + 1,
         isAlive: true,
@@ -614,7 +613,6 @@
       document.getElementById("drawerPoliceModule").classList.toggle("hidden", !isPoliceMode);
       document.getElementById("drawerExileModule").classList.toggle("hidden", isPoliceMode);
 
-      // 檢查是否需顯示「警徽移交/撕毀」卡片
       checkPoliceBadgeStatus();
 
       if (isPoliceMode) {
@@ -624,7 +622,6 @@
       }
     }
 
-    // 核心邏輯：檢查警長是否出局
     function checkPoliceBadgeStatus() {
       const box = document.getElementById("policeBadgeTransferBox");
       if (!gameState.policeSeat || gameState.isBadgeTorn) {
@@ -645,7 +642,6 @@
       }
     }
 
-    // 移交警徽
     function applyTransferBadge() {
       const select = document.getElementById("transferBadgeTargetSelect");
       const targetSeat = parseInt(select.value);
@@ -659,7 +655,6 @@
       alert(`👑 ${oldPolice} 號已將警徽順利移交給 ${targetSeat} 號！${targetSeat} 號成為新任警長。`);
     }
 
-    // 撕毀警徽
     function applyTearBadge() {
       if (!confirm("⚠️ 確定要撕毀警徽嗎？撕毀後本局將不再有警長，所有人回歸 1 票權！")) return;
       const oldPolice = gameState.policeSeat;
@@ -791,6 +786,17 @@
       if (p.isAlive) {
         p.isAlive = false;
         p.deathReason = "NIGHT";
+
+        // 出局時自動從即時票型中剔除（移除受票目標與投票資格）
+        if (gameState.tempVotes) {
+          delete gameState.tempVotes[seat];
+          Object.keys(gameState.tempVotes).forEach(k => {
+            gameState.tempVotes[k] = gameState.tempVotes[k].filter(s => s !== seat);
+          });
+        }
+        if (gameState.selectedTarget === seat) {
+          gameState.selectedTarget = null;
+        }
       } else {
         p.isAlive = true;
         p.deathReason = null;
@@ -865,7 +871,11 @@
         votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
       });
 
+      // 封存當前放逐紀錄後，清空當前輪次的計票狀態
+      gameState.tempVotes = {};
+      gameState.selectedTarget = null;
       currentHistoryViewIndex = gameState.history.length - 1;
+
       pushStateToFirebase();
       alert(`✅ 第 ${gameState.day} 天放逐票型已同步封存！${exiledSeat ? `\${exiledSeat} 號玩家出局。` : '平票無人出局。'}`);
     }
