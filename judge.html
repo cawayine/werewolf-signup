@@ -310,12 +310,12 @@
       initSeats();
     }
 
-    // 核心：全域重複檢查函式（直接讀取 DOM，確保 100% 同步觸發）
+    // 核心：全域重複檢查與「已入座」下拉選單動態更新函式
     function checkSeatDuplicates() {
       const selects = document.querySelectorAll("select[id^='userSelect-']");
       const counts = {};
 
-      // 1. 統計所有非空的選取名稱次數
+      // 1. 統計所有已選人選
       selects.forEach(sel => {
         const val = sel.value.trim();
         if (val !== "") {
@@ -325,14 +325,15 @@
 
       let hasDup = false;
 
-      // 2. 針對每個座位進行樣式與標籤切換
+      // 2. 更新樣式並即時重整每個座位的下拉選單顯示文字
       selects.forEach(sel => {
         const seat = sel.id.replace("userSelect-", "");
         const card = document.getElementById("seatCard-" + seat);
         const dupTag = document.getElementById("seatDupTag-" + seat);
-        const val = sel.value.trim();
+        const currentVal = sel.value.trim();
 
-        if (val !== "" && counts[val] > 1) {
+        // 樣式高亮控制
+        if (currentVal !== "" && counts[currentVal] > 1) {
           hasDup = true;
           if (card) card.classList.add("seat-duplicate-box");
           sel.classList.add("seat-duplicate-select");
@@ -343,9 +344,20 @@
           if (dupTag) dupTag.style.display = "none";
         }
 
+        // 動態更新下拉選項的文字（標記：已入座）
+        Array.from(sel.options).forEach(opt => {
+          if (!opt.value) return; // 跳過「清空此座位」
+          const isSeatedElsewhere = (counts[opt.value] > 0) && (opt.value !== currentVal);
+          if (isSeatedElsewhere) {
+            opt.textContent = `${opt.value} (已入座)`;
+          } else {
+            opt.textContent = opt.value;
+          }
+        });
+
         // 同步寫入 gameState
         const p = gameState.players.find(x => x.seat === parseInt(seat));
-        if (p) p.name = val;
+        if (p) p.name = currentVal;
       });
 
       return { hasDup, counts };
@@ -406,7 +418,7 @@
         container.appendChild(card);
       }
       
-      // 席位建立完成後立即掃描一次
+      // 席位建立完成後立即檢查並動態帶出已入座狀態
       checkSeatDuplicates();
       updateCounts();
     }
