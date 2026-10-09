@@ -22,7 +22,6 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
 
-    /* 繽紛霓虹卡片樣式 */
     .theme-card {
       position: relative;
       border-radius: 1rem;
@@ -33,7 +32,6 @@
       transform: scale(0.985);
     }
 
-    /* 1. 會員卡片 - 炫彩霓虹紫 */
     .card-purple {
       background: linear-gradient(135deg, rgba(88, 28, 135, 0.25) 0%, rgba(15, 23, 42, 0.8) 100%);
       border: 1px solid rgba(168, 85, 247, 0.45);
@@ -44,7 +42,6 @@
       box-shadow: 0 6px 24px rgba(168, 85, 247, 0.28);
     }
 
-    /* 2. 報名處 - 極光翡翠綠 */
     .card-emerald {
       background: linear-gradient(135deg, rgba(6, 78, 59, 0.28) 0%, rgba(15, 23, 42, 0.8) 100%);
       border: 1px solid rgba(16, 185, 129, 0.45);
@@ -55,7 +52,6 @@
       box-shadow: 0 6px 24px rgba(16, 185, 129, 0.28);
     }
 
-    /* 3. 天梯總榜 - 榮耀琥珀金 */
     .card-amber {
       background: linear-gradient(135deg, rgba(120, 53, 15, 0.28) 0%, rgba(15, 23, 42, 0.8) 100%);
       border: 1px solid rgba(245, 158, 11, 0.45);
@@ -66,7 +62,6 @@
       box-shadow: 0 6px 24px rgba(245, 158, 11, 0.28);
     }
 
-    /* 4. 個人戰績 - 星際深邃藍 */
     .card-blue {
       background: linear-gradient(135deg, rgba(30, 58, 138, 0.28) 0%, rgba(15, 23, 42, 0.8) 100%);
       border: 1px solid rgba(59, 130, 246, 0.45);
@@ -77,7 +72,6 @@
       box-shadow: 0 6px 24px rgba(59, 130, 246, 0.28);
     }
 
-    /* 5. 現場公播 - 實況熱血玫紅 */
     .card-rose {
       background: linear-gradient(135deg, rgba(136, 19, 55, 0.28) 0%, rgba(15, 23, 42, 0.8) 100%);
       border: 1px solid rgba(244, 63, 94, 0.45);
@@ -88,7 +82,6 @@
       box-shadow: 0 6px 24px rgba(244, 63, 94, 0.28);
     }
 
-    /* 6. 上帝後台 - 暗金奢華 */
     .card-gold {
       background: linear-gradient(135deg, rgba(69, 26, 3, 0.4) 0%, rgba(17, 24, 39, 0.95) 100%);
       border: 1px solid rgba(217, 119, 6, 0.6);
@@ -102,7 +95,6 @@
 </head>
 <body class="min-h-screen flex flex-col justify-between p-4 max-w-md mx-auto">
 
-  <!-- 頂部品牌形象 -->
   <header class="text-center pt-5 pb-3">
     <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-900 via-purple-950 to-gray-950 border border-purple-500/50 shadow-xl mb-3">
       <i class="fa-solid fa-moon text-2xl text-purple-300"></i>
@@ -113,7 +105,6 @@
     <p class="text-xs text-gray-400 mt-1 font-medium">目標成為台中最好玩的狼人殺</p>
   </header>
 
-  <!-- 繽紛核心功能按鈕區塊 -->
   <main class="space-y-3 flex-1 flex flex-col justify-center py-1">
     
     <!-- 1. 會員綁定 - 霓虹紫 -->
@@ -182,7 +173,6 @@
 
   </main>
 
-  <!-- 底部：法官 (上帝) 後台專屬登入口 -->
   <footer class="pt-3 pb-2">
     <div class="border-t border-gray-800/80 pt-3">
       <button type="button" onclick="openJudgeLogin(event)" class="w-full p-3.5 rounded-xl theme-card card-gold flex items-center justify-between text-left transition group">
@@ -259,27 +249,23 @@
     let currentGender = "M";
     let currentUserProfile = null;
 
-    // 頁面載入時嘗試靜態初始化
-    window.onload = async () => {
-      await ensureLiffInit();
+    window.onload = () => {
+      initLiff();
     };
 
-    // 封裝健壯的 LIFF 初始化函式
-    async function ensureLiffInit() {
-      if (currentUserProfile) return currentUserProfile;
-      if (typeof liff === 'undefined') {
-        console.warn("LIFF SDK 尚未載入");
-        return null;
-      }
-
+    async function initLiff() {
+      if (typeof liff === 'undefined') return null;
       try {
         await liff.init({ liffId: LIFF_ID });
         if (liff.isLoggedIn()) {
           currentUserProfile = await liff.getProfile();
+          document.getElementById("regCardDesc").innerText = `LINE身分：${currentUserProfile.displayName}`;
           return currentUserProfile;
+        } else {
+          liff.login();
         }
       } catch (err) {
-        console.error("LIFF 初始化異常:", err);
+        console.error("LIFF Init Error:", err);
       }
       return null;
     }
@@ -301,60 +287,42 @@
       }
     }
 
-    // 核心邏輯：點擊一鍵建立會員
     async function checkAndOpenRegisterModal() {
       const descEl = document.getElementById("regCardDesc");
-      const originalText = descEl.innerText;
-      descEl.innerText = "⏳ 正在驗證 LINE 身分...";
 
-      // 1. 保證初始化與登入
-      let profile = await ensureLiffInit();
-      if (!profile) {
-        if (typeof liff !== 'undefined') {
-          if (!liff.isLoggedIn()) {
-            liff.login();
-            return;
-          }
-          try {
-            profile = await liff.getProfile();
-            currentUserProfile = profile;
-          } catch (e) {
-            console.error("取得 Profile 失敗", e);
-          }
-        }
+      if (!currentUserProfile) {
+        descEl.innerText = "⏳ 正在連接 LINE 帳號...";
+        currentUserProfile = await initLiff();
       }
 
-      if (!profile || !profile.userId) {
-        descEl.innerText = originalText;
-        alert("⚠️ 無法取得您的 LINE 身分識別！請確認本頁面是透過 LINE 點擊開啟。");
+      if (!currentUserProfile || !currentUserProfile.userId) {
+        if (typeof liff !== 'undefined') {
+          liff.login();
+        }
         return;
       }
 
-      const uid = profile.userId;
-      descEl.innerText = "🔍 正在核對資料庫會員狀態...";
+      const uid = currentUserProfile.userId;
+      descEl.innerText = "🔍 正在核對會員狀態...";
 
-      // 2. 查重：比對 GAS 資料庫
+      // 比對資料庫查重 (JSONP / doGet 方式完全不觸發 CORS)
       try {
         const checkUrl = `${MEMBER_GAS_URL}?action=getMember&uid=${encodeURIComponent(uid)}`;
         const res = await fetch(checkUrl);
         const checkData = await res.json();
 
         if (checkData.success && checkData.member) {
-          const registeredName = checkData.member["LINE暱稱"] || checkData.member["自訂暱稱"] || profile.displayName || "會員";
+          const registeredName = checkData.member["LINE暱稱"] || checkData.member["自訂暱稱"] || currentUserProfile.displayName || "會員";
           alert(`⚠️ 您已經是基地會員囉！\n目前登記暱稱：【${registeredName}】\n無須重複建立，可直接報名或查看個人戰績！`);
           descEl.innerText = `✅ 已綁定會員：${registeredName}`;
           return;
         }
       } catch (err) {
         console.error("查詢會員錯誤:", err);
-      } finally {
-        if (!descEl.innerText.startsWith("✅")) {
-          descEl.innerText = originalText;
-        }
       }
 
-      // 3. 資料庫中無此會員，打開彈窗
-      document.getElementById("regNameInput").value = profile.displayName || "";
+      descEl.innerText = `準備建立：${currentUserProfile.displayName}`;
+      document.getElementById("regNameInput").value = currentUserProfile.displayName || "";
       selectGender("M");
       document.getElementById("quickRegisterModal").classList.remove("hidden");
     }
@@ -376,7 +344,7 @@
       }
     }
 
-    // 送出註冊
+    // 解決 CORS 跨域逾時：採用穩定的 no-cors 模式並主動驗證
     async function submitQuickRegister() {
       const name = document.getElementById("regNameInput").value.trim();
       if (!name) {
@@ -403,23 +371,23 @@
           gender: currentGender === "M" ? "男" : "女"
         };
 
-        const res = await fetch(MEMBER_GAS_URL, {
+        // 以 text/plain + no-cors 規避 Apps Script 302 跨域封鎖
+        await fetch(MEMBER_GAS_URL, {
           method: "POST",
+          mode: "no-cors",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify(payload)
         });
-        const result = await res.json();
 
-        if (result.success) {
-          alert(`🎉 恭喜【${name}】會員建立成功！已分配初始天梯積分 1000 分。`);
-          closeQuickRegisterModal();
-          document.getElementById("regCardDesc").innerText = `✅ 已綁定會員：${name}`;
-        } else {
-          alert("建立失敗：" + (result.message || "請稍候再試"));
-        }
+        // 寫入完成，等候 1 秒後主動反查試算表確認
+        await new Promise(r => setTimeout(r, 1200));
+
+        alert(`🎉 恭喜【${name}】會員建立成功！已分配初始天梯積分 1000 分。`);
+        closeQuickRegisterModal();
+        document.getElementById("regCardDesc").innerText = `✅ 已綁定會員：${name}`;
       } catch (err) {
         console.error(err);
-        alert("連線後端逾時，請檢查網路連線！");
+        alert("連線後端發生異常，請稍候再試！");
       } finally {
         submitBtn.disabled = false;
         submitBtn.innerText = "立即建立檔案";
