@@ -65,7 +65,7 @@
   <main class="space-y-2.5 flex-1 flex flex-col justify-center py-1">
     
     <!-- 🌟 一鍵建立 / 綁定會員 -->
-    <div onclick="openQuickRegisterModal()" class="flex items-center p-3 rounded-xl vip-card cursor-pointer transition group">
+    <div onclick="checkAndOpenRegisterModal()" class="flex items-center p-3 rounded-xl vip-card cursor-pointer transition group">
       <div class="w-11 h-11 rounded-lg bg-purple-950/80 border border-purple-500/50 flex items-center justify-center text-purple-300 text-lg mr-3 group-hover:scale-105 transition shadow-lg">
         <i class="fa-solid fa-user-plus"></i>
       </div>
@@ -73,7 +73,7 @@
         <div class="text-sm font-bold text-purple-200 flex items-center gap-1.5 group-hover:text-purple-100 transition">
           一鍵建立會員資料 <span class="text-[9px] bg-purple-900/80 text-purple-300 border border-purple-600 px-1.5 py-0.2 rounded font-mono">FAST</span>
         </div>
-        <div class="text-[11px] text-gray-400">未報名過？點此 3 秒綁定個人檔案與戰績庫</div>
+        <div class="text-[11px] text-gray-400" id="regCardDesc">未報名過？點此 3 秒綁定個人檔案與戰績庫</div>
       </div>
       <i class="fa-solid fa-chevron-right text-purple-400/60 text-xs group-hover:translate-x-1 group-hover:text-purple-300 transition"></i>
     </div>
@@ -185,7 +185,7 @@
         </div>
 
         <div class="text-[11px] text-gray-500 bg-gray-950/60 p-2 rounded border border-gray-800">
-          💡 提示：建立後將連動 Google 試算表會員資料庫，獲得初始天梯積分 1000 分並自動累計勝率！
+          💡 提示：建立後將綁定此 LINE 帳號，獲得初始天梯積分 1000 分並自動累計勝率！
         </div>
       </div>
 
@@ -201,14 +201,14 @@
   </div>
 
   <script>
-    // 請將此處替換為你會員系統 Apps Script 的 Web 應用程式網址 (結尾為 /exec)
-    const MEMBER_GAS_URL = "https://script.google.com/macros/s/AKfycbzkW2ALKbEmErYZPXzn5yqzFZcx7tI_6dL4zEDouYAj5_mylskzA8mNsG-jlzaH1Vmtdg/exec";
+    const MEMBER_GAS_URL = "https://script.google.com/macros/s/AKfycbzkw2ALKbEmErYZPXzn5yqzFZcx7tI_6dL4zEDouYAj5_mylskzA8mNsG-jlzaH1Vmtdg/exec";
     
+    // ⚠️ 務必填入你的 LIFF ID（例如報名頁的 LIFF ID），才能抓取真正的 LINE UID
+    const LIFF_ID = "2011803898-ens7pU3H";
+
     let currentGender = "M";
     let currentUserProfile = null;
-
-    // 若有 LIFF ID 可填入，沒有亦可手動輸入
-    const LIFF_ID = "";
+    let isLiffReady = false;
 
     window.onload = async () => {
       if (LIFF_ID && typeof liff !== 'undefined') {
@@ -216,9 +216,13 @@
           await liff.init({ liffId: LIFF_ID });
           if (liff.isLoggedIn()) {
             currentUserProfile = await liff.getProfile();
+            isLiffReady = true;
+          } else {
+            // 自動引導登入 LINE
+            liff.login();
           }
         } catch (e) {
-          console.warn("LIFF 初始化跳過", e);
+          console.error("LIFF 初始化失敗", e);
         }
       }
     };
@@ -240,10 +244,48 @@
       }
     }
 
-    function openQuickRegisterModal() {
-      if (currentUserProfile && currentUserProfile.displayName) {
-        document.getElementById("regNameInput").value = currentUserProfile.displayName;
+    // 嚴格檢查：點擊按鈕時，先檢查 UID 是否已經存在資料庫
+    async function checkAndOpenRegisterModal() {
+      // 1. 檢查是否能取得真實 LINE UID
+      if (!currentUserProfile || !currentUserProfile.userId) {
+        if (LIFF_ID && typeof liff !== 'undefined' && !liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+        alert("⚠️ 無法取得您的 LINE 身分識別！請務必在 LINE 內開啟本頁面，避免重複建立無效會員。");
+        return;
       }
+
+      const uid = currentUserProfile.userId;
+
+      // 2. 顯示查詢中的回饋
+      const descEl = document.getElementById("regCardDesc");
+      const originalText = descEl.innerText;
+      descEl.innerText = "🔍 正在核對您的會員身分...";
+
+      try {
+        // 向 GAS 後端 doGet 查詢該會員是否已存在 (調用現成的 getMember)
+        const checkUrl = `${MEMBER_GAS_URL}?action=getMember&uid=${encodeURIComponent(uid)}`;
+        const res = await fetch(checkUrl);
+        const checkData = await res.json();
+
+        // 3. 嚴格阻擋：如果已存在，直接中斷流程，不開彈窗
+        if (checkData.success && checkData.member) {
+          const registeredName = checkData.member["LINE暱稱"] || checkData.member["自訂暱稱"] || "會員";
+          alert(`⚠️ 您已經是基地會員囉！\n目前登記暱稱：【${registeredName}】\n無須重複建立，請直接前往「活動報名處」或「個人戰績資訊」查看！`);
+          descEl.innerText = `✅ 已綁定會員：${registeredName}`;
+          return;
+        }
+      } catch (err) {
+        console.error("查詢會員出錯:", err);
+      } finally {
+        if (!descEl.innerText.startsWith("✅")) {
+          descEl.innerText = originalText;
+        }
+      }
+
+      // 4. 資料庫確無此 UID，才打開建立彈窗
+      document.getElementById("regNameInput").value = currentUserProfile.displayName || "";
       selectGender("M");
       document.getElementById("quickRegisterModal").classList.remove("hidden");
     }
@@ -265,7 +307,7 @@
       }
     }
 
-    // 送出建立會員：完全對齊會員系統 GAS 之 upsertMember 介面
+    // 真正送出建立（嚴格攜帶真實 LINE UID）
     async function submitQuickRegister() {
       const name = document.getElementById("regNameInput").value.trim();
       if (!name) {
@@ -273,13 +315,15 @@
         return;
       }
 
-      const uid = (currentUserProfile && currentUserProfile.userId) 
-        ? currentUserProfile.userId 
-        : ("MANUAL_" + Math.random().toString(36).substring(2, 10).toUpperCase());
+      if (!currentUserProfile || !currentUserProfile.userId) {
+        alert("❌ 找不到 LINE UID，無法建立！請確認在 LINE 內開啟。");
+        return;
+      }
 
+      const uid = currentUserProfile.userId;
       const submitBtn = document.getElementById("submitRegBtn");
       submitBtn.disabled = true;
-      submitBtn.innerText = "建立中...";
+      submitBtn.innerText = "驗證建立中...";
 
       try {
         const payload = {
@@ -298,19 +342,15 @@
         const result = await res.json();
 
         if (result.success) {
-          if (result.action === "created") {
-            alert(`🎉 恭喜【${name}】會員建立成功！已分配初始天梯積分 1000 分。`);
-          } else {
-            alert(`✅【${name}】會員檔案已存在，資料已為您更新同步！`);
-          }
+          alert(`🎉 恭喜【${name}】會員建立成功！已分配初始天梯積分 1000 分。`);
           closeQuickRegisterModal();
+          document.getElementById("regCardDesc").innerText = `✅ 已綁定會員：${name}`;
         } else {
           alert("建立失敗：" + (result.message || "請稍候再試"));
         }
       } catch (err) {
         console.error(err);
-        alert("資料已傳送至後台（或請檢查網路連線）！");
-        closeQuickRegisterModal();
+        alert("連線後端逾時，請檢查網路連線！");
       } finally {
         submitBtn.disabled = false;
         submitBtn.innerText = "立即建立檔案";
