@@ -254,29 +254,35 @@
 
   <script>
     const MEMBER_GAS_URL = "https://script.google.com/macros/s/AKfycbzkw2ALKbEmErYZPXzn5yqzFZcx7tI_6dL4zEDouYAj5_mylskzA8mNsG-jlzaH1Vmtdg/exec";
-    
-    // 貼上剛才新建立的首頁專屬 LIFF ID
-    const LIFF_ID = "";
+    const LIFF_ID = "2011803898-ens7pU3H";
 
     let currentGender = "M";
     let currentUserProfile = null;
-    let isLiffReady = false;
 
+    // 頁面載入時嘗試靜態初始化
     window.onload = async () => {
-      if (LIFF_ID && typeof liff !== 'undefined') {
-        try {
-          await liff.init({ liffId: LIFF_ID });
-          if (liff.isLoggedIn()) {
-            currentUserProfile = await liff.getProfile();
-            isLiffReady = true;
-          } else {
-            liff.login();
-          }
-        } catch (e) {
-          console.error("LIFF 初始化失敗", e);
-        }
-      }
+      await ensureLiffInit();
     };
+
+    // 封裝健壯的 LIFF 初始化函式
+    async function ensureLiffInit() {
+      if (currentUserProfile) return currentUserProfile;
+      if (typeof liff === 'undefined') {
+        console.warn("LIFF SDK 尚未載入");
+        return null;
+      }
+
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        if (liff.isLoggedIn()) {
+          currentUserProfile = await liff.getProfile();
+          return currentUserProfile;
+        }
+      } catch (err) {
+        console.error("LIFF 初始化異常:", err);
+      }
+      return null;
+    }
 
     function showUpcomingAlert(featureName) {
       alert(`【${featureName}】正在建置中，第一賽季即將正式開放結算！`);
@@ -295,41 +301,60 @@
       }
     }
 
+    // 核心邏輯：點擊一鍵建立會員
     async function checkAndOpenRegisterModal() {
-      if (!currentUserProfile || !currentUserProfile.userId) {
-        if (LIFF_ID && typeof liff !== 'undefined' && !liff.isLoggedIn()) {
-          liff.login();
-          return;
+      const descEl = document.getElementById("regCardDesc");
+      const originalText = descEl.innerText;
+      descEl.innerText = "⏳ 正在驗證 LINE 身分...";
+
+      // 1. 保證初始化與登入
+      let profile = await ensureLiffInit();
+      if (!profile) {
+        if (typeof liff !== 'undefined') {
+          if (!liff.isLoggedIn()) {
+            liff.login();
+            return;
+          }
+          try {
+            profile = await liff.getProfile();
+            currentUserProfile = profile;
+          } catch (e) {
+            console.error("取得 Profile 失敗", e);
+          }
         }
-        alert("⚠️ 無法取得您的 LINE 身分識別！請務必在 LINE 內開啟本頁面，避免重複建立無效會員。");
+      }
+
+      if (!profile || !profile.userId) {
+        descEl.innerText = originalText;
+        alert("⚠️ 無法取得您的 LINE 身分識別！請確認本頁面是透過 LINE 點擊開啟。");
         return;
       }
 
-      const uid = currentUserProfile.userId;
-      const descEl = document.getElementById("regCardDesc");
-      const originalText = descEl.innerText;
-      descEl.innerText = "🔍 正在核對會員身分...";
+      const uid = profile.userId;
+      descEl.innerText = "🔍 正在核對資料庫會員狀態...";
 
+      // 2. 查重：比對 GAS 資料庫
       try {
         const checkUrl = `${MEMBER_GAS_URL}?action=getMember&uid=${encodeURIComponent(uid)}`;
         const res = await fetch(checkUrl);
         const checkData = await res.json();
 
         if (checkData.success && checkData.member) {
-          const registeredName = checkData.member["LINE暱稱"] || checkData.member["自訂暱稱"] || "會員";
-          alert(`⚠️ 您已經是基地會員囉！\n目前登記暱稱：【${registeredName}】\n無須重複建立，請直接前往「活動報名處」或「個人戰績資訊」查看！`);
+          const registeredName = checkData.member["LINE暱稱"] || checkData.member["自訂暱稱"] || profile.displayName || "會員";
+          alert(`⚠️ 您已經是基地會員囉！\n目前登記暱稱：【${registeredName}】\n無須重複建立，可直接報名或查看個人戰績！`);
           descEl.innerText = `✅ 已綁定會員：${registeredName}`;
           return;
         }
       } catch (err) {
-        console.error("查詢會員出錯:", err);
+        console.error("查詢會員錯誤:", err);
       } finally {
         if (!descEl.innerText.startsWith("✅")) {
           descEl.innerText = originalText;
         }
       }
 
-      document.getElementById("regNameInput").value = currentUserProfile.displayName || "";
+      // 3. 資料庫中無此會員，打開彈窗
+      document.getElementById("regNameInput").value = profile.displayName || "";
       selectGender("M");
       document.getElementById("quickRegisterModal").classList.remove("hidden");
     }
@@ -351,6 +376,7 @@
       }
     }
 
+    // 送出註冊
     async function submitQuickRegister() {
       const name = document.getElementById("regNameInput").value.trim();
       if (!name) {
@@ -359,14 +385,14 @@
       }
 
       if (!currentUserProfile || !currentUserProfile.userId) {
-        alert("❌ 找不到 LINE UID，無法建立！請確認在 LINE 內開啟。");
+        alert("❌ 找不到 LINE UID，無法建立！");
         return;
       }
 
       const uid = currentUserProfile.userId;
       const submitBtn = document.getElementById("submitRegBtn");
       submitBtn.disabled = true;
-      submitBtn.innerText = "驗證建立中...";
+      submitBtn.innerText = "建立存檔中...";
 
       try {
         const payload = {
