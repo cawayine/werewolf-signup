@@ -12,6 +12,11 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  
+  <!-- Firebase 官方 SDK (Compat 模式，極簡輕量且相容性最佳) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .neon-border { border: 1px solid #30363d; }
@@ -88,14 +93,14 @@
       </div>
       <div>
         <h1 class="text-sm font-black text-gray-100 flex items-center gap-1.5">
-          基地公播看板 <span class="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[10px] px-1.5 py-0.2 rounded font-bold">即時公播</span>
+          基地公播看板 <span id="syncStatusBadge" class="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[10px] px-1.5 py-0.2 rounded font-bold">連線中...</span>
         </h1>
-        <span class="text-[11px] text-amber-300 font-mono font-bold" id="currentStageText">第 1 天 警長競選</span>
+        <span class="text-[11px] text-amber-300 font-mono font-bold" id="currentStageText">讀取對局進度中...</span>
       </div>
     </div>
     <div class="text-right">
       <div class="text-[10px] text-gray-400">存活狀態</div>
-      <div class="text-sm font-bold text-emerald-400 font-mono" id="aliveRatioText">12 / 12 人</div>
+      <div class="text-sm font-bold text-emerald-400 font-mono" id="aliveRatioText">-- / 12 人</div>
     </div>
   </header>
 
@@ -160,16 +165,21 @@
     </div>
   </section>
 
-  <!-- 底部固定：計票員操作彈窗呼叫按鈕 -->
-  <footer class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-40">
+  <!-- 底部固定：計票員操作彈窗按鈕 (僅限管理員 ?admin=1 顯示) -->
+  <footer id="adminFooter" class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-40 hidden">
     <div class="max-w-xl mx-auto flex justify-between items-center">
       <div class="text-xs">
-        <span class="text-gray-400">目前輪次：</span>
-        <span class="text-amber-400 font-bold" id="drawerStageStatusText">第 1 天 警長競選</span>
+        <span class="text-gray-400">控制台狀態：</span>
+        <span class="text-amber-400 font-bold" id="drawerStageStatusText">管理模式中</span>
       </div>
-      <button onclick="toggleControlDrawer()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow transition">
-        <i class="fa-solid fa-pen-to-square"></i> 開啟計票面板
-      </button>
+      <div class="flex gap-2">
+        <button onclick="resetMatchData()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold px-2.5 py-1.5 rounded-lg text-xs transition">
+          重置開局
+        </button>
+        <button onclick="toggleControlDrawer()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow transition">
+          <i class="fa-solid fa-pen-to-square"></i> 開啟計票面板
+        </button>
+      </div>
     </div>
   </footer>
 
@@ -236,33 +246,90 @@
   </div>
 
   <script>
-    let gameState = {
+    // 你的專屬 Firebase 配置
+    const firebaseConfig = {
+      apiKey: "AIzaSyD-IcZrJUj4pXYxe9ZXNxU5o5A1koSwxbc",
+      authDomain: "werewolf-base.firebaseapp.com",
+      databaseURL: "https://werewolf-base-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "werewolf-base",
+      storageBucket: "werewolf-base.firebasestorage.app",
+      messagingSenderId: "1044529133849",
+      appId: "1:1044529133849:web:b79bf341b1296971252d88"
+    };
+
+    // 初始化 Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const matchRef = db.ref("currentMatch");
+
+    // 判斷是否為管理員/計票員 (網址帶有 ?admin=1)
+    const urlParams = new URLSearchParams(window.location.search);
+    const isAdmin = urlParams.get('admin') === '1';
+
+    // 初始狀態定義
+    const defaultState = {
       day: 1,
       phase: "POLICE_ELECTION",
       policeSeat: null,
       players: Array.from({ length: 12 }, (_, i) => ({
         seat: i + 1,
         isAlive: true,
-        deathReason: null, // null | "NIGHT" (夜間倒牌) | "EXILE" (白天放逐)
+        deathReason: null,
         isCandidate: false,
         hasDropped: false
       })),
       history: [],
-      currentHistoryViewIndex: -1,
       tempVotes: {},
       selectedTarget: null
     };
 
+    let gameState = JSON.parse(JSON.stringify(defaultState));
+    let currentHistoryViewIndex = -1;
+
     window.onload = () => {
-      renderAll();
+      // 顯示管理員工具列
+      if (isAdmin) {
+        document.getElementById("adminFooter").classList.remove("hidden");
+      }
+
+      // 監聽 Firebase 雲端即時變化 (全場多裝置秒級同步)
+      matchRef.on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          gameState = data;
+          if (!gameState.players) gameState.players = defaultState.players;
+          if (!gameState.history) gameState.history = [];
+          if (!gameState.tempVotes) gameState.tempVotes = {};
+        } else {
+          // 資料庫尚無資料，管理員主動初始化
+          if (isAdmin) {
+            pushStateToFirebase();
+          }
+        }
+        
+        document.getElementById("syncStatusBadge").innerText = "● 即時同步中";
+        document.getElementById("syncStatusBadge").className = "bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] px-1.5 py-0.2 rounded font-bold";
+
+        renderAll();
+      }, (error) => {
+        console.error("Firebase 連線異常:", error);
+        document.getElementById("syncStatusBadge").innerText = "⚠️ 連線中斷";
+        document.getElementById("syncStatusBadge").className = "bg-rose-950 text-rose-300 border border-rose-800 text-[10px] px-1.5 py-0.2 rounded font-bold";
+      });
     };
+
+    // 同步寫入雲端
+    function pushStateToFirebase() {
+      if (!isAdmin) return;
+      matchRef.set(gameState);
+    }
 
     function renderAll() {
       renderHeaderAndSections();
       renderHistoryTabs();
       renderSeatsStatus();
       renderLottoVoteDisplay();
-      renderDrawerControls();
+      if (isAdmin) renderDrawerControls();
     }
 
     function renderHeaderAndSections() {
@@ -276,7 +343,7 @@
       document.getElementById("currentStageText").innerText = stageDesc;
       document.getElementById("drawerStageStatusText").innerText = stageDesc;
 
-      const isPoliceActive = (gameState.phase === "POLICE_ELECTION" && gameState.currentHistoryViewIndex === -1);
+      const isPoliceActive = (gameState.phase === "POLICE_ELECTION" && currentHistoryViewIndex === -1);
       document.getElementById("policeSection").classList.toggle("hidden", !isPoliceActive);
 
       document.getElementById("badgeHolderLabel").innerText = gameState.policeSeat 
@@ -289,7 +356,7 @@
       let tabsHtml = "";
 
       gameState.history.forEach((record, idx) => {
-        const isActive = (gameState.currentHistoryViewIndex === idx);
+        const isActive = (currentHistoryViewIndex === idx);
         tabsHtml += `
           <button onclick="viewHistory(${idx})" class="px-2.5 py-1 rounded font-bold whitespace-nowrap transition border ${isActive ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700'}">
             ${record.title}
@@ -297,7 +364,7 @@
         `;
       });
 
-      const isCurrentActive = (gameState.currentHistoryViewIndex === -1);
+      const isCurrentActive = (currentHistoryViewIndex === -1);
       const currentTitle = gameState.phase === "POLICE_ELECTION" ? "即時: 警長競選" : `即時: D${gameState.day}放逐`;
       tabsHtml += `
         <button onclick="viewHistory(-1)" class="px-2.5 py-1 rounded font-bold whitespace-nowrap transition border ${isCurrentActive ? 'bg-blue-600 text-white border-blue-400' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'}">
@@ -309,11 +376,10 @@
     }
 
     function viewHistory(idx) {
-      gameState.currentHistoryViewIndex = idx;
+      currentHistoryViewIndex = idx;
       renderAll();
     }
 
-    // 渲染全場標準席位點陣 (實作做法 B：角標流)
     function renderSeatsStatus() {
       const candidates = gameState.players.filter(p => p.isCandidate);
       const voters = gameState.players.filter(p => !p.isCandidate && p.isAlive);
@@ -321,7 +387,6 @@
       document.getElementById("candidateCountLabel").innerText = `${candidates.length} 人上警`;
       document.getElementById("votersCountLabel").innerText = `${voters.length} 人在警下`;
 
-      // 警上候選人
       const candGrid = document.getElementById("candidatesGrid");
       if (candidates.length === 0) {
         candGrid.innerHTML = `<div class="col-span-6 text-gray-500 text-xs text-center py-2">目前無人上警</div>`;
@@ -335,7 +400,6 @@
         `).join('');
       }
 
-      // 警下選民
       const voterGrid = document.getElementById("votersGrid");
       if (voters.length === 0) {
         voterGrid.innerHTML = `<div class="col-span-6 text-gray-500 text-xs text-center py-2">全員上警</div>`;
@@ -349,7 +413,6 @@
         `).join('');
       }
 
-      // 1~12 席位點陣：實作做法 B (右上角標 + 顏色分流)
       const stdGrid = document.getElementById("standardSeatsGrid");
       stdGrid.innerHTML = gameState.players.map(p => {
         let cardStyle = "seat-alive";
@@ -392,23 +455,22 @@
       }).join('');
     }
 
-    // 樂透彩球票型渲染
     function renderLottoVoteDisplay() {
       const container = document.getElementById("lottoVotesContainer");
       const titleEl = document.getElementById("voteSummaryTitle");
       const badgeEl = document.getElementById("voteSummaryBadge");
 
       let currentDisplayVotes = {};
-      let isHistoryView = (gameState.currentHistoryViewIndex !== -1);
+      let isHistoryView = (currentHistoryViewIndex !== -1);
 
       if (isHistoryView) {
-        const histItem = gameState.history[gameState.currentHistoryViewIndex];
+        const histItem = gameState.history[currentHistoryViewIndex];
         currentDisplayVotes = histItem.votes || {};
         titleEl.innerText = `歷史紀錄：${histItem.title}`;
         badgeEl.innerText = histItem.badgeText || "已結算";
         badgeEl.className = "text-xs bg-amber-950 text-amber-300 border border-amber-700 px-2 py-0.5 rounded font-bold";
       } else {
-        currentDisplayVotes = gameState.tempVotes;
+        currentDisplayVotes = gameState.tempVotes || {};
         titleEl.innerText = (gameState.phase === "POLICE_ELECTION") ? "即時：警長競選票型" : `即時：第 ${gameState.day} 天放逐票型`;
         badgeEl.innerText = "即時開票中";
         badgeEl.className = "text-xs bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold";
@@ -522,7 +584,7 @@
       
       votersGrid.innerHTML = eligibleVoters.map(p => {
         let votedTarget = null;
-        Object.entries(gameState.tempVotes).forEach(([cand, list]) => {
+        Object.entries(gameState.tempVotes || {}).forEach(([cand, list]) => {
           if (list.includes(p.seat)) votedTarget = cand;
         });
 
@@ -536,7 +598,6 @@
     }
 
     function renderExileDrawerControls() {
-      // 夜間死訊 (點選標記為 NIGHT)
       const deathGrid = document.getElementById("drawerNightDeathGrid");
       deathGrid.innerHTML = gameState.players.map(p => {
         const isNightDead = (!p.isAlive && p.deathReason === "NIGHT");
@@ -547,7 +608,6 @@
         `;
       }).join('');
 
-      // 受票目標 (存活玩家)
       const targetContainer = document.getElementById("drawerExileTargetContainer");
       const alivePlayers = gameState.players.filter(p => p.isAlive);
 
@@ -561,11 +621,10 @@
         </button>
       `;
 
-      // 投票選民 (存活玩家)
       const votersGrid = document.getElementById("drawerExileVotersGrid");
       votersGrid.innerHTML = alivePlayers.map(p => {
         let votedTarget = null;
-        Object.entries(gameState.tempVotes).forEach(([target, list]) => {
+        Object.entries(gameState.tempVotes || {}).forEach(([target, list]) => {
           if (list.includes(p.seat)) votedTarget = target;
         });
 
@@ -583,7 +642,7 @@
       const p = gameState.players.find(x => x.seat === seat);
       p.isCandidate = !p.isCandidate;
       p.hasDropped = false;
-      renderAll();
+      pushStateToFirebase();
     }
 
     function selectTargetForVote(targetSeat) {
@@ -598,6 +657,7 @@
       }
       const target = gameState.selectedTarget;
 
+      if (!gameState.tempVotes) gameState.tempVotes = {};
       Object.keys(gameState.tempVotes).forEach(k => {
         gameState.tempVotes[k] = gameState.tempVotes[k].filter(s => s !== voterSeat);
       });
@@ -605,11 +665,10 @@
       if (!gameState.tempVotes[target]) gameState.tempVotes[target] = [];
       gameState.tempVotes[target].push(voterSeat);
 
-      gameState.currentHistoryViewIndex = -1;
-      renderAll();
+      currentHistoryViewIndex = -1;
+      pushStateToFirebase();
     }
 
-    // 切換夜間死亡狀態 (NIGHT)
     function togglePlayerNightDeath(seat) {
       const p = gameState.players.find(x => x.seat === seat);
       if (p.isAlive) {
@@ -619,14 +678,14 @@
         p.isAlive = true;
         p.deathReason = null;
       }
-      renderAll();
+      pushStateToFirebase();
     }
 
     function confirmPoliceElection() {
       let maxVotes = 0;
       let winnerSeat = null;
 
-      Object.entries(gameState.tempVotes).forEach(([cand, voters]) => {
+      Object.entries(gameState.tempVotes || {}).forEach(([cand, voters]) => {
         if (cand != 0 && voters.length > maxVotes) {
           maxVotes = voters.length;
           winnerSeat = parseInt(cand);
@@ -639,26 +698,27 @@
         gameState.policeSeat = winnerSeat;
       }
 
+      if (!gameState.history) gameState.history = [];
       gameState.history.push({
         title: `D1 警長競選`,
         badgeText: winnerSeat ? `👑 ${winnerSeat}號當選警長` : "競選結束",
-        votes: JSON.parse(JSON.stringify(gameState.tempVotes))
+        votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
       });
 
       gameState.phase = "DAY_EXILE";
       gameState.tempVotes = {};
       gameState.selectedTarget = null;
-      gameState.currentHistoryViewIndex = -1;
+      currentHistoryViewIndex = -1;
 
-      renderAll();
-      alert(`🎉 警長競選完成！票型已封存，系統自動進入【第 1 天 白天放逐】階段。`);
+      pushStateToFirebase();
+      alert(`🎉 警長競選完成！票型已封存至雲端，進入【第 1 天 白天放逐】。`);
     }
 
     function confirmExileVote() {
       let maxPoints = 0;
       let exiledSeat = null;
 
-      Object.entries(gameState.tempVotes).forEach(([target, voters]) => {
+      Object.entries(gameState.tempVotes || {}).forEach(([target, voters]) => {
         if (target != 0) {
           let points = 0;
           voters.forEach(v => {
@@ -675,19 +735,20 @@
         const p = gameState.players.find(x => x.seat === exiledSeat);
         if (p) {
           p.isAlive = false;
-          p.deathReason = "EXILE"; // 標記為放逐出局
+          p.deathReason = "EXILE";
         }
       }
 
+      if (!gameState.history) gameState.history = [];
       gameState.history.push({
         title: `D${gameState.day} 白天放逐`,
         badgeText: exiledSeat ? `❌ ${exiledSeat}號放逐出局 (${maxPoints}票)` : "平票無人出局",
-        votes: JSON.parse(JSON.stringify(gameState.tempVotes))
+        votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
       });
 
-      gameState.currentHistoryViewIndex = gameState.history.length - 1;
-      alert(`✅ 第 ${gameState.day} 天放逐票型已封存！${exiledSeat ? `\${exiledSeat} 號玩家出局。` : '平票無人出局。'}`);
-      renderAll();
+      currentHistoryViewIndex = gameState.history.length - 1;
+      pushStateToFirebase();
+      alert(`✅ 第 ${gameState.day} 天放逐票型已同步封存！${exiledSeat ? `\${exiledSeat} 號玩家出局。` : '平票無人出局。'}`);
     }
 
     function enterNextDayCycle() {
@@ -697,10 +758,19 @@
       gameState.phase = "DAY_EXILE";
       gameState.tempVotes = {};
       gameState.selectedTarget = null;
-      gameState.currentHistoryViewIndex = -1;
+      currentHistoryViewIndex = -1;
 
-      renderAll();
-      alert(`☀️ 已進入第 ${gameState.day} 天白天！請於控制端更新昨夜死訊後進行放逐計票。`);
+      pushStateToFirebase();
+      alert(`☀️ 已進入第 ${gameState.day} 天白天！雲端已同步更新。`);
+    }
+
+    // 重置對局
+    function resetMatchData() {
+      if (confirm("⚠️ 確定要將雲端整局資料歸零重置嗎？所有裝置將同步重置！")) {
+        gameState = JSON.parse(JSON.stringify(defaultState));
+        currentHistoryViewIndex = -1;
+        pushStateToFirebase();
+      }
     }
   </script>
 </body>
