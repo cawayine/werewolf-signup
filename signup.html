@@ -9,7 +9,7 @@
   <title>基地狼人殺 報名櫃台</title>
   
   <script>
-    const APP_VERSION = "1.2.0";
+    const APP_VERSION = "1.2.1";
     
     (function autoUpdateCheck() {
       const savedVersion = localStorage.getItem('werewolf_app_version');
@@ -207,11 +207,20 @@
     .badge-checked { background: rgba(66, 153, 225, 0.2); color: #63b3ed; border: 1px solid rgba(66, 153, 225, 0.4); }
     .badge-unchecked { background: rgba(160, 174, 192, 0.15); color: #a0aec0; border: 1px solid rgba(160, 174, 192, 0.3); }
 
-    /* 性別標籤樣式 */
-    .gender-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; display: inline-flex; align-items: center; gap: 2px; }
+    /* 性別純圖標標籤樣式 */
+    .gender-badge {
+      font-size: 12px;
+      line-height: 1;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-weight: bold;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
     .gender-male { background: rgba(49, 130, 206, 0.2); color: #63b3ed; border: 1px solid rgba(49, 130, 206, 0.5); }
     .gender-female { background: rgba(237, 100, 166, 0.2); color: #f687b3; border: 1px solid rgba(237, 100, 166, 0.5); }
-    .gender-unknown { background: rgba(160, 174, 192, 0.15); color: #a0aec0; border: 1px solid rgba(160, 174, 192, 0.3); }
+    .gender-unknown { background: rgba(160, 174, 192, 0.15); color: #a0aec0; border: 1px solid rgba(160, 174, 192, 0.3); font-size: 11px; }
 
     .empty-state { text-align: center; color: var(--text-sub); padding: 24px 0; font-size: 13px; }
     .status-msg { text-align: center; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 14px; display: none; }
@@ -523,14 +532,15 @@
       }
     }
 
+    // 純圖標顯示：♂、♀、?
     function renderGenderBadge(genderStr) {
       const g = (genderStr || '').trim();
       if (g === '男') {
-        return `<span class="gender-badge gender-male">♂ 男</span>`;
+        return `<span class="gender-badge gender-male" title="男">♂</span>`;
       } else if (g === '女') {
-        return `<span class="gender-badge gender-female">♀ 女</span>`;
+        return `<span class="gender-badge gender-female" title="女">♀</span>`;
       } else {
-        return `<span class="gender-badge gender-unknown">未知</span>`;
+        return `<span class="gender-badge gender-unknown" title="未知">?</span>`;
       }
     }
 
@@ -711,7 +721,7 @@
               'LINE暱稱': getVal(1), // B欄
               'LINE_UID': getVal(2), // C欄
               '自訂暱稱': getVal(3), // D欄
-              '性別':     getVal(4) || '未知', // E欄（新增）
+              '性別':     getVal(4) || '未知', // E欄
               '到場時間': getVal(5), // F欄
               '離場時間': getVal(6), // G欄
               '簽到狀態': getVal(7), // H欄
