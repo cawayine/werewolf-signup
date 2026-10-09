@@ -17,11 +17,17 @@
     .gold-glow { text-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
     select, input { background-color: #161b22; border-color: #30363d; color: #f0f6fc; }
     
-    /* 重複玩家警示樣式 */
+    /* 重複玩家警示樣式（強制最高優先權） */
     .duplicate-warning {
-      border: 1px solid #f87171 !important;
-      background-color: rgba(127, 29, 29, 0.25) !important;
-      box-shadow: 0 0 8px rgba(239, 68, 68, 0.3) !important;
+      border: 2px solid #ef4444 !important;
+      background-color: rgba(127, 29, 29, 0.35) !important;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.4) !important;
+    }
+    .duplicate-select {
+      border-color: #ef4444 !important;
+      background-color: #450a0a !important;
+      color: #fca5a5 !important;
+      font-weight: bold !important;
     }
   </style>
 </head>
@@ -275,7 +281,6 @@
     let currentVoteTarget = null;
     let votesMap = {};
 
-    // 1. 初始化板型選單
     function initBoardSelector() {
       if (typeof BOARD_DATABASE === 'undefined') {
         alert("找不到 rules_config.js 設定檔，請確認該檔案已上傳至同層目錄！");
@@ -294,7 +299,6 @@
       onBoardSelectChange();
     }
 
-    // 2. 切換板型時連動重置
     function onBoardSelectChange() {
       currentBoardKey = document.getElementById("boardSelect").value;
       const config = BOARD_DATABASE[currentBoardKey];
@@ -306,7 +310,6 @@
       initSeats();
     }
 
-    // 3. 動態渲染席位，支援清空此座位與即時重複警示
     function initSeats() {
       const config = BOARD_DATABASE[currentBoardKey];
       const container = document.getElementById("seatAssignmentGrid");
@@ -329,22 +332,34 @@
         });
 
         const card = document.createElement("div");
-        card.id = `seatCard-${i}`;
+        card.id = "seatCard-" + i;
         card.className = "bg-gray-800/60 p-2 rounded-lg border border-gray-700 transition";
+
+        let optionsHtml = '<option value="">-- 清空此座位 --</option>';
+        MOCK_MEMBERS.forEach(m => {
+          const isSel = (m === assignedName) ? 'selected' : '';
+          optionsHtml += `<option value="${m}" ${isSel}>${m}</option>`;
+        });
+
+        let rolesHtml = '';
+        config.availableRoles.forEach(r => {
+          const isSelRole = (r === assignedRole) ? 'selected' : '';
+          rolesHtml += `<option value="${r}" ${isSelRole}>${r}</option>`;
+        });
+
         card.innerHTML = `
           <div class="flex justify-between items-center mb-1">
             <span class="font-bold text-amber-400">#${i < 10 ? '0' + i : i} 席位</span>
             <div class="flex items-center gap-1">
-              <span id="seatDupTag-${i}" class="text-[9px] text-rose-400 font-bold hidden">⚠️ 重複</span>
+              <span id="seatDupTag-${i}" class="text-[9px] text-rose-300 bg-rose-950 px-1 py-0.5 rounded border border-rose-700 font-bold hidden">⚠️ 玩家重複</span>
               <span class="text-[10px] text-gray-400" id="roleTag-${i}">${assignedRole}</span>
             </div>
           </div>
           <select id="userSelect-${i}" onchange="onUserChange(${i})" class="w-full text-[11px] rounded p-1 mb-1 border outline-none">
-            <option value="">-- 清空此座位 --</option>
-            ${MOCK_MEMBERS.map(m => `<option value="\${m}" ${m === assignedName ? 'selected' : ''}>${m}</option>`).join('')}
+            ${optionsHtml}
           </select>
           <select id="roleSelect-${i}" onchange="onRoleChange(${i})" class="w-full text-[11px] rounded p-1 border outline-none font-bold text-indigo-300">
-            ${config.availableRoles.map(r => `<option value="\${r}" ${r === assignedRole ? 'selected' : ''}>${r}</option>`).join('')}
+            ${rolesHtml}
           </select>
         `;
         container.appendChild(card);
@@ -353,33 +368,45 @@
       updateCounts();
     }
 
-    // 玩家選擇變更事件
+    // 玩家選擇變更事件：即時更新與重新計算衝突
     function onUserChange(seat) {
-      const selectedName = document.getElementById(`userSelect-${seat}`).value.trim();
+      const selectEl = document.getElementById("userSelect-" + seat);
+      const selectedName = selectEl ? selectEl.value.trim() : "";
+      
       const p = gameState.players.find(x => x.seat === seat);
       if (p) p.name = selectedName;
+
       validateDuplicatePlayers();
     }
 
-    // 檢查重複玩家並即時標示紅框警示（不鎖死，自由操作）
+    // 檢查重複玩家並即時加上醒目紅框與標籤
     function validateDuplicatePlayers() {
+      // 依據目前介面上所有的 select 值做統計
       const nameCounts = {};
       gameState.players.forEach(p => {
-        if (p.name) {
-          nameCounts[p.name] = (nameCounts[p.name] || 0) + 1;
+        const selectEl = document.getElementById("userSelect-" + p.seat);
+        const currentVal = selectEl ? selectEl.value.trim() : (p.name || "");
+        p.name = currentVal; // 同步狀態
+
+        if (currentVal !== "") {
+          nameCounts[currentVal] = (nameCounts[currentVal] || 0) + 1;
         }
       });
 
       let hasDuplicates = false;
       gameState.players.forEach(p => {
-        const card = document.getElementById(`seatCard-${p.seat}`);
-        const dupTag = document.getElementById(`seatDupTag-${p.seat}`);
+        const card = document.getElementById("seatCard-" + p.seat);
+        const selectEl = document.getElementById("userSelect-" + p.seat);
+        const dupTag = document.getElementById("seatDupTag-" + p.seat);
+
         if (p.name && nameCounts[p.name] > 1) {
           hasDuplicates = true;
           if (card) card.classList.add("duplicate-warning");
+          if (selectEl) selectEl.classList.add("duplicate-select");
           if (dupTag) dupTag.classList.remove("hidden");
         } else {
           if (card) card.classList.remove("duplicate-warning");
+          if (selectEl) selectEl.classList.remove("duplicate-select");
           if (dupTag) dupTag.classList.add("hidden");
         }
       });
@@ -402,8 +429,8 @@
     }
 
     function onRoleChange(seat) {
-      const selected = document.getElementById(`roleSelect-${seat}`).value;
-      document.getElementById(`roleTag-${seat}`).innerText = selected;
+      const selected = document.getElementById("roleSelect-" + seat).value;
+      document.getElementById("roleTag-" + seat).innerText = selected;
       const p = gameState.players.find(x => x.seat === seat);
       p.role = selected;
       p.seatType = getSeatType(selected);
@@ -705,7 +732,7 @@
       alert("✅ 對局結算完成！已同步寫入資料庫！");
     }
 
-    // 🚨 本局作廢 (流局) - 雙重防呆機制，不寫入任何統計
+    // 🚨 本局作廢 (流局) - 雙重防呆機制
     function abandonMatch() {
       const step1 = confirm("🚨 確定要將本局判定為【流局（抄掉）】嗎？\n\n注意：此操作將直接作廢對局，且「絕不會」將任何勝負或天梯積分寫入資料庫！");
       if (!step1) return;
