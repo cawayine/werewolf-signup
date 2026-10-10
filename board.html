@@ -239,6 +239,24 @@
 
     <!-- 模式 1：警長競選計票模組 -->
     <div id="drawerPoliceModule" class="space-y-2.5">
+      <!-- 競選中自爆專屬入口 -->
+      <div class="bg-rose-950/40 p-2.5 rounded-lg border border-rose-800/80">
+        <div class="flex justify-between items-center mb-1.5">
+          <span class="text-xs font-bold text-rose-300 flex items-center gap-1">
+            <i class="fa-solid fa-bomb text-rose-400"></i> 💥 競選環節自爆 (連續兩天自爆吞警徽)
+          </span>
+          <span class="text-[10px] text-amber-300 font-bold" id="policeExplodeCountLabel">自爆計數：0 / 2</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="policeWolfExplodeSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-rose-200 font-bold outline-none">
+            <!-- 動態填入存活玩家 -->
+          </select>
+          <button onclick="handlePoliceWolfExplode()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1 rounded text-xs transition">
+            確認競選自爆
+          </button>
+        </div>
+      </div>
+
       <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
         <span class="text-xs font-bold text-gray-200 block mb-1.5">步驟 1：登記上警名單 (點選切換)</span>
         <div class="grid grid-cols-6 gap-1" id="drawerCandidateToggleGrid"></div>
@@ -259,11 +277,11 @@
 
     <!-- 模式 2：白天放逐與即時操作模組 -->
     <div id="drawerExileModule" class="space-y-2.5 hidden">
-      <!-- 狼人自爆操作區 -->
+      <!-- 白天狼人自爆操作區 -->
       <div class="bg-rose-950/30 p-2.5 rounded-lg border border-rose-800/80">
         <div class="flex justify-between items-center mb-1.5">
           <span class="text-xs font-bold text-rose-300 flex items-center gap-1">
-            <i class="fa-solid fa-bomb text-rose-400"></i> 💥 狼人自爆 (白天即時發動)
+            <i class="fa-solid fa-bomb text-rose-400"></i> 💥 白天狼人自爆
           </span>
           <span class="text-[10px] text-rose-400">將立即中斷白天並出局</span>
         </div>
@@ -327,7 +345,7 @@
   <script>
     const ADMIN_PASSWORD = "8888";
 
-    // 專屬 Firebase 配置
+    // Firebase 配置
     const firebaseConfig = {
       apiKey: "AIzaSyD-IcZrJUj4pXYxe9ZXNxU5o5A1koSwxbc",
       authDomain: "werewolf-base.firebaseapp.com",
@@ -389,6 +407,7 @@
       phase: "POLICE_ELECTION",
       policeSeat: null,
       isBadgeTorn: false,
+      consecutiveExplodeCount: 0, // 警長競選自爆累計次數
       players: Array.from({ length: 12 }, (_, i) => ({
         seat: i + 1,
         isAlive: true,
@@ -414,6 +433,7 @@
           if (!gameState.players) gameState.players = defaultState.players;
           if (!gameState.history) gameState.history = [];
           if (!gameState.tempVotes) gameState.tempVotes = {};
+          if (gameState.consecutiveExplodeCount === undefined) gameState.consecutiveExplodeCount = 0;
         } else {
           if (isAdmin) pushStateToFirebase();
         }
@@ -446,9 +466,16 @@
       const aliveCount = gameState.players.filter(p => p.isAlive).length;
       document.getElementById("aliveRatioText").innerText = `${aliveCount} / 12 人`;
 
-      const stageDesc = gameState.phase === "POLICE_ELECTION" 
-        ? `第 ${gameState.day} 天 警長競選` 
-        : `第 ${gameState.day} 天 白天對局`;
+      let stageDesc = "";
+      if (gameState.phase === "POLICE_ELECTION") {
+        if (gameState.consecutiveExplodeCount === 1) {
+          stageDesc = `第 ${gameState.day} 天 警長競選 (昨日自爆補選)`;
+        } else {
+          stageDesc = `第 ${gameState.day} 天 警長競選`;
+        }
+      } else {
+        stageDesc = `第 ${gameState.day} 天 白天放逐對局`;
+      }
 
       document.getElementById("currentStageText").innerText = stageDesc;
 
@@ -457,7 +484,7 @@
 
       let badgeLabelText = "警長：未指定";
       if (gameState.isBadgeTorn) {
-        badgeLabelText = "警長：警徽已撕毀";
+        badgeLabelText = "警長：警徽已流失/撕毀";
       } else if (gameState.policeSeat) {
         badgeLabelText = `警長：${gameState.policeSeat} 號 (1.5票)`;
       }
@@ -478,7 +505,7 @@
       });
 
       const isCurrentActive = (currentHistoryViewIndex === -1);
-      const currentTitle = gameState.phase === "POLICE_ELECTION" ? "即時: 警長競選" : `即時: D${gameState.day}公播`;
+      const currentTitle = gameState.phase === "POLICE_ELECTION" ? `即時: D${gameState.day}警選` : `即時: D${gameState.day}放逐`;
       tabsHtml += `
         <button onclick="viewHistory(-1)" class="px-2.5 py-1 rounded font-bold whitespace-nowrap transition border ${isCurrentActive ? 'bg-blue-600 text-white border-blue-400' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'}">
           ● ${currentTitle}
@@ -594,7 +621,7 @@
         badgeEl.className = "text-xs bg-amber-950 text-amber-300 border border-amber-700 px-2 py-0.5 rounded font-bold";
       } else {
         currentDisplayVotes = gameState.tempVotes || {};
-        titleEl.innerText = (gameState.phase === "POLICE_ELECTION") ? "即時：警長競選票型" : `即時：第 ${gameState.day} 天放逐票型`;
+        titleEl.innerText = (gameState.phase === "POLICE_ELECTION") ? `即時：第 ${gameState.day} 天警長競選票型` : `即時：第 ${gameState.day} 天放逐票型`;
         badgeEl.innerText = "即時開票中";
         badgeEl.className = "text-xs bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold";
       }
@@ -674,7 +701,20 @@
 
       const alivePlayers = gameState.players.filter(p => p.isAlive);
       
-      // 更新狼人自爆與技能下拉選單
+      const policeWolfSelect = document.getElementById("policeWolfExplodeSelect");
+      if (policeWolfSelect) {
+        policeWolfSelect.innerHTML = alivePlayers.map(p => `
+          <option value="${p.seat}">${p.seat} 號玩家</option>
+        `).join('');
+      }
+
+      const explodeLabel = document.getElementById("policeExplodeCountLabel");
+      if (explodeLabel) {
+        const cnt = gameState.consecutiveExplodeCount || 0;
+        explodeLabel.innerText = `自爆計數：${cnt} / 2 次 (${cnt === 0 ? '首輪正常' : '已自爆1次，再爆即吞警徽'})`;
+        explodeLabel.className = cnt > 0 ? "text-[10px] text-rose-400 font-bold animate-pulse" : "text-[10px] text-amber-300 font-bold";
+      }
+
       const wolfSelect = document.getElementById("wolfExplodeSelect");
       if (wolfSelect) {
         wolfSelect.innerHTML = alivePlayers.map(p => `
@@ -740,13 +780,83 @@
       alert(`🔥 ${oldPolice} 號選擇撕毀警徽！警徽作廢，本局後續投票皆為 1 票。`);
     }
 
-    // 狼人自爆操作
+    // 核心設計：警長競選自爆處理
+    function handlePoliceWolfExplode() {
+      const select = document.getElementById("policeWolfExplodeSelect");
+      const wolfSeat = parseInt(select.value);
+      if (!wolfSeat) return;
+
+      const currentCount = gameState.consecutiveExplodeCount || 0;
+      const isSecondExplode = (currentCount >= 1);
+
+      const confirmMsg = isSecondExplode 
+        ? `⚠️ 注意：這是第二次在競選階段自爆！\n確定要由【${wolfSeat} 號玩家】自爆嗎？\n確認後將正式【吞警徽（警徽流失）】，天亮直接進入第 ${gameState.day + 1} 天白天放逐！`
+        : `⚠️ 確定要由【${wolfSeat} 號玩家】在競選階段自爆嗎？\n天亮將進入【第 ${gameState.day + 1} 天】並繼續進行警長競選環節。`;
+
+      if (!confirm(confirmMsg)) return;
+
+      const p = gameState.players.find(x => x.seat === wolfSeat);
+      if (p) {
+        p.isAlive = false;
+        p.deathReason = "EXPLODE";
+      }
+
+      if (!gameState.history) gameState.history = [];
+
+      if (!isSecondExplode) {
+        // 第一天自爆：累計 1 次，第二天繼續競選
+        gameState.consecutiveExplodeCount = 1;
+        gameState.history.push({
+          title: `D${gameState.day} 警選自爆`,
+          badgeText: `💥 ${wolfSeat}號自爆 (保留警徽，明日補選)`,
+          votes: {}
+        });
+
+        gameState.day += 1;
+        gameState.phase = "POLICE_ELECTION"; // 保持競選階段
+        // 重置所有人的上警標記，隔日天亮重新上警
+        gameState.players.forEach(pl => {
+          pl.isCandidate = false;
+          pl.hasDropped = false;
+        });
+
+        alert(`💥 ${wolfSeat} 號狼人競選自爆出局！\n天亮進入【第 ${gameState.day} 天】，將重新進行警長競選環節。若今天再次自爆，則警徽正式流失！`);
+      } else {
+        // 第二天連續自爆：累計達到 2 次，警徽流失！
+        gameState.consecutiveExplodeCount = 2;
+        gameState.isBadgeTorn = true;
+        gameState.policeSeat = null;
+
+        gameState.history.push({
+          title: `D${gameState.day} 警選二次自爆`,
+          badgeText: `💥 ${wolfSeat}號自爆 (警徽流失吞警徽)`,
+          votes: {}
+        });
+
+        gameState.day += 1;
+        gameState.phase = "DAY_EXILE"; // 警徽流失，後續不再競選，直接進入白天放逐
+        gameState.players.forEach(pl => {
+          pl.isCandidate = false;
+          pl.hasDropped = false;
+        });
+
+        alert(`🔥 ${wolfSeat} 號狼人連續兩天在競選階段自爆！\n觸發規則【警徽流失】！本局不再產生警長，進入【第 ${gameState.day} 天白天放逐】！`);
+      }
+
+      gameState.tempVotes = {};
+      gameState.selectedTarget = null;
+      currentHistoryViewIndex = gameState.history.length - 1;
+
+      pushStateToFirebase();
+    }
+
+    // 白天放逐階段狼人自爆
     function handleWolfExplode() {
       const select = document.getElementById("wolfExplodeSelect");
       const wolfSeat = parseInt(select.value);
       if (!wolfSeat) return;
 
-      if (!confirm(`⚠️ 確定要確認 ${wolfSeat} 號玩家【狼人自爆】嗎？白天將直接中斷並進入天黑！`)) return;
+      if (!confirm(`⚠️ 確定要確認 ${wolfSeat} 號玩家【白天自爆】嗎？白天將直接中斷並進入天黑！`)) return;
 
       const p = gameState.players.find(x => x.seat === wolfSeat);
       if (p) {
@@ -756,7 +866,7 @@
 
       if (!gameState.history) gameState.history = [];
       gameState.history.push({
-        title: `D${gameState.day} 狼人自爆`,
+        title: `D${gameState.day} 白天自爆`,
         badgeText: `💥 ${wolfSeat} 號自爆`,
         votes: {}
       });
@@ -765,18 +875,17 @@
       gameState.selectedTarget = null;
       currentHistoryViewIndex = gameState.history.length - 1;
 
-      // 如果自爆的是警長，需處置警徽
       checkPoliceBadgeStatus();
       pushStateToFirebase();
 
-      if (confirm(`💥 ${wolfSeat} 號狼人已自爆出局！\n是否直接進入第 ${gameState.day + 1} 天黑夜/白天？`)) {
+      if (confirm(`💥 ${wolfSeat} 號狼人已自爆出局！\n是否直接進入第 ${gameState.day + 1} 天白天？`)) {
         enterNextDayCycle(true);
       } else {
         alert(`💥 ${wolfSeat} 號狼人已自爆出局，看板已同步。`);
       }
     }
 
-    // 技能帶走操作
+    // 技能連帶帶走操作
     function handleSkillKill() {
       const select = document.getElementById("skillTargetSelect");
       const targetSeat = parseInt(select.value);
@@ -924,7 +1033,6 @@
       if (p.isAlive) {
         p.isAlive = false;
         p.deathReason = "NIGHT";
-        // 詢問是否有連帶出局
         promptChainedSkillDeath(seat, "夜間倒牌");
       } else {
         p.isAlive = true;
@@ -933,7 +1041,6 @@
       pushStateToFirebase();
     }
 
-    // 提示連帶技能出局流程
     function promptChainedSkillDeath(triggerSeat, triggerPhaseName) {
       setTimeout(() => {
         if (confirm(`【${triggerSeat} 號玩家 (${triggerPhaseName})】出局！\n是否有發動技能連帶帶走其他玩家（如獵人開槍/狼美人魅惑）？`)) {
@@ -977,9 +1084,12 @@
         gameState.isBadgeTorn = false;
       }
 
+      // 順利當選警長，競選自爆計數器歸零
+      gameState.consecutiveExplodeCount = 0;
+
       if (!gameState.history) gameState.history = [];
       gameState.history.push({
-        title: `D1 警長競選`,
+        title: `D${gameState.day} 警長競選`,
         badgeText: winnerSeat ? `👑 ${winnerSeat}號當選警長` : "競選結束",
         votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
       });
@@ -990,7 +1100,7 @@
       currentHistoryViewIndex = -1;
 
       pushStateToFirebase();
-      alert(`🎉 警長競選完成！票型已封存至雲端，進入【第 1 天 白天】。`);
+      alert(`🎉 警長競選完成！票型已封存至雲端，進入【第 ${gameState.day} 天 白天放逐】。`);
     }
 
     function confirmExileVote() {
