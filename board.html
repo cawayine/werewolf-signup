@@ -93,7 +93,7 @@
     }
   </style>
 </head>
-<body class="p-3 max-w-xl mx-auto pb-32">
+<body class="p-3 max-w-xl lg:max-w-7xl mx-auto pb-32 lg:pb-12">
 
   <!-- 頂部即時公播標題列 -->
   <header class="flex justify-between items-center py-2.5 px-3 bg-gray-900 rounded-xl neon-border mb-3 shadow-lg">
@@ -102,10 +102,10 @@
         <i class="fa-solid fa-shield-halved"></i>
       </div>
       <div>
-        <h1 class="text-sm font-black text-gray-100 flex items-center gap-1.5">
+        <h1 class="text-sm lg:text-base font-black text-gray-100 flex items-center gap-1.5">
           基地公播看板 <span id="syncStatusBadge" class="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[10px] px-1.5 py-0.2 rounded font-bold">連線中...</span>
         </h1>
-        <span class="text-[11px] text-amber-300 font-mono font-bold" id="currentStageText">讀取對局進度中...</span>
+        <span class="text-[11px] lg:text-xs text-amber-300 font-mono font-bold" id="currentStageText">讀取對局進度中...</span>
       </div>
     </div>
     <div class="text-right flex items-center gap-2">
@@ -121,68 +121,223 @@
   </header>
 
   <!-- 歷史投票輪次切換頁籤 -->
-  <nav class="flex gap-1.5 overflow-x-auto pb-2 mb-2 text-xs scrollbar-none" id="historyTabContainer">
+  <nav class="flex gap-1.5 overflow-x-auto pb-2 mb-3 text-xs scrollbar-none" id="historyTabContainer">
     <!-- 動態生成輪次標籤 -->
   </nav>
 
-  <!-- 階段 A：警長競選專屬面板 -->
-  <section id="policeSection" class="space-y-3 mb-3">
-    <!-- 警上候選人區 -->
-    <div class="bg-gray-900 rounded-xl neon-border p-3 border-amber-500/40">
-      <div class="flex justify-between items-center mb-2">
-        <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-          <i class="fa-solid fa-crown text-amber-400"></i> 🔥 警上競選區 (候選人)
-        </span>
-        <span class="text-[10px] text-gray-400" id="candidateCountLabel">0 人上警</span>
+  <!-- 主版面容器：手機維持垂直單欄，電腦端 (lg) 自動切換為雙欄並排 -->
+  <div class="lg:grid lg:grid-cols-12 lg:gap-4 lg:items-start">
+    
+    <!-- 左側欄位：公播大螢幕核心 (在電腦端佔 7 欄，未登入時佔滿 12 欄) -->
+    <main id="displayMainCol" class="lg:col-span-12 space-y-3 transition-all duration-300">
+      
+      <!-- 階段 A：警長競選專屬面板 -->
+      <section id="policeSection" class="space-y-3">
+        <!-- 警上候選人區 -->
+        <div class="bg-gray-900 rounded-xl neon-border p-3 border-amber-500/40">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-crown text-amber-400"></i> 🔥 警上競選區 (候選人)
+            </span>
+            <span class="text-[10px] text-gray-400" id="candidateCountLabel">0 人上警</span>
+          </div>
+          <div class="grid grid-cols-6 lg:grid-cols-12 gap-1.5" id="candidatesGrid"></div>
+        </div>
+
+        <!-- 警下投票區 -->
+        <div class="bg-gray-900 rounded-xl neon-border p-3 border-blue-500/40">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-check-to-slot text-blue-400"></i> 🛡️ 警下投票區 (擁有投票權)
+            </span>
+            <span class="text-[10px] text-gray-400" id="votersCountLabel">12 人在警下</span>
+          </div>
+          <div class="grid grid-cols-6 lg:grid-cols-12 gap-1.5" id="votersGrid"></div>
+        </div>
+      </section>
+
+      <!-- 階段 B：席位即時存活點陣 -->
+      <section id="seatStatusSection">
+        <div class="bg-gray-900 rounded-xl neon-border p-3">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+              <i class="fa-solid fa-users"></i> 全場席位存活狀態
+            </span>
+            <span class="text-[10px] text-amber-400 font-bold" id="badgeHolderLabel">警長：未指定</span>
+          </div>
+          <div class="grid grid-cols-6 lg:grid-cols-12 gap-1.5" id="standardSeatsGrid"></div>
+        </div>
+      </section>
+
+      <!-- 核心重點：當前選定輪次的「樂透彩球票型看板」 -->
+      <section class="bg-gray-900 rounded-xl neon-border p-3">
+        <div class="flex justify-between items-center mb-2.5 pb-2 border-b border-gray-800">
+          <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+            <i class="fa-solid fa-square-poll-vertical text-amber-400"></i>
+            <span id="voteSummaryTitle">票型開票結果</span>
+          </span>
+          <span id="voteSummaryBadge" class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded font-bold">
+            等待計票
+          </span>
+        </div>
+
+        <!-- 樂透彩球票型清單 -->
+        <div id="lottoVotesContainer" class="space-y-2.5">
+          <div class="text-gray-500 text-xs text-center py-6">尚未輸入投票票型</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 右側欄位：電腦端計票控制工作台 (在電腦端佔 5 欄；手機端作為底部抽屜) -->
+    <aside id="controlDrawer" class="hidden lg:col-span-5 fixed inset-x-0 bottom-0 lg:static lg:block bg-gray-900 border-t lg:border border-gray-700 p-3 z-50 rounded-t-2xl lg:rounded-xl shadow-2xl max-w-xl lg:max-w-none mx-auto max-h-[88vh] lg:max-h-none overflow-y-auto">
+      <div class="flex justify-between items-center pb-2 mb-2 border-b border-gray-800">
+        <h3 class="text-xs lg:text-sm font-bold text-amber-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-calculator"></i> 現場計票控制端
+        </h3>
+        <div class="flex items-center gap-2">
+          <button onclick="resetMatchData()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold px-2 py-0.5 rounded text-[11px] transition">
+            重置開局
+          </button>
+          <button onclick="toggleControlDrawer()" class="lg:hidden text-gray-400 hover:text-white text-sm px-2">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
       </div>
-      <div class="grid grid-cols-6 gap-1.5" id="candidatesGrid"></div>
-    </div>
 
-    <!-- 警下投票區 -->
-    <div class="bg-gray-900 rounded-xl neon-border p-3 border-blue-500/40">
-      <div class="flex justify-between items-center mb-2">
-        <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
-          <i class="fa-solid fa-check-to-slot text-blue-400"></i> 🛡️ 警下投票區 (擁有投票權)
-        </span>
-        <span class="text-[10px] text-gray-400" id="votersCountLabel">12 人在警下</span>
+      <!-- 警徽處置操作卡片 (當警長出局時自動彈出) -->
+      <div id="policeBadgeTransferBox" class="mb-3 p-2.5 bg-amber-950/40 border border-amber-500/80 rounded-lg hidden">
+        <div class="flex justify-between items-center mb-1.5">
+          <span class="text-xs font-bold text-amber-300 flex items-center gap-1">
+            <i class="fa-solid fa-crown text-amber-400"></i> ⚠️ 警長已出局！請處置警徽：
+          </span>
+        </div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-xs text-gray-300">移交給：</span>
+          <select id="transferBadgeTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-amber-200 font-bold outline-none">
+            <!-- 動態填入存活玩家 -->
+          </select>
+          <button onclick="applyTransferBadge()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-2.5 py-1 rounded text-xs transition">
+            確認移交
+          </button>
+        </div>
+        <div class="pt-1.5 border-t border-amber-900/60 flex justify-end">
+          <button onclick="applyTearBadge()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold px-3 py-1 rounded text-xs transition">
+            🔥 撕毀警徽 (本局不再有警長)
+          </button>
+        </div>
       </div>
-      <div class="grid grid-cols-6 gap-1.5" id="votersGrid"></div>
-    </div>
-  </section>
 
-  <!-- 階段 B：席位即時存活點陣 -->
-  <section id="seatStatusSection" class="space-y-3 mb-3">
-    <div class="bg-gray-900 rounded-xl neon-border p-3">
-      <div class="flex justify-between items-center mb-2">
-        <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
-          <i class="fa-solid fa-users"></i> 全場席位存活狀態
-        </span>
-        <span class="text-[10px] text-amber-400 font-bold" id="badgeHolderLabel">警長：未指定</span>
+      <!-- 模式 1：警長競選計票模組 -->
+      <div id="drawerPoliceModule" class="space-y-2.5">
+        <!-- 競選中自爆專屬入口 -->
+        <div class="bg-rose-950/40 p-2.5 rounded-lg border border-rose-800/80">
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="text-xs font-bold text-rose-300 flex items-center gap-1">
+              <i class="fa-solid fa-bomb text-rose-400"></i> 💥 競選環節自爆 (連續兩天自爆吞警徽)
+            </span>
+            <span class="text-[10px] text-amber-300 font-bold" id="policeExplodeCountLabel">自爆計數：0 / 2</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="policeWolfExplodeSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-rose-200 font-bold outline-none">
+              <!-- 動態填入存活玩家 -->
+            </select>
+            <button onclick="handlePoliceWolfExplode()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1 rounded text-xs transition">
+              確認競選自爆
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="text-xs font-bold text-gray-200">步驟 1：登記上警名單 (點選切換)</span>
+            <span class="text-[10px] text-amber-400" id="preserveHintText"></span>
+          </div>
+          <div class="grid grid-cols-6 gap-1" id="drawerCandidateToggleGrid"></div>
+        </div>
+
+        <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
+          <span class="text-xs font-bold text-gray-200 block mb-1">步驟 2：警長計票 (先選候選人 ➔ 點警下選民)</span>
+          <div class="text-[11px] text-amber-300 mb-1">選擇受票候選人：</div>
+          <div class="flex flex-wrap gap-1.5 mb-2" id="drawerPoliceTargetCandidatesContainer"></div>
+          <div class="text-[11px] text-blue-300 mb-1">警下投票人點擊投票：</div>
+          <div class="grid grid-cols-6 gap-1 mb-2" id="drawerPoliceEligibleVotersGrid"></div>
+          
+          <button onclick="confirmPoliceElection()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded text-xs shadow">
+            確認警長當選並封存此輪
+          </button>
+        </div>
       </div>
-      <div class="grid grid-cols-6 gap-1.5" id="standardSeatsGrid"></div>
-    </div>
-  </section>
 
-  <!-- 核心重點：當前選定輪次的「樂透彩球票型看板」 -->
-  <section class="bg-gray-900 rounded-xl neon-border p-3 mb-3">
-    <div class="flex justify-between items-center mb-2.5 pb-2 border-b border-gray-800">
-      <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
-        <i class="fa-solid fa-square-poll-vertical text-amber-400"></i>
-        <span id="voteSummaryTitle">票型開票結果</span>
-      </span>
-      <span id="voteSummaryBadge" class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded font-bold">
-        等待計票
-      </span>
-    </div>
+      <!-- 模式 2：白天放逐與即時操作模組 -->
+      <div id="drawerExileModule" class="space-y-2.5 hidden">
+        <!-- 白天狼人自爆操作區 -->
+        <div class="bg-rose-950/30 p-2.5 rounded-lg border border-rose-800/80">
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="text-xs font-bold text-rose-300 flex items-center gap-1">
+              <i class="fa-solid fa-bomb text-rose-400"></i> 💥 白天狼人自爆
+            </span>
+            <span class="text-[10px] text-rose-400">將立即中斷白天並出局</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="wolfExplodeSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-rose-200 font-bold outline-none">
+              <!-- 動態填入存活玩家 -->
+            </select>
+            <button onclick="handleWolfExplode()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1 rounded text-xs transition">
+              確認自爆
+            </button>
+          </div>
+        </div>
 
-    <!-- 樂透彩球票型清單 -->
-    <div id="lottoVotesContainer" class="space-y-2.5">
-      <div class="text-gray-500 text-xs text-center py-6">尚未輸入投票票型</div>
-    </div>
-  </section>
+        <!-- 技能連帶出局快速入口 (獵人槍殺、狼美人魅惑、騎士決鬥) -->
+        <div class="bg-orange-950/30 p-2.5 rounded-lg border border-orange-800/70">
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="text-xs font-bold text-orange-300 flex items-center gap-1">
+              <i class="fa-solid fa-crosshairs text-orange-400"></i> 🎯 發動技能連帶帶走 (獵人/狼美/毒殺)
+            </span>
+            <span class="text-[10px] text-orange-400">指定 1 名玩家連帶出局</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="skillTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-orange-200 font-bold outline-none">
+              <!-- 動態填入存活玩家 -->
+            </select>
+            <button onclick="handleSkillKill()" class="bg-orange-600 hover:bg-orange-500 text-white font-bold px-3 py-1 rounded text-xs transition">
+              技能帶走
+            </button>
+          </div>
+        </div>
 
-  <!-- 底部固定：計票員操作欄 (輸入密碼後解鎖) -->
-  <footer id="adminFooter" class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-40 hidden">
+        <!-- 夜間死訊更新 -->
+        <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-xs font-bold text-purple-300">更新夜間倒牌死訊 (點選出局)</span>
+            <span class="text-[10px] text-gray-400">平安夜則無需點選</span>
+          </div>
+          <div class="grid grid-cols-6 gap-1" id="drawerNightDeathGrid"></div>
+        </div>
+
+        <!-- 放逐投票計票 -->
+        <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
+          <span class="text-xs font-bold text-gray-200 block mb-1">放逐計票 (先選被投人 ➔ 點投票選民)</span>
+          <div class="text-[11px] text-amber-300 mb-1">選擇放逐目標：</div>
+          <div class="flex flex-wrap gap-1.5 mb-2" id="drawerExileTargetContainer"></div>
+          <div class="text-[11px] text-emerald-300 mb-1">存活選民投票 (警長自動計 1.5 票)：</div>
+          <div class="grid grid-cols-6 gap-1 mb-2" id="drawerExileVotersGrid"></div>
+
+          <div class="flex gap-2 mt-2">
+            <button onclick="confirmExileVote()" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded text-xs shadow">
+              確認放逐出局並封存票型
+            </button>
+            <button onclick="enterNextDayCycle()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded text-xs shadow">
+              進入下一天 ➔
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- 手機端底部固定：計票員操作欄 (輸入密碼後解鎖，電腦端不需此浮動列) -->
+  <footer id="adminFooter" class="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-40 hidden">
     <div class="max-w-xl mx-auto flex justify-between items-center">
       <div class="flex items-center gap-2">
         <span class="text-xs text-emerald-400 font-bold flex items-center gap-1">
@@ -202,148 +357,6 @@
       </div>
     </div>
   </footer>
-
-  <!-- 計票員操作抽屜 (控制端) -->
-  <div id="controlDrawer" class="fixed inset-x-0 bottom-0 bg-gray-900 border-t border-gray-700 p-3 z-50 rounded-t-2xl shadow-2xl max-w-xl mx-auto hidden max-h-[88vh] overflow-y-auto">
-    <div class="flex justify-between items-center pb-2 mb-2 border-b border-gray-800">
-      <h3 class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-        <i class="fa-solid fa-calculator"></i> 現場計票控制端
-      </h3>
-      <button onclick="toggleControlDrawer()" class="text-gray-400 hover:text-white text-sm px-2">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-    </div>
-
-    <!-- 警徽處置操作卡片 (當警長出局時自動彈出) -->
-    <div id="policeBadgeTransferBox" class="mb-3 p-2.5 bg-amber-950/40 border border-amber-500/80 rounded-lg hidden">
-      <div class="flex justify-between items-center mb-1.5">
-        <span class="text-xs font-bold text-amber-300 flex items-center gap-1">
-          <i class="fa-solid fa-crown text-amber-400"></i> ⚠️ 警長已出局！請處置警徽：
-        </span>
-      </div>
-      <div class="flex items-center gap-2 mb-2">
-        <span class="text-xs text-gray-300">移交給：</span>
-        <select id="transferBadgeTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-amber-200 font-bold outline-none">
-          <!-- 動態填入存活玩家 -->
-        </select>
-        <button onclick="applyTransferBadge()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-2.5 py-1 rounded text-xs transition">
-          確認移交
-        </button>
-      </div>
-      <div class="pt-1.5 border-t border-amber-900/60 flex justify-end">
-        <button onclick="applyTearBadge()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold px-3 py-1 rounded text-xs transition">
-          🔥 撕毀警徽 (本局不再有警長)
-        </button>
-      </div>
-    </div>
-
-    <!-- 模式 1：警長競選計票模組 -->
-    <div id="drawerPoliceModule" class="space-y-2.5">
-      <!-- 競選中自爆專屬入口 -->
-      <div class="bg-rose-950/40 p-2.5 rounded-lg border border-rose-800/80">
-        <div class="flex justify-between items-center mb-1.5">
-          <span class="text-xs font-bold text-rose-300 flex items-center gap-1">
-            <i class="fa-solid fa-bomb text-rose-400"></i> 💥 競選環節自爆 (連續兩天自爆吞警徽)
-          </span>
-          <span class="text-[10px] text-amber-300 font-bold" id="policeExplodeCountLabel">自爆計數：0 / 2</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <select id="policeWolfExplodeSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-rose-200 font-bold outline-none">
-            <!-- 動態填入存活玩家 -->
-          </select>
-          <button onclick="handlePoliceWolfExplode()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1 rounded text-xs transition">
-            確認競選自爆
-          </button>
-        </div>
-      </div>
-
-      <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
-        <div class="flex justify-between items-center mb-1.5">
-          <span class="text-xs font-bold text-gray-200">步驟 1：登記上警名單 (點選切換)</span>
-          <span class="text-[10px] text-amber-400" id="preserveHintText"></span>
-        </div>
-        <div class="grid grid-cols-6 gap-1" id="drawerCandidateToggleGrid"></div>
-      </div>
-
-      <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
-        <span class="text-xs font-bold text-gray-200 block mb-1">步驟 2：警長計票 (先選候選人 ➔ 點警下選民)</span>
-        <div class="text-[11px] text-amber-300 mb-1">選擇受票候選人：</div>
-        <div class="flex flex-wrap gap-1.5 mb-2" id="drawerPoliceTargetCandidatesContainer"></div>
-        <div class="text-[11px] text-blue-300 mb-1">警下投票人點擊投票：</div>
-        <div class="grid grid-cols-6 gap-1 mb-2" id="drawerPoliceEligibleVotersGrid"></div>
-        
-        <button onclick="confirmPoliceElection()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded text-xs shadow">
-          確認警長當選並封存此輪
-        </button>
-      </div>
-    </div>
-
-    <!-- 模式 2：白天放逐與即時操作模組 -->
-    <div id="drawerExileModule" class="space-y-2.5 hidden">
-      <!-- 白天狼人自爆操作區 -->
-      <div class="bg-rose-950/30 p-2.5 rounded-lg border border-rose-800/80">
-        <div class="flex justify-between items-center mb-1.5">
-          <span class="text-xs font-bold text-rose-300 flex items-center gap-1">
-            <i class="fa-solid fa-bomb text-rose-400"></i> 💥 白天狼人自爆
-          </span>
-          <span class="text-[10px] text-rose-400">將立即中斷白天並出局</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <select id="wolfExplodeSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-rose-200 font-bold outline-none">
-            <!-- 動態填入存活玩家 -->
-          </select>
-          <button onclick="handleWolfExplode()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1 rounded text-xs transition">
-            確認自爆
-          </button>
-        </div>
-      </div>
-
-      <!-- 技能連帶出局快速入口 (獵人槍殺、狼美人魅惑、騎士決鬥) -->
-      <div class="bg-orange-950/30 p-2.5 rounded-lg border border-orange-800/70">
-        <div class="flex justify-between items-center mb-1.5">
-          <span class="text-xs font-bold text-orange-300 flex items-center gap-1">
-            <i class="fa-solid fa-crosshairs text-orange-400"></i> 🎯 發動技能連帶帶走 (獵人/狼美/毒殺)
-          </span>
-          <span class="text-[10px] text-orange-400">指定 1 名玩家連帶出局</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <select id="skillTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-orange-200 font-bold outline-none">
-            <!-- 動態填入存活玩家 -->
-          </select>
-          <button onclick="handleSkillKill()" class="bg-orange-600 hover:bg-orange-500 text-white font-bold px-3 py-1 rounded text-xs transition">
-            技能帶走
-          </button>
-        </div>
-      </div>
-
-      <!-- 夜間死訊更新 -->
-      <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
-        <div class="flex justify-between items-center mb-1">
-          <span class="text-xs font-bold text-purple-300">更新夜間倒牌死訊 (點選出局)</span>
-          <span class="text-[10px] text-gray-400">平安夜則無需點選</span>
-        </div>
-        <div class="grid grid-cols-6 gap-1" id="drawerNightDeathGrid"></div>
-      </div>
-
-      <!-- 放逐投票計票 -->
-      <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
-        <span class="text-xs font-bold text-gray-200 block mb-1">放逐計票 (先選被投人 ➔ 點投票選民)</span>
-        <div class="text-[11px] text-amber-300 mb-1">選擇放逐目標：</div>
-        <div class="flex flex-wrap gap-1.5 mb-2" id="drawerExileTargetContainer"></div>
-        <div class="text-[11px] text-emerald-300 mb-1">存活選民投票 (警長自動計 1.5 票)：</div>
-        <div class="grid grid-cols-6 gap-1 mb-2" id="drawerExileVotersGrid"></div>
-
-        <div class="flex gap-2 mt-2">
-          <button onclick="confirmExileVote()" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded text-xs shadow">
-            確認放逐出局並封存票型
-          </button>
-          <button onclick="enterNextDayCycle()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded text-xs shadow">
-            進入下一天 ➔
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <script>
     const ADMIN_PASSWORD = "8888";
@@ -368,12 +381,24 @@
     function updateAdminUI() {
       const footer = document.getElementById("adminFooter");
       const lockBtn = document.getElementById("authLockBtn");
+      const controlDrawer = document.getElementById("controlDrawer");
+      const displayMainCol = document.getElementById("displayMainCol");
+
       if (isAdmin) {
         footer.classList.remove("hidden");
         lockBtn.innerHTML = '<i class="fa-solid fa-unlock-keyhole text-emerald-400 text-xs"></i>';
+        
+        // 電腦端登入後：顯示右側控制欄，左側調整為佔 7 欄
+        controlDrawer.classList.remove("lg:hidden");
+        displayMainCol.className = "lg:col-span-7 space-y-3 transition-all duration-300";
       } else {
         footer.classList.add("hidden");
         lockBtn.innerHTML = '<i class="fa-solid fa-lock text-gray-600 text-xs"></i>';
+        
+        // 電腦端未登入：隱藏右側，左側佔滿 12 欄大螢幕
+        controlDrawer.classList.add("lg:hidden");
+        controlDrawer.classList.add("hidden");
+        displayMainCol.className = "lg:col-span-12 space-y-3 transition-all duration-300";
       }
     }
 
@@ -399,7 +424,6 @@
     function logoutAdmin() {
       isAdmin = false;
       localStorage.removeItem("werewolf_board_admin");
-      document.getElementById("controlDrawer").classList.add("hidden");
       updateAdminUI();
       renderAll();
       alert("🔒 已鎖定計票面板，切回純公播視圖。");
@@ -524,9 +548,7 @@
     }
 
     function renderSeatsStatus() {
-      // 警上候選人必須存活且標記為 isCandidate
       const candidates = gameState.players.filter(p => p.isCandidate && p.isAlive);
-      // 警下投票人必須存活且非候選人
       const voters = gameState.players.filter(p => !p.isCandidate && p.isAlive);
 
       document.getElementById("candidateCountLabel").innerText = `${candidates.length} 人上警`;
@@ -534,7 +556,7 @@
 
       const candGrid = document.getElementById("candidatesGrid");
       if (candidates.length === 0) {
-        candGrid.innerHTML = `<div class="col-span-6 text-gray-500 text-xs text-center py-2">目前無人上警</div>`;
+        candGrid.innerHTML = `<div class="col-span-6 lg:col-span-12 text-gray-500 text-xs text-center py-2">目前無人上警</div>`;
       } else {
         candGrid.innerHTML = candidates.map(p => `
           <div class="h-10 rounded-lg border ${p.hasDropped ? 'border-gray-700 bg-gray-800/40 text-gray-500' : 'border-amber-500/70 bg-amber-950/30 text-amber-300 font-bold'} flex flex-col items-center justify-center text-xs relative">
@@ -547,7 +569,7 @@
 
       const voterGrid = document.getElementById("votersGrid");
       if (voters.length === 0) {
-        voterGrid.innerHTML = `<div class="col-span-6 text-gray-500 text-xs text-center py-2">全員上警</div>`;
+        voterGrid.innerHTML = `<div class="col-span-6 lg:col-span-12 text-gray-500 text-xs text-center py-2">全員上警</div>`;
       } else {
         voterGrid.innerHTML = voters.map(p => `
           <div class="h-10 rounded-lg border border-blue-500/50 bg-blue-950/20 text-blue-200 flex flex-col items-center justify-center text-xs font-mono font-bold">
@@ -790,7 +812,6 @@
       alert(`🔥 ${oldPolice} 號選擇撕毀警徽！警徽作廢，本局後續投票皆為 1 票。`);
     }
 
-    // 核心設計：警長競選自爆處理 (保留第一天上警名單)
     function handlePoliceWolfExplode() {
       const select = document.getElementById("policeWolfExplodeSelect");
       const wolfSeat = parseInt(select.value);
@@ -809,13 +830,12 @@
       if (p) {
         p.isAlive = false;
         p.deathReason = "EXPLODE";
-        p.isCandidate = false; // 自爆者退出候選人名單
+        p.isCandidate = false;
       }
 
       if (!gameState.history) gameState.history = [];
 
       if (!isSecondExplode) {
-        // 第一天自爆：累計 1 次，第二天繼續競選，保留其他候選人名單
         gameState.consecutiveExplodeCount = 1;
         gameState.history.push({
           title: `D${gameState.day} 警選自爆`,
@@ -824,11 +844,10 @@
         });
 
         gameState.day += 1;
-        gameState.phase = "POLICE_ELECTION"; // 保持競選階段
+        gameState.phase = "POLICE_ELECTION";
 
         alert(`💥 ${wolfSeat} 號狼人競選自爆出局！\n天亮進入【第 ${gameState.day} 天】，已保留第 1 天其餘玩家的上警名單繼續競選。若今天再次自爆，則警徽正式流失！`);
       } else {
-        // 第二天連續自爆：累計達到 2 次，警徽流失！
         gameState.consecutiveExplodeCount = 2;
         gameState.isBadgeTorn = true;
         gameState.policeSeat = null;
@@ -840,7 +859,7 @@
         });
 
         gameState.day += 1;
-        gameState.phase = "DAY_EXILE"; // 警徽流失，後續不再競選，直接進入白天放逐
+        gameState.phase = "DAY_EXILE";
         gameState.players.forEach(pl => {
           pl.isCandidate = false;
           pl.hasDropped = false;
@@ -856,7 +875,6 @@
       pushStateToFirebase();
     }
 
-    // 白天放逐階段狼人自爆
     function handleWolfExplode() {
       const select = document.getElementById("wolfExplodeSelect");
       const wolfSeat = parseInt(select.value);
@@ -891,7 +909,6 @@
       }
     }
 
-    // 技能連帶帶走操作
     function handleSkillKill() {
       const select = document.getElementById("skillTargetSelect");
       const targetSeat = parseInt(select.value);
@@ -1090,7 +1107,6 @@
         gameState.isBadgeTorn = false;
       }
 
-      // 順利當選警長，競選自爆計數器歸零
       gameState.consecutiveExplodeCount = 0;
 
       if (!gameState.history) gameState.history = [];
