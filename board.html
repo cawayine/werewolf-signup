@@ -125,10 +125,10 @@
     <!-- 動態生成輪次標籤 -->
   </nav>
 
-  <!-- 主版面容器：手機維持垂直單欄，電腦端 (lg) 自動切換為雙欄並排 -->
+  <!-- 主版面容器：手機垂直單欄，電腦端 (lg) 雙欄並排 -->
   <div class="lg:grid lg:grid-cols-12 lg:gap-4 lg:items-start">
     
-    <!-- 左側欄位：公播大螢幕核心 (在電腦端佔 7 欄，未登入時佔滿 12 欄) -->
+    <!-- 左側欄位：公播大螢幕核心 -->
     <main id="displayMainCol" class="lg:col-span-12 space-y-3 transition-all duration-300">
       
       <!-- 階段 A：警長競選專屬面板 -->
@@ -137,7 +137,7 @@
         <div class="bg-gray-900 rounded-xl neon-border p-3 border-amber-500/40">
           <div class="flex justify-between items-center mb-2">
             <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-              <i class="fa-solid fa-crown text-amber-400"></i> 🔥 警上競選區 (候選人)
+              <i class="fa-solid fa-crown text-amber-400"></i> 🔥 警上競選區 (候選人與狀態)
             </span>
             <span class="text-[10px] text-gray-400" id="candidateCountLabel">0 人上警</span>
           </div>
@@ -148,7 +148,7 @@
         <div class="bg-gray-900 rounded-xl neon-border p-3 border-blue-500/40">
           <div class="flex justify-between items-center mb-2">
             <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
-              <i class="fa-solid fa-check-to-slot text-blue-400"></i> 🛡️ 警下投票區 (擁有投票權)
+              <i class="fa-solid fa-check-to-slot text-blue-400"></i> 🛡️ 具備投票權選民區
             </span>
             <span class="text-[10px] text-gray-400" id="votersCountLabel">12 人在警下</span>
           </div>
@@ -188,7 +188,7 @@
       </section>
     </main>
 
-    <!-- 右側欄位：電腦端計票控制工作台 (在電腦端佔 5 欄；手機端作為底部抽屜) -->
+    <!-- 右側欄位：電腦端計票控制工作台 (手機端為底部抽屜) -->
     <aside id="controlDrawer" class="hidden lg:col-span-5 fixed inset-x-0 bottom-0 lg:static lg:block bg-gray-900 border-t lg:border border-gray-700 p-3 z-50 rounded-t-2xl lg:rounded-xl shadow-2xl max-w-xl lg:max-w-none mx-auto max-h-[88vh] lg:max-h-none overflow-y-auto">
       <div class="flex justify-between items-center pb-2 mb-2 border-b border-gray-800">
         <h3 class="text-xs lg:text-sm font-bold text-amber-400 flex items-center gap-1.5">
@@ -204,7 +204,7 @@
         </div>
       </div>
 
-      <!-- 警徽處置操作卡片 (當警長出局時自動彈出) -->
+      <!-- 警徽處置操作卡片 -->
       <div id="policeBadgeTransferBox" class="mb-3 p-2.5 bg-amber-950/40 border border-amber-500/80 rounded-lg hidden">
         <div class="flex justify-between items-center mb-1.5">
           <span class="text-xs font-bold text-amber-300 flex items-center gap-1">
@@ -213,9 +213,7 @@
         </div>
         <div class="flex items-center gap-2 mb-2">
           <span class="text-xs text-gray-300">移交給：</span>
-          <select id="transferBadgeTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-amber-200 font-bold outline-none">
-            <!-- 動態填入存活玩家 -->
-          </select>
+          <select id="transferBadgeTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-amber-200 font-bold outline-none"></select>
           <button onclick="applyTransferBadge()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-2.5 py-1 rounded text-xs transition">
             確認移交
           </button>
@@ -227,7 +225,7 @@
         </div>
       </div>
 
-      <!-- 模式 1：警長競選計票模組 -->
+      <!-- 模式 1：警長競選計票模組 (含首輪與 PK 決選) -->
       <div id="drawerPoliceModule" class="space-y-2.5">
         <!-- 競選中自爆專屬入口 -->
         <div class="bg-rose-950/40 p-2.5 rounded-lg border border-rose-800/80">
@@ -238,32 +236,36 @@
             <span class="text-[10px] text-amber-300 font-bold" id="policeExplodeCountLabel">自爆計數：0 / 2</span>
           </div>
           <div class="flex items-center gap-2">
-            <select id="policeWolfExplodeSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-rose-200 font-bold outline-none">
-              <!-- 動態填入存活玩家 -->
-            </select>
+            <select id="policeWolfExplodeSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-rose-200 font-bold outline-none"></select>
             <button onclick="handlePoliceWolfExplode()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1 rounded text-xs transition">
               確認競選自爆
             </button>
           </div>
         </div>
 
+        <!-- 步驟 1：登記上警 / 退水操作 -->
         <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
           <div class="flex justify-between items-center mb-1.5">
-            <span class="text-xs font-bold text-gray-200">步驟 1：登記上警名單 (點選切換)</span>
-            <span class="text-[10px] text-amber-400" id="preserveHintText"></span>
+            <span class="text-xs font-bold text-gray-200" id="step1HeaderLabel">步驟 1：登記上警名單 (點選切換)</span>
+            <span class="text-[10px] text-amber-400 font-bold" id="preserveHintText"></span>
           </div>
           <div class="grid grid-cols-6 gap-1" id="drawerCandidateToggleGrid"></div>
         </div>
 
+        <!-- 步驟 2：警長計票 / PK 計票 -->
         <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
-          <span class="text-xs font-bold text-gray-200 block mb-1">步驟 2：警長計票 (先選候選人 ➔ 點警下選民)</span>
-          <div class="text-[11px] text-amber-300 mb-1">選擇受票候選人：</div>
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-xs font-bold text-gray-200" id="step2HeaderLabel">步驟 2：警長計票 (先選候選人 ➔ 點投票選民)</span>
+            <span class="text-[10px] text-amber-300 font-bold" id="pkBadgeIndicator" style="display: none;">⚖️ PK 決選輪次</span>
+          </div>
+          <div class="text-[11px] text-amber-300 mb-1" id="selectTargetDescLabel">選擇受票候選人：</div>
           <div class="flex flex-wrap gap-1.5 mb-2" id="drawerPoliceTargetCandidatesContainer"></div>
-          <div class="text-[11px] text-blue-300 mb-1">警下投票人點擊投票：</div>
+          
+          <div class="text-[11px] text-blue-300 mb-1" id="selectVoterDescLabel">投票選民點擊投票 (未退水者無投票權)：</div>
           <div class="grid grid-cols-6 gap-1 mb-2" id="drawerPoliceEligibleVotersGrid"></div>
           
-          <button onclick="confirmPoliceElection()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded text-xs shadow">
-            確認警長當選並封存此輪
+          <button onclick="confirmPoliceElection()" id="confirmPoliceBtn" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded text-xs shadow transition">
+            確認開票並結算警長
           </button>
         </div>
       </div>
@@ -279,16 +281,14 @@
             <span class="text-[10px] text-rose-400">將立即中斷白天並出局</span>
           </div>
           <div class="flex items-center gap-2">
-            <select id="wolfExplodeSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-rose-200 font-bold outline-none">
-              <!-- 動態填入存活玩家 -->
-            </select>
+            <select id="wolfExplodeSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-rose-200 font-bold outline-none"></select>
             <button onclick="handleWolfExplode()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1 rounded text-xs transition">
               確認自爆
             </button>
           </div>
         </div>
 
-        <!-- 技能連帶出局快速入口 (獵人槍殺、狼美人魅惑、騎士決鬥) -->
+        <!-- 技能連帶出局快速入口 -->
         <div class="bg-orange-950/30 p-2.5 rounded-lg border border-orange-800/70">
           <div class="flex justify-between items-center mb-1.5">
             <span class="text-xs font-bold text-orange-300 flex items-center gap-1">
@@ -297,9 +297,7 @@
             <span class="text-[10px] text-orange-400">指定 1 名玩家連帶出局</span>
           </div>
           <div class="flex items-center gap-2">
-            <select id="skillTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-orange-200 font-bold outline-none">
-              <!-- 動態填入存活玩家 -->
-            </select>
+            <select id="skillTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-orange-200 font-bold outline-none"></select>
             <button onclick="handleSkillKill()" class="bg-orange-600 hover:bg-orange-500 text-white font-bold px-3 py-1 rounded text-xs transition">
               技能帶走
             </button>
@@ -324,10 +322,10 @@
           <div class="grid grid-cols-6 gap-1 mb-2" id="drawerExileVotersGrid"></div>
 
           <div class="flex gap-2 mt-2">
-            <button onclick="confirmExileVote()" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded text-xs shadow">
+            <button onclick="confirmExileVote()" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded text-xs shadow transition">
               確認放逐出局並封存票型
             </button>
-            <button onclick="enterNextDayCycle()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded text-xs shadow">
+            <button onclick="enterNextDayCycle()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded text-xs shadow transition">
               進入下一天 ➔
             </button>
           </div>
@@ -336,7 +334,7 @@
     </aside>
   </div>
 
-  <!-- 手機端底部固定：計票員操作欄 (輸入密碼後解鎖，電腦端不需此浮動列) -->
+  <!-- 手機端底部固定：計票員操作欄 -->
   <footer id="adminFooter" class="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-40 hidden">
     <div class="max-w-xl mx-auto flex justify-between items-center">
       <div class="flex items-center gap-2">
@@ -387,15 +385,11 @@
       if (isAdmin) {
         footer.classList.remove("hidden");
         lockBtn.innerHTML = '<i class="fa-solid fa-unlock-keyhole text-emerald-400 text-xs"></i>';
-        
-        // 電腦端登入後：顯示右側控制欄，左側調整為佔 7 欄
         controlDrawer.classList.remove("lg:hidden");
         displayMainCol.className = "lg:col-span-7 space-y-3 transition-all duration-300";
       } else {
         footer.classList.add("hidden");
         lockBtn.innerHTML = '<i class="fa-solid fa-lock text-gray-600 text-xs"></i>';
-        
-        // 電腦端未登入：隱藏右側，左側佔滿 12 欄大螢幕
         controlDrawer.classList.add("lg:hidden");
         controlDrawer.classList.add("hidden");
         displayMainCol.className = "lg:col-span-12 space-y-3 transition-all duration-300";
@@ -431,10 +425,11 @@
 
     const defaultState = {
       day: 1,
-      phase: "POLICE_ELECTION",
+      phase: "POLICE_ELECTION", // POLICE_ELECTION | POLICE_PK | DAY_EXILE
       policeSeat: null,
       isBadgeTorn: false,
       consecutiveExplodeCount: 0,
+      pkCandidates: [], // 紀錄平票進 PK 的候選人座位號碼，例如 [1, 2]
       players: Array.from({ length: 12 }, (_, i) => ({
         seat: i + 1,
         isAlive: true,
@@ -461,6 +456,7 @@
           if (!gameState.history) gameState.history = [];
           if (!gameState.tempVotes) gameState.tempVotes = {};
           if (gameState.consecutiveExplodeCount === undefined) gameState.consecutiveExplodeCount = 0;
+          if (!gameState.pkCandidates) gameState.pkCandidates = [];
         } else {
           if (isAdmin) pushStateToFirebase();
         }
@@ -498,15 +494,17 @@
         if (gameState.consecutiveExplodeCount === 1) {
           stageDesc = `第 ${gameState.day} 天 警長補選 (延續昨日上警名單)`;
         } else {
-          stageDesc = `第 ${gameState.day} 天 警長競選`;
+          stageDesc = `第 ${gameState.day} 天 警長競選 (首輪投票)`;
         }
+      } else if (gameState.phase === "POLICE_PK") {
+        stageDesc = `第 ${gameState.day} 天 警長競選 ⚖️ 平票 PK 決選`;
       } else {
         stageDesc = `第 ${gameState.day} 天 白天放逐對局`;
       }
 
       document.getElementById("currentStageText").innerText = stageDesc;
 
-      const isPoliceActive = (gameState.phase === "POLICE_ELECTION" && currentHistoryViewIndex === -1);
+      const isPoliceActive = ((gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK") && currentHistoryViewIndex === -1);
       document.getElementById("policeSection").classList.toggle("hidden", !isPoliceActive);
 
       let badgeLabelText = "警長：未指定";
@@ -532,7 +530,11 @@
       });
 
       const isCurrentActive = (currentHistoryViewIndex === -1);
-      const currentTitle = gameState.phase === "POLICE_ELECTION" ? `即時: D${gameState.day}警選` : `即時: D${gameState.day}放逐`;
+      let currentTitle = "";
+      if (gameState.phase === "POLICE_ELECTION") currentTitle = `即時: D${gameState.day}警選`;
+      else if (gameState.phase === "POLICE_PK") currentTitle = `即時: D${gameState.day}警長PK`;
+      else currentTitle = `即時: D${gameState.day}放逐`;
+
       tabsHtml += `
         <button onclick="viewHistory(-1)" class="px-2.5 py-1 rounded font-bold whitespace-nowrap transition border ${isCurrentActive ? 'bg-blue-600 text-white border-blue-400' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'}">
           ● ${currentTitle}
@@ -548,34 +550,72 @@
     }
 
     function renderSeatsStatus() {
-      const candidates = gameState.players.filter(p => p.isCandidate && p.isAlive);
-      const voters = gameState.players.filter(p => !p.isCandidate && p.isAlive);
+      const isPkMode = (gameState.phase === "POLICE_PK");
+      const pkCandidates = gameState.pkCandidates || [];
 
-      document.getElementById("candidateCountLabel").innerText = `${candidates.length} 人上警`;
-      document.getElementById("votersCountLabel").innerText = `${voters.length} 人在警下`;
+      // 候選人區：顯示所有存活且上警者
+      const candidates = gameState.players.filter(p => p.isCandidate && p.isAlive);
+      
+      // 具備投票權選民判定：
+      // 首輪：!isCandidate && isAlive
+      // PK 輪次：isAlive && (原本不在警下 || 已退水) && 不在 pkCandidates 中
+      const voters = gameState.players.filter(p => {
+        if (!p.isAlive) return false;
+        if (!isPkMode) {
+          return !p.isCandidate;
+        } else {
+          const isEligibleVoter = (!p.isCandidate || p.hasDropped);
+          return isEligibleVoter && !pkCandidates.includes(p.seat);
+        }
+      });
+
+      document.getElementById("candidateCountLabel").innerText = isPkMode ? `${pkCandidates.length} 人角逐 PK` : `${candidates.length} 人上警`;
+      document.getElementById("votersCountLabel").innerText = `${voters.length} 人有投票權`;
 
       const candGrid = document.getElementById("candidatesGrid");
       if (candidates.length === 0) {
         candGrid.innerHTML = `<div class="col-span-6 lg:col-span-12 text-gray-500 text-xs text-center py-2">目前無人上警</div>`;
       } else {
-        candGrid.innerHTML = candidates.map(p => `
-          <div class="h-10 rounded-lg border ${p.hasDropped ? 'border-gray-700 bg-gray-800/40 text-gray-500' : 'border-amber-500/70 bg-amber-950/30 text-amber-300 font-bold'} flex flex-col items-center justify-center text-xs relative">
-            ${gameState.policeSeat === p.seat ? '<span class="absolute -top-1.5 -right-1 text-xs">👑</span>' : ''}
-            <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
-            <span class="text-[9px] ${p.hasDropped ? 'text-gray-600' : 'text-amber-400'}">${p.hasDropped ? '已退水' : '競選中'}</span>
-          </div>
-        `).join('');
+        candGrid.innerHTML = candidates.map(p => {
+          let borderStyle = "border-amber-500/70 bg-amber-950/30 text-amber-300 font-bold";
+          let statusLabel = "競選中";
+          let statusColor = "text-amber-400";
+
+          if (p.hasDropped) {
+            borderStyle = "border-gray-700 bg-gray-800/40 text-gray-500";
+            statusLabel = "已退水 (有票)";
+            statusColor = "text-blue-400";
+          } else if (isPkMode) {
+            if (pkCandidates.includes(p.seat)) {
+              borderStyle = "border-amber-400 bg-amber-500/20 text-amber-200 font-extrabold ring-1 ring-amber-400";
+              statusLabel = "👑 PK候選";
+              statusColor = "text-amber-300 font-bold";
+            } else {
+              borderStyle = "border-rose-900/60 bg-rose-950/20 text-gray-500 opacity-60";
+              statusLabel = "未退水(無票)";
+              statusColor = "text-rose-400";
+            }
+          }
+
+          return `
+            <div class="h-10 rounded-lg border ${borderStyle} flex flex-col items-center justify-center text-xs relative">
+              ${gameState.policeSeat === p.seat ? '<span class="absolute -top-1.5 -right-1 text-xs">👑</span>' : ''}
+              <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
+              <span class="text-[9px] ${statusColor}">${statusLabel}</span>
+            </div>
+          `;
+        }).join('');
       }
 
       const voterGrid = document.getElementById("votersGrid");
       if (voters.length === 0) {
-        voterGrid.innerHTML = `<div class="col-span-6 lg:col-span-12 text-gray-500 text-xs text-center py-2">全員上警</div>`;
+        voterGrid.innerHTML = `<div class="col-span-6 lg:col-span-12 text-gray-500 text-xs text-center py-2">全場無合資格選民</div>`;
       } else {
         voterGrid.innerHTML = voters.map(p => `
           <div class="h-10 rounded-lg border border-blue-500/50 bg-blue-950/20 text-blue-200 flex flex-col items-center justify-center text-xs font-mono font-bold">
             ${gameState.policeSeat === p.seat ? '<span class="absolute -top-1.5 -right-1 text-xs">👑</span>' : ''}
             <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
-            <span class="text-[9px] text-blue-400 font-normal">投票人</span>
+            <span class="text-[9px] text-blue-400 font-normal">${p.hasDropped ? '退水選民' : '警下選民'}</span>
           </div>
         `).join('');
       }
@@ -648,7 +688,13 @@
         badgeEl.className = "text-xs bg-amber-950 text-amber-300 border border-amber-700 px-2 py-0.5 rounded font-bold";
       } else {
         currentDisplayVotes = gameState.tempVotes || {};
-        titleEl.innerText = (gameState.phase === "POLICE_ELECTION") ? `即時：第 ${gameState.day} 天警長競選票型` : `即時：第 ${gameState.day} 天放逐票型`;
+        if (gameState.phase === "POLICE_ELECTION") {
+          titleEl.innerText = `即時：第 ${gameState.day} 天 警長競選首輪票型`;
+        } else if (gameState.phase === "POLICE_PK") {
+          titleEl.innerText = `即時：第 ${gameState.day} 天 警長 PK 決選票型`;
+        } else {
+          titleEl.innerText = `即時：第 ${gameState.day} 天 放逐票型`;
+        }
         badgeEl.innerText = "即時開票中";
         badgeEl.className = "text-xs bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold";
       }
@@ -672,7 +718,8 @@
 
         voters.forEach(vSeat => {
           const isPolice = (!gameState.isBadgeTorn && vSeat === gameState.policeSeat);
-          if (gameState.phase !== "POLICE_ELECTION" && isPolice) {
+          // 警選與 PK 輪次無警長 1.5 票加權
+          if (gameState.phase !== "POLICE_ELECTION" && gameState.phase !== "POLICE_PK" && isPolice) {
             totalPoints += 1.5;
           } else {
             totalPoints += 1;
@@ -720,9 +767,9 @@
     }
 
     function renderDrawerControls() {
-      const isPoliceMode = (gameState.phase === "POLICE_ELECTION");
-      document.getElementById("drawerPoliceModule").classList.toggle("hidden", !isPoliceMode);
-      document.getElementById("drawerExileModule").classList.toggle("hidden", isPoliceMode);
+      const isPoliceModuleActive = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
+      document.getElementById("drawerPoliceModule").classList.toggle("hidden", !isPoliceModuleActive);
+      document.getElementById("drawerExileModule").classList.toggle("hidden", isPoliceModuleActive);
 
       checkPoliceBadgeStatus();
 
@@ -739,11 +786,11 @@
       const preserveHint = document.getElementById("preserveHintText");
       if (explodeLabel) {
         const cnt = gameState.consecutiveExplodeCount || 0;
-        explodeLabel.innerText = `自爆計數：${cnt} / 2 次 (${cnt === 0 ? '首輪正常' : '已自爆1次，再爆即吞警徽'})`;
+        explodeLabel.innerText = `自爆計數：${cnt} / 2 次 (${cnt === 0 ? '正常' : '已自爆1次，再爆即吞警徽'})`;
         explodeLabel.className = cnt > 0 ? "text-[10px] text-rose-400 font-bold animate-pulse" : "text-[10px] text-amber-300 font-bold";
         
         if (preserveHint) {
-          preserveHint.innerText = cnt === 1 ? "★ 已保留昨日上警名單" : "";
+          preserveHint.innerText = cnt === 1 ? "★ 已保留昨日名單" : "";
         }
       }
 
@@ -761,7 +808,7 @@
         `).join('');
       }
 
-      if (isPoliceMode) {
+      if (isPoliceModuleActive) {
         renderPoliceDrawerControls();
       } else {
         renderExileDrawerControls();
@@ -845,6 +892,7 @@
 
         gameState.day += 1;
         gameState.phase = "POLICE_ELECTION";
+        gameState.pkCandidates = [];
 
         alert(`💥 ${wolfSeat} 號狼人競選自爆出局！\n天亮進入【第 ${gameState.day} 天】，已保留第 1 天其餘玩家的上警名單繼續競選。若今天再次自爆，則警徽正式流失！`);
       } else {
@@ -860,6 +908,7 @@
 
         gameState.day += 1;
         gameState.phase = "DAY_EXILE";
+        gameState.pkCandidates = [];
         gameState.players.forEach(pl => {
           pl.isCandidate = false;
           pl.hasDropped = false;
@@ -936,42 +985,120 @@
       alert(`🎯 ${targetSeat} 號玩家因【${reason}】連帶出局！`);
     }
 
+    // 核心：警長競選與 PK 抽屜面板控制
     function renderPoliceDrawerControls() {
-      const toggleGrid = document.getElementById("drawerCandidateToggleGrid");
-      toggleGrid.innerHTML = gameState.players.map(p => `
-        <button onclick="toggleCandidate(${p.seat})" class="h-8 rounded text-xs font-bold border ${p.isCandidate ? 'bg-amber-600 border-amber-400 text-white' : 'bg-gray-800 border-gray-700 text-gray-300'}">
-          ${p.seat}號
-        </button>
-      `).join('');
+      const isPkMode = (gameState.phase === "POLICE_PK");
+      const pkCandidates = gameState.pkCandidates || [];
 
+      document.getElementById("pkBadgeIndicator").style.display = isPkMode ? "inline-block" : "none";
+      document.getElementById("step1HeaderLabel").innerText = isPkMode ? "步驟 1：警上退水確認 (點選切換退水狀態)" : "步驟 1：登記上警名單 (點選切換)";
+      document.getElementById("step2HeaderLabel").innerText = isPkMode ? "步驟 2：PK 計票 (僅 PK 候選人可受票)" : "步驟 2：警長計票 (先選候選人 ➔ 點警下選民)";
+      document.getElementById("selectTargetDescLabel").innerText = isPkMode ? "選擇 PK 受票候選人：" : "選擇受票候選人：";
+      document.getElementById("selectVoterDescLabel").innerText = isPkMode ? "合資格選民投票 (未退水者無投票權)：" : "警下投票人點擊投票：";
+      document.getElementById("confirmPoliceBtn").innerText = isPkMode ? "確認 PK 開票 (二次平票則警徽流失)" : "確認首輪開票 (若平票則進入 PK)";
+
+      // 上警/退水切換點陣
+      const toggleGrid = document.getElementById("drawerCandidateToggleGrid");
+      toggleGrid.innerHTML = gameState.players.map(p => {
+        let btnClass = "bg-gray-800 border-gray-700 text-gray-300";
+        let label = `${p.seat}號`;
+
+        if (p.isCandidate) {
+          if (p.hasDropped) {
+            btnClass = "bg-blue-950 border-blue-600 text-blue-300";
+            label = `${p.seat}號(退水)`;
+          } else {
+            if (isPkMode && pkCandidates.includes(p.seat)) {
+              btnClass = "bg-amber-500 border-amber-300 text-black font-extrabold";
+              label = `${p.seat}號(PK)`;
+            } else {
+              btnClass = "bg-amber-600 border-amber-400 text-white";
+            }
+          }
+        }
+
+        return `
+          <button onclick="toggleCandidateOrDrop(${p.seat})" class="h-8 rounded text-[11px] font-bold border transition ${btnClass}">
+            ${label}
+          </button>
+        `;
+      }).join('');
+
+      // 受票候選人容器
       const candContainer = document.getElementById("drawerPoliceTargetCandidatesContainer");
-      const activeCandidates = gameState.players.filter(p => p.isCandidate && !p.hasDropped && p.isAlive);
+      let activeCandidates = [];
+
+      if (!isPkMode) {
+        // 首輪：所有存活且上警且未退水者
+        activeCandidates = gameState.players.filter(p => p.isCandidate && !p.hasDropped && p.isAlive);
+      } else {
+        // PK 輪次：僅限 pkCandidates 中的玩家
+        activeCandidates = gameState.players.filter(p => pkCandidates.includes(p.seat) && p.isAlive);
+      }
       
       if (activeCandidates.length === 0) {
-        candContainer.innerHTML = `<span class="text-xs text-gray-500">無候選人</span>`;
+        candContainer.innerHTML = `<span class="text-xs text-gray-500">無有效候選人</span>`;
       } else {
         candContainer.innerHTML = activeCandidates.map(p => `
-          <button onclick="selectTargetForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border ${gameState.selectedTarget === p.seat ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
+          <button onclick="selectTargetForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === p.seat ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
             投 ${p.seat}號
           </button>
         `).join('') + `
-          <button onclick="selectTargetForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border ${gameState.selectedTarget === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
+          <button onclick="selectTargetForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
             棄票
           </button>
         `;
       }
 
+      // 投票選民容器：嚴格判定誰能投票
       const votersGrid = document.getElementById("drawerPoliceEligibleVotersGrid");
-      const eligibleVoters = gameState.players.filter(p => !p.isCandidate && p.isAlive);
-      
-      votersGrid.innerHTML = eligibleVoters.map(p => {
+      votersGrid.innerHTML = gameState.players.map(p => {
+        let isEligible = false;
+        let disableReason = "";
+
+        if (!p.isAlive) {
+          isEligible = false;
+          disableReason = "出局";
+        } else if (!isPkMode) {
+          // 首輪：警下玩家有投票權
+          if (!p.isCandidate) {
+            isEligible = true;
+          } else {
+            isEligible = false;
+            disableReason = p.hasDropped ? "已退水" : "在警上";
+          }
+        } else {
+          // PK 輪次：
+          // 1. PK 候選人不能投
+          // 2. 警上未退水但非最高票者不能投（無投票權）
+          // 3. 原始警下玩家與已退水玩家可以投
+          if (pkCandidates.includes(p.seat)) {
+            isEligible = false;
+            disableReason = "PK候選";
+          } else if (p.isCandidate && !p.hasDropped) {
+            isEligible = false;
+            disableReason = "未退水無票";
+          } else {
+            isEligible = true;
+          }
+        }
+
         let votedTarget = null;
         Object.entries(gameState.tempVotes || {}).forEach(([cand, list]) => {
           if (list.includes(p.seat)) votedTarget = cand;
         });
 
+        if (!isEligible) {
+          return `
+            <div class="h-9 rounded text-xs border border-gray-800 bg-gray-900/60 text-gray-600 font-mono flex flex-col items-center justify-center opacity-40 cursor-not-allowed">
+              <span>${p.seat}號</span>
+              <span class="text-[7px]">${disableReason}</span>
+            </div>
+          `;
+        }
+
         return `
-          <button onclick="assignVote(${p.seat})" class="h-9 rounded text-xs border font-mono flex flex-col items-center justify-center ${votedTarget !== null ? 'bg-indigo-950 border-indigo-400 text-indigo-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
+          <button onclick="assignVote(${p.seat})" class="h-9 rounded text-xs border font-mono flex flex-col items-center justify-center transition ${votedTarget !== null ? 'bg-indigo-950 border-indigo-400 text-indigo-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
             <span>${p.seat}號</span>
             <span class="text-[8px] text-amber-300">${votedTarget !== null ? (votedTarget == 0 ? '棄' : '➔' + votedTarget) : '未投'}</span>
           </button>
@@ -979,12 +1106,41 @@
       }).join('');
     }
 
+    // 點擊切換上警 / 退水狀態
+    function toggleCandidateOrDrop(seat) {
+      const p = gameState.players.find(x => x.seat === seat);
+      if (gameState.phase === "POLICE_PK") {
+        // PK 模式下，僅允許非 PK 候選人的上警玩家切換退水
+        if ((gameState.pkCandidates || []).includes(seat)) {
+          alert("⚠️ PK 候選人不可在 PK 發言階段退水！");
+          return;
+        }
+        if (p.isCandidate) {
+          p.hasDropped = !p.hasDropped;
+          pushStateToFirebase();
+        }
+        return;
+      }
+
+      // 首輪正常切換上警
+      if (!p.isCandidate) {
+        p.isCandidate = true;
+        p.hasDropped = false;
+      } else if (!p.hasDropped) {
+        p.hasDropped = true; // 第一次點變退水
+      } else {
+        p.isCandidate = false;
+        p.hasDropped = false; // 第二次點完全不上警
+      }
+      pushStateToFirebase();
+    }
+
     function renderExileDrawerControls() {
       const deathGrid = document.getElementById("drawerNightDeathGrid");
       deathGrid.innerHTML = gameState.players.map(p => {
         const isNightDead = (!p.isAlive && p.deathReason === "NIGHT");
         return `
-          <button onclick="togglePlayerNightDeath(${p.seat})" class="h-8 rounded text-xs font-bold border ${isNightDead ? 'bg-purple-900 border-purple-500 text-purple-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
+          <button onclick="togglePlayerNightDeath(${p.seat})" class="h-8 rounded text-xs font-bold border transition ${isNightDead ? 'bg-purple-900 border-purple-500 text-purple-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
             ${p.seat}號 ${isNightDead ? '🌙' : ''}
           </button>
         `;
@@ -994,11 +1150,11 @@
       const alivePlayers = gameState.players.filter(p => p.isAlive);
 
       targetContainer.innerHTML = alivePlayers.map(p => `
-        <button onclick="selectTargetForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border ${gameState.selectedTarget === p.seat ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
+        <button onclick="selectTargetForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === p.seat ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
           投 ${p.seat}號
         </button>
       `).join('') + `
-        <button onclick="selectTargetForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border ${gameState.selectedTarget === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
+        <button onclick="selectTargetForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
           棄票
         </button>
       `;
@@ -1012,19 +1168,12 @@
 
         const isPolice = (!gameState.isBadgeTorn && p.seat === gameState.policeSeat);
         return `
-          <button onclick="assignVote(${p.seat})" class="h-9 rounded text-xs border font-mono flex flex-col items-center justify-center ${votedTarget !== null ? 'bg-indigo-950 border-indigo-400 text-indigo-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
+          <button onclick="assignVote(${p.seat})" class="h-9 rounded text-xs border font-mono flex flex-col items-center justify-center transition ${votedTarget !== null ? 'bg-indigo-950 border-indigo-400 text-indigo-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
             <span>${p.seat}號${isPolice ? '👑' : ''}</span>
             <span class="text-[8px] text-amber-300">${votedTarget !== null ? (votedTarget == 0 ? '棄' : '➔' + votedTarget) : '未投'}</span>
           </button>
         `;
       }).join('');
-    }
-
-    function toggleCandidate(seat) {
-      const p = gameState.players.find(x => x.seat === seat);
-      p.isCandidate = !p.isCandidate;
-      p.hasDropped = false;
-      pushStateToFirebase();
     }
 
     function selectTargetForVote(targetSeat) {
@@ -1089,40 +1238,134 @@
       }, 200);
     }
 
+    // 核心：警長競選與 PK 投票結算判斷
     function confirmPoliceElection() {
-      let maxVotes = 0;
-      let winnerSeat = null;
-
+      const isPkMode = (gameState.phase === "POLICE_PK");
+      
+      // 統計所有非棄票候選人得票
+      let voteCounts = {};
       Object.entries(gameState.tempVotes || {}).forEach(([cand, voters]) => {
-        if (cand != 0 && voters.length > maxVotes) {
-          maxVotes = voters.length;
-          winnerSeat = parseInt(cand);
+        if (cand != 0 && voters.length > 0) {
+          voteCounts[cand] = voters.length;
         }
       });
 
-      if (!winnerSeat) {
-        if (!confirm("平票或尚未產生獲勝者，確定要直接封存這輪票型嗎？")) return;
-      } else {
-        gameState.policeSeat = winnerSeat;
-        gameState.isBadgeTorn = false;
-      }
+      let maxVotes = 0;
+      let topCandidates = [];
 
-      gameState.consecutiveExplodeCount = 0;
-
-      if (!gameState.history) gameState.history = [];
-      gameState.history.push({
-        title: `D${gameState.day} 警長競選`,
-        badgeText: winnerSeat ? `👑 ${winnerSeat}號當選警長` : "競選結束",
-        votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
+      Object.entries(voteCounts).forEach(([cand, count]) => {
+        if (count > maxVotes) {
+          maxVotes = count;
+          topCandidates = [parseInt(cand)];
+        } else if (count === maxVotes) {
+          topCandidates.push(parseInt(cand));
+        }
       });
 
-      gameState.phase = "DAY_EXILE";
-      gameState.tempVotes = {};
-      gameState.selectedTarget = null;
-      currentHistoryViewIndex = -1;
+      if (!isPkMode) {
+        // --- 首輪警長投票結算 ---
+        if (topCandidates.length === 0 || maxVotes === 0) {
+          alert("⚠️ 所有人都棄票或尚未輸入任何有效投票！無法結算。");
+          return;
+        }
 
-      pushStateToFirebase();
-      alert(`🎉 警長競選完成！票型已封存至雲端，進入【第 ${gameState.day} 天 白天放逐】。`);
+        // 首輪平票判定 ➔ 進入 PK 輪次
+        if (topCandidates.length > 1) {
+          if (!confirm(`⚖️ 檢測到平票！【${topCandidates.join(' 號、')} 號】同獲 ${maxVotes} 票最高票！\n\n確定進入【警長競選 PK 輪次】嗎？\n（第一輪票型將自動封存，未退水玩家在 PK 輪次將喪失投票權）`)) return;
+
+          if (!gameState.history) gameState.history = [];
+          gameState.history.push({
+            title: `D${gameState.day} 警選首輪(平票)`,
+            badgeText: `⚖️ ${topCandidates.join('、')}號平票 (${maxVotes}票)`,
+            votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
+          });
+
+          // 進入 PK 階段
+          gameState.phase = "POLICE_PK";
+          gameState.pkCandidates = topCandidates;
+          gameState.tempVotes = {};
+          gameState.selectedTarget = null;
+          currentHistoryViewIndex = -1;
+
+          pushStateToFirebase();
+          alert(`⚖️ 已切換至【警長競選 PK 輪次】！\n僅 ${topCandidates.join(' 號與 ')} 號可被投票。\n請法官確認其餘警上玩家退水情況後進行第二輪投票。`);
+          return;
+        }
+
+        // 首輪順利產生獲勝者
+        const winnerSeat = topCandidates[0];
+        gameState.policeSeat = winnerSeat;
+        gameState.isBadgeTorn = false;
+        gameState.consecutiveExplodeCount = 0;
+        gameState.pkCandidates = [];
+
+        if (!gameState.history) gameState.history = [];
+        gameState.history.push({
+          title: `D${gameState.day} 警長競選`,
+          badgeText: `👑 ${winnerSeat}號當選警長 (${maxVotes}票)`,
+          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
+        });
+
+        gameState.phase = "DAY_EXILE";
+        gameState.tempVotes = {};
+        gameState.selectedTarget = null;
+        currentHistoryViewIndex = -1;
+
+        pushStateToFirebase();
+        alert(`🎉 恭喜！${winnerSeat} 號玩家以 ${maxVotes} 票當選警長！\n進入【第 ${gameState.day} 天 白天放逐對局】。`);
+
+      } else {
+        // --- PK 決選輪次結算 ---
+        if (topCandidates.length === 0 || maxVotes === 0) {
+          alert("⚠️ PK 輪次無有效得票！");
+          return;
+        }
+
+        // PK 二次平票判定 ➔ 警徽流失（吞警徽）
+        if (topCandidates.length > 1) {
+          alert(`🔥 PK 輪次再次平票！【${topCandidates.join(' 號與 ')} 號】同獲 ${maxVotes} 票！\n觸發規則【警徽流失】！\n本局不再有警長，所有人回歸 1 票制！`);
+
+          if (!gameState.history) gameState.history = [];
+          gameState.history.push({
+            title: `D${gameState.day} 警選PK(二次平票)`,
+            badgeText: `🔥 二次平票 (警徽流失)`,
+            votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
+          });
+
+          gameState.policeSeat = null;
+          gameState.isBadgeTorn = true; // 警徽流失
+          gameState.phase = "DAY_EXILE";
+          gameState.pkCandidates = [];
+          gameState.tempVotes = {};
+          gameState.selectedTarget = null;
+          currentHistoryViewIndex = -1;
+
+          pushStateToFirebase();
+          return;
+        }
+
+        // PK 順利產生獲勝者
+        const winnerSeat = topCandidates[0];
+        gameState.policeSeat = winnerSeat;
+        gameState.isBadgeTorn = false;
+        gameState.consecutiveExplodeCount = 0;
+        gameState.pkCandidates = [];
+
+        if (!gameState.history) gameState.history = [];
+        gameState.history.push({
+          title: `D${gameState.day} 警選PK決選`,
+          badgeText: `👑 ${winnerSeat}號PK勝出 (${maxVotes}票)`,
+          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
+        });
+
+        gameState.phase = "DAY_EXILE";
+        gameState.tempVotes = {};
+        gameState.selectedTarget = null;
+        currentHistoryViewIndex = -1;
+
+        pushStateToFirebase();
+        alert(`🎉 PK 決選完成！${winnerSeat} 號玩家勝出當選警長！\n進入【第 ${gameState.day} 天 白天放逐對局】。`);
+      }
     }
 
     function confirmExileVote() {
@@ -1151,6 +1394,8 @@
         }
       }
 
+      gameState.consecutiveExplodeCount = 0;
+
       if (!gameState.history) gameState.history = [];
       gameState.history.push({
         title: `D${gameState.day} 白天放逐`,
@@ -1174,6 +1419,7 @@
       gameState.phase = "DAY_EXILE";
       gameState.tempVotes = {};
       gameState.selectedTarget = null;
+      gameState.pkCandidates = [];
       currentHistoryViewIndex = -1;
 
       pushStateToFirebase();
