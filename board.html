@@ -21,7 +21,7 @@
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .neon-border { border: 1px solid #30363d; }
 
-    /* 存活與出局樣式分流 (做法 B) */
+    /* 存活與出局樣式分流 */
     .seat-alive {
       border: 1px solid #374151;
       background-color: #1f2937;
@@ -40,6 +40,16 @@
     .seat-exile-dead {
       border: 1px solid #dc2626;
       background-color: rgba(127, 29, 29, 0.3);
+      color: #fca5a5;
+    }
+    .seat-skill-dead {
+      border: 1px solid #f97316;
+      background-color: rgba(194, 65, 12, 0.25);
+      color: #fdba74;
+    }
+    .seat-explode-dead {
+      border: 1px solid #ef4444;
+      background-color: rgba(153, 27, 27, 0.35);
       color: #fca5a5;
     }
 
@@ -103,7 +113,7 @@
         <div class="text-[10px] text-gray-400">存活狀態</div>
         <div class="text-sm font-bold text-emerald-400 font-mono" id="aliveRatioText">-- / 12 人</div>
       </div>
-      <!-- 低調解鎖入口按鈕 -->
+      <!-- 解鎖入口按鈕 -->
       <button onclick="promptAdminLogin()" id="authLockBtn" class="text-gray-600 hover:text-amber-400 p-1 transition" title="計票員登入">
         <i class="fa-solid fa-lock text-xs"></i>
       </button>
@@ -115,7 +125,7 @@
     <!-- 動態生成輪次標籤 -->
   </nav>
 
-  <!-- 階段 A：警長競選專屬面板 (首輪警長競選時顯示) -->
+  <!-- 階段 A：警長競選專屬面板 -->
   <section id="policeSection" class="space-y-3 mb-3">
     <!-- 警上候選人區 -->
     <div class="bg-gray-900 rounded-xl neon-border p-3 border-amber-500/40">
@@ -140,7 +150,7 @@
     </div>
   </section>
 
-  <!-- 階段 B：席位即時存活點陣 (支援 做法B 死亡原因角標分流) -->
+  <!-- 階段 B：席位即時存活點陣 -->
   <section id="seatStatusSection" class="space-y-3 mb-3">
     <div class="bg-gray-900 rounded-xl neon-border p-3">
       <div class="flex justify-between items-center mb-2">
@@ -171,7 +181,7 @@
     </div>
   </section>
 
-  <!-- 底部固定：計票員操作彈窗按鈕 (僅限輸入正確密碼後顯示) -->
+  <!-- 底部固定：計票員操作欄 (輸入密碼後解鎖) -->
   <footer id="adminFooter" class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-40 hidden">
     <div class="max-w-xl mx-auto flex justify-between items-center">
       <div class="flex items-center gap-2">
@@ -194,7 +204,7 @@
   </footer>
 
   <!-- 計票員操作抽屜 (控制端) -->
-  <div id="controlDrawer" class="fixed inset-x-0 bottom-0 bg-gray-900 border-t border-gray-700 p-3 z-50 rounded-t-2xl shadow-2xl max-w-xl mx-auto hidden max-h-[85vh] overflow-y-auto">
+  <div id="controlDrawer" class="fixed inset-x-0 bottom-0 bg-gray-900 border-t border-gray-700 p-3 z-50 rounded-t-2xl shadow-2xl max-w-xl mx-auto hidden max-h-[88vh] overflow-y-auto">
     <div class="flex justify-between items-center pb-2 mb-2 border-b border-gray-800">
       <h3 class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
         <i class="fa-solid fa-calculator"></i> 現場計票控制端
@@ -204,7 +214,7 @@
       </button>
     </div>
 
-    <!-- 警徽處置操作卡片 (當警長出局時自動彈出此區塊) -->
+    <!-- 警徽處置操作卡片 (當警長出局時自動彈出) -->
     <div id="policeBadgeTransferBox" class="mb-3 p-2.5 bg-amber-950/40 border border-amber-500/80 rounded-lg hidden">
       <div class="flex justify-between items-center mb-1.5">
         <span class="text-xs font-bold text-amber-300 flex items-center gap-1">
@@ -247,8 +257,44 @@
       </div>
     </div>
 
-    <!-- 模式 2：白天放逐計票模組 (通用輪次) -->
+    <!-- 模式 2：白天放逐與即時操作模組 -->
     <div id="drawerExileModule" class="space-y-2.5 hidden">
+      <!-- 狼人自爆操作區 -->
+      <div class="bg-rose-950/30 p-2.5 rounded-lg border border-rose-800/80">
+        <div class="flex justify-between items-center mb-1.5">
+          <span class="text-xs font-bold text-rose-300 flex items-center gap-1">
+            <i class="fa-solid fa-bomb text-rose-400"></i> 💥 狼人自爆 (白天即時發動)
+          </span>
+          <span class="text-[10px] text-rose-400">將立即中斷白天並出局</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="wolfExplodeSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-rose-200 font-bold outline-none">
+            <!-- 動態填入存活玩家 -->
+          </select>
+          <button onclick="handleWolfExplode()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1 rounded text-xs transition">
+            確認自爆
+          </button>
+        </div>
+      </div>
+
+      <!-- 技能連帶出局快速入口 (獵人槍殺、狼美人魅惑、騎士決鬥) -->
+      <div class="bg-orange-950/30 p-2.5 rounded-lg border border-orange-800/70">
+        <div class="flex justify-between items-center mb-1.5">
+          <span class="text-xs font-bold text-orange-300 flex items-center gap-1">
+            <i class="fa-solid fa-crosshairs text-orange-400"></i> 🎯 發動技能連帶帶走 (獵人/狼美/毒殺)
+          </span>
+          <span class="text-[10px] text-orange-400">指定 1 名玩家連帶出局</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="skillTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-orange-200 font-bold outline-none">
+            <!-- 動態填入存活玩家 -->
+          </select>
+          <button onclick="handleSkillKill()" class="bg-orange-600 hover:bg-orange-500 text-white font-bold px-3 py-1 rounded text-xs transition">
+            技能帶走
+          </button>
+        </div>
+      </div>
+
       <!-- 夜間死訊更新 -->
       <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
         <div class="flex justify-between items-center mb-1">
@@ -281,6 +327,7 @@
   <script>
     const ADMIN_PASSWORD = "8888";
 
+    // 專屬 Firebase 配置
     const firebaseConfig = {
       apiKey: "AIzaSyD-IcZrJUj4pXYxe9ZXNxU5o5A1koSwxbc",
       authDomain: "werewolf-base.firebaseapp.com",
@@ -401,7 +448,7 @@
 
       const stageDesc = gameState.phase === "POLICE_ELECTION" 
         ? `第 ${gameState.day} 天 警長競選` 
-        : `第 ${gameState.day} 天 白天放逐公投`;
+        : `第 ${gameState.day} 天 白天對局`;
 
       document.getElementById("currentStageText").innerText = stageDesc;
 
@@ -431,7 +478,7 @@
       });
 
       const isCurrentActive = (currentHistoryViewIndex === -1);
-      const currentTitle = gameState.phase === "POLICE_ELECTION" ? "即時: 警長競選" : `即時: D${gameState.day}放逐`;
+      const currentTitle = gameState.phase === "POLICE_ELECTION" ? "即時: 警長競選" : `即時: D${gameState.day}公播`;
       tabsHtml += `
         <button onclick="viewHistory(-1)" class="px-2.5 py-1 rounded font-bold whitespace-nowrap transition border ${isCurrentActive ? 'bg-blue-600 text-white border-blue-400' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'}">
           ● ${currentTitle}
@@ -495,17 +542,27 @@
             textStyle = "text-amber-300 font-bold";
           }
         } else {
+          seatNumStyle = "line-through opacity-60";
           if (p.deathReason === "NIGHT") {
             cardStyle = "seat-night-dead";
             badgeHtml = '<span class="absolute -top-1.5 -right-1 text-[11px] bg-purple-950 border border-purple-600 rounded-full w-4 h-4 flex items-center justify-center">🌙</span>';
             statusText = "夜亡";
             textStyle = "text-purple-400 font-bold";
-          } else {
+          } else if (p.deathReason === "EXILE") {
             cardStyle = "seat-exile-dead";
             badgeHtml = '<span class="absolute -top-1.5 -right-1 text-[11px] bg-rose-950 border border-rose-600 rounded-full w-4 h-4 flex items-center justify-center">❌</span>';
             statusText = "放逐";
             textStyle = "text-rose-400 font-bold";
-            seatNumStyle = "line-through opacity-60";
+          } else if (p.deathReason === "SKILL") {
+            cardStyle = "seat-skill-dead";
+            badgeHtml = '<span class="absolute -top-1.5 -right-1 text-[11px] bg-orange-950 border border-orange-600 rounded-full w-4 h-4 flex items-center justify-center">🎯</span>';
+            statusText = "技能";
+            textStyle = "text-orange-400 font-bold";
+          } else if (p.deathReason === "EXPLODE") {
+            cardStyle = "seat-explode-dead";
+            badgeHtml = '<span class="absolute -top-1.5 -right-1 text-[11px] bg-red-950 border border-red-600 rounded-full w-4 h-4 flex items-center justify-center">💥</span>';
+            statusText = "自爆";
+            textStyle = "text-red-400 font-bold";
           }
         }
 
@@ -615,6 +672,23 @@
 
       checkPoliceBadgeStatus();
 
+      const alivePlayers = gameState.players.filter(p => p.isAlive);
+      
+      // 更新狼人自爆與技能下拉選單
+      const wolfSelect = document.getElementById("wolfExplodeSelect");
+      if (wolfSelect) {
+        wolfSelect.innerHTML = alivePlayers.map(p => `
+          <option value="${p.seat}">${p.seat} 號玩家</option>
+        `).join('');
+      }
+
+      const skillSelect = document.getElementById("skillTargetSelect");
+      if (skillSelect) {
+        skillSelect.innerHTML = alivePlayers.map(p => `
+          <option value="${p.seat}">${p.seat} 號玩家</option>
+        `).join('');
+      }
+
       if (isPoliceMode) {
         renderPoliceDrawerControls();
       } else {
@@ -664,6 +738,70 @@
 
       pushStateToFirebase();
       alert(`🔥 ${oldPolice} 號選擇撕毀警徽！警徽作廢，本局後續投票皆為 1 票。`);
+    }
+
+    // 狼人自爆操作
+    function handleWolfExplode() {
+      const select = document.getElementById("wolfExplodeSelect");
+      const wolfSeat = parseInt(select.value);
+      if (!wolfSeat) return;
+
+      if (!confirm(`⚠️ 確定要確認 ${wolfSeat} 號玩家【狼人自爆】嗎？白天將直接中斷並進入天黑！`)) return;
+
+      const p = gameState.players.find(x => x.seat === wolfSeat);
+      if (p) {
+        p.isAlive = false;
+        p.deathReason = "EXPLODE";
+      }
+
+      if (!gameState.history) gameState.history = [];
+      gameState.history.push({
+        title: `D${gameState.day} 狼人自爆`,
+        badgeText: `💥 ${wolfSeat} 號自爆`,
+        votes: {}
+      });
+
+      gameState.tempVotes = {};
+      gameState.selectedTarget = null;
+      currentHistoryViewIndex = gameState.history.length - 1;
+
+      // 如果自爆的是警長，需處置警徽
+      checkPoliceBadgeStatus();
+      pushStateToFirebase();
+
+      if (confirm(`💥 ${wolfSeat} 號狼人已自爆出局！\n是否直接進入第 ${gameState.day + 1} 天黑夜/白天？`)) {
+        enterNextDayCycle(true);
+      } else {
+        alert(`💥 ${wolfSeat} 號狼人已自爆出局，看板已同步。`);
+      }
+    }
+
+    // 技能帶走操作
+    function handleSkillKill() {
+      const select = document.getElementById("skillTargetSelect");
+      const targetSeat = parseInt(select.value);
+      if (!targetSeat) return;
+
+      const reason = prompt(`請輸入連帶帶走的技能原因（例如：獵人槍殺、狼美人魅惑、騎士決鬥）：`, "獵人開槍");
+      if (reason === null) return;
+
+      const p = gameState.players.find(x => x.seat === targetSeat);
+      if (p) {
+        p.isAlive = false;
+        p.deathReason = "SKILL";
+      }
+
+      if (!gameState.history) gameState.history = [];
+      gameState.history.push({
+        title: `D${gameState.day} 技能帶走`,
+        badgeText: `🎯 ${targetSeat} 號出局 (${reason})`,
+        votes: {}
+      });
+
+      currentHistoryViewIndex = gameState.history.length - 1;
+      checkPoliceBadgeStatus();
+      pushStateToFirebase();
+      alert(`🎯 ${targetSeat} 號玩家因【${reason}】連帶出局！`);
     }
 
     function renderPoliceDrawerControls() {
@@ -786,22 +924,39 @@
       if (p.isAlive) {
         p.isAlive = false;
         p.deathReason = "NIGHT";
-
-        // 出局時自動從即時票型中剔除（移除受票目標與投票資格）
-        if (gameState.tempVotes) {
-          delete gameState.tempVotes[seat];
-          Object.keys(gameState.tempVotes).forEach(k => {
-            gameState.tempVotes[k] = gameState.tempVotes[k].filter(s => s !== seat);
-          });
-        }
-        if (gameState.selectedTarget === seat) {
-          gameState.selectedTarget = null;
-        }
+        // 詢問是否有連帶出局
+        promptChainedSkillDeath(seat, "夜間倒牌");
       } else {
         p.isAlive = true;
         p.deathReason = null;
       }
       pushStateToFirebase();
+    }
+
+    // 提示連帶技能出局流程
+    function promptChainedSkillDeath(triggerSeat, triggerPhaseName) {
+      setTimeout(() => {
+        if (confirm(`【${triggerSeat} 號玩家 (${triggerPhaseName})】出局！\n是否有發動技能連帶帶走其他玩家（如獵人開槍/狼美人魅惑）？`)) {
+          const aliveOptions = gameState.players.filter(p => p.isAlive).map(p => p.seat).join('、');
+          const targetStr = prompt(`請輸入被連帶帶走的玩家號碼：\n（目前存活：${aliveOptions}）`);
+          const targetSeat = parseInt(targetStr);
+          if (targetSeat && gameState.players.find(p => p.seat === targetSeat && p.isAlive)) {
+            const skillTarget = gameState.players.find(p => p.seat === targetSeat);
+            skillTarget.isAlive = false;
+            skillTarget.deathReason = "SKILL";
+
+            if (!gameState.history) gameState.history = [];
+            gameState.history.push({
+              title: `D${gameState.day} 技能連帶`,
+              badgeText: `🎯 ${triggerSeat}號帶走${targetSeat}號`,
+              votes: {}
+            });
+            alert(`🎯 已標記：${targetSeat} 號被 ${triggerSeat} 號連帶帶走！`);
+            checkPoliceBadgeStatus();
+            pushStateToFirebase();
+          }
+        }
+      }, 200);
     }
 
     function confirmPoliceElection() {
@@ -835,7 +990,7 @@
       currentHistoryViewIndex = -1;
 
       pushStateToFirebase();
-      alert(`🎉 警長競選完成！票型已封存至雲端，進入【第 1 天 白天放逐】。`);
+      alert(`🎉 警長競選完成！票型已封存至雲端，進入【第 1 天 白天】。`);
     }
 
     function confirmExileVote() {
@@ -871,17 +1026,17 @@
         votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
       });
 
-      // 封存當前放逐紀錄後，清空當前輪次的計票狀態
-      gameState.tempVotes = {};
-      gameState.selectedTarget = null;
       currentHistoryViewIndex = gameState.history.length - 1;
-
       pushStateToFirebase();
+
+      if (exiledSeat) {
+        promptChainedSkillDeath(exiledSeat, "白天放逐");
+      }
       alert(`✅ 第 ${gameState.day} 天放逐票型已同步封存！${exiledSeat ? `\${exiledSeat} 號玩家出局。` : '平票無人出局。'}`);
     }
 
-    function enterNextDayCycle() {
-      if (!confirm(`確定要結算今天並進入【第 ${gameState.day + 1} 天】嗎？`)) return;
+    function enterNextDayCycle(auto = false) {
+      if (!auto && !confirm(`確定要結算今天並進入【第 ${gameState.day + 1} 天】嗎？`)) return;
 
       gameState.day += 1;
       gameState.phase = "DAY_EXILE";
