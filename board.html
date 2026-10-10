@@ -258,7 +258,10 @@
       </div>
 
       <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
-        <span class="text-xs font-bold text-gray-200 block mb-1.5">步驟 1：登記上警名單 (點選切換)</span>
+        <div class="flex justify-between items-center mb-1.5">
+          <span class="text-xs font-bold text-gray-200">步驟 1：登記上警名單 (點選切換)</span>
+          <span class="text-[10px] text-amber-400" id="preserveHintText"></span>
+        </div>
         <div class="grid grid-cols-6 gap-1" id="drawerCandidateToggleGrid"></div>
       </div>
 
@@ -407,7 +410,7 @@
       phase: "POLICE_ELECTION",
       policeSeat: null,
       isBadgeTorn: false,
-      consecutiveExplodeCount: 0, // 警長競選自爆累計次數
+      consecutiveExplodeCount: 0,
       players: Array.from({ length: 12 }, (_, i) => ({
         seat: i + 1,
         isAlive: true,
@@ -469,7 +472,7 @@
       let stageDesc = "";
       if (gameState.phase === "POLICE_ELECTION") {
         if (gameState.consecutiveExplodeCount === 1) {
-          stageDesc = `第 ${gameState.day} 天 警長競選 (昨日自爆補選)`;
+          stageDesc = `第 ${gameState.day} 天 警長補選 (延續昨日上警名單)`;
         } else {
           stageDesc = `第 ${gameState.day} 天 警長競選`;
         }
@@ -521,7 +524,9 @@
     }
 
     function renderSeatsStatus() {
-      const candidates = gameState.players.filter(p => p.isCandidate);
+      // 警上候選人必須存活且標記為 isCandidate
+      const candidates = gameState.players.filter(p => p.isCandidate && p.isAlive);
+      // 警下投票人必須存活且非候選人
       const voters = gameState.players.filter(p => !p.isCandidate && p.isAlive);
 
       document.getElementById("candidateCountLabel").innerText = `${candidates.length} 人上警`;
@@ -709,10 +714,15 @@
       }
 
       const explodeLabel = document.getElementById("policeExplodeCountLabel");
+      const preserveHint = document.getElementById("preserveHintText");
       if (explodeLabel) {
         const cnt = gameState.consecutiveExplodeCount || 0;
         explodeLabel.innerText = `自爆計數：${cnt} / 2 次 (${cnt === 0 ? '首輪正常' : '已自爆1次，再爆即吞警徽'})`;
         explodeLabel.className = cnt > 0 ? "text-[10px] text-rose-400 font-bold animate-pulse" : "text-[10px] text-amber-300 font-bold";
+        
+        if (preserveHint) {
+          preserveHint.innerText = cnt === 1 ? "★ 已保留昨日上警名單" : "";
+        }
       }
 
       const wolfSelect = document.getElementById("wolfExplodeSelect");
@@ -780,7 +790,7 @@
       alert(`🔥 ${oldPolice} 號選擇撕毀警徽！警徽作廢，本局後續投票皆為 1 票。`);
     }
 
-    // 核心設計：警長競選自爆處理
+    // 核心設計：警長競選自爆處理 (保留第一天上警名單)
     function handlePoliceWolfExplode() {
       const select = document.getElementById("policeWolfExplodeSelect");
       const wolfSeat = parseInt(select.value);
@@ -791,7 +801,7 @@
 
       const confirmMsg = isSecondExplode 
         ? `⚠️ 注意：這是第二次在競選階段自爆！\n確定要由【${wolfSeat} 號玩家】自爆嗎？\n確認後將正式【吞警徽（警徽流失）】，天亮直接進入第 ${gameState.day + 1} 天白天放逐！`
-        : `⚠️ 確定要由【${wolfSeat} 號玩家】在競選階段自爆嗎？\n天亮將進入【第 ${gameState.day + 1} 天】並繼續進行警長競選環節。`;
+        : `⚠️ 確定要由【${wolfSeat} 號玩家】在競選階段自爆嗎？\n天亮將進入【第 ${gameState.day + 1} 天】，系統將完整保留第一天的上警名單繼續競選。`;
 
       if (!confirm(confirmMsg)) return;
 
@@ -799,28 +809,24 @@
       if (p) {
         p.isAlive = false;
         p.deathReason = "EXPLODE";
+        p.isCandidate = false; // 自爆者退出候選人名單
       }
 
       if (!gameState.history) gameState.history = [];
 
       if (!isSecondExplode) {
-        // 第一天自爆：累計 1 次，第二天繼續競選
+        // 第一天自爆：累計 1 次，第二天繼續競選，保留其他候選人名單
         gameState.consecutiveExplodeCount = 1;
         gameState.history.push({
           title: `D${gameState.day} 警選自爆`,
-          badgeText: `💥 ${wolfSeat}號自爆 (保留警徽，明日補選)`,
+          badgeText: `💥 ${wolfSeat}號自爆 (保留警徽，延續名單補選)`,
           votes: {}
         });
 
         gameState.day += 1;
         gameState.phase = "POLICE_ELECTION"; // 保持競選階段
-        // 重置所有人的上警標記，隔日天亮重新上警
-        gameState.players.forEach(pl => {
-          pl.isCandidate = false;
-          pl.hasDropped = false;
-        });
 
-        alert(`💥 ${wolfSeat} 號狼人競選自爆出局！\n天亮進入【第 ${gameState.day} 天】，將重新進行警長競選環節。若今天再次自爆，則警徽正式流失！`);
+        alert(`💥 ${wolfSeat} 號狼人競選自爆出局！\n天亮進入【第 ${gameState.day} 天】，已保留第 1 天其餘玩家的上警名單繼續競選。若今天再次自爆，則警徽正式流失！`);
       } else {
         // 第二天連續自爆：累計達到 2 次，警徽流失！
         gameState.consecutiveExplodeCount = 2;
@@ -922,7 +928,7 @@
       `).join('');
 
       const candContainer = document.getElementById("drawerPoliceTargetCandidatesContainer");
-      const activeCandidates = gameState.players.filter(p => p.isCandidate && !p.hasDropped);
+      const activeCandidates = gameState.players.filter(p => p.isCandidate && !p.hasDropped && p.isAlive);
       
       if (activeCandidates.length === 0) {
         candContainer.innerHTML = `<span class="text-xs text-gray-500">無候選人</span>`;
