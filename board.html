@@ -556,9 +556,7 @@
       // 候選人區：顯示所有存活且上警者
       const candidates = gameState.players.filter(p => p.isCandidate && p.isAlive);
       
-      // 具備投票權選民判定：
-      // 首輪：!isCandidate && isAlive
-      // PK 輪次：isAlive && (原本不在警下 || 已退水) && 不在 pkCandidates 中
+      // 具備投票權選民判定
       const voters = gameState.players.filter(p => {
         if (!p.isAlive) return false;
         if (!isPkMode) {
@@ -672,6 +670,7 @@
       }).join('');
     }
 
+    // 核心修復：正確判定歷史與即時的警徽持有者，確保歷史票數不被後續動作篡改
     function renderLottoVoteDisplay() {
       const container = document.getElementById("lottoVotesContainer");
       const titleEl = document.getElementById("voteSummaryTitle");
@@ -679,6 +678,7 @@
 
       let currentDisplayVotes = {};
       let isHistoryView = (currentHistoryViewIndex !== -1);
+      let effectiveBadgeHolder = null; // 當輪真正生效的警長席位
 
       if (isHistoryView) {
         const histItem = gameState.history[currentHistoryViewIndex];
@@ -686,8 +686,17 @@
         titleEl.innerText = `歷史紀錄：${histItem.title}`;
         badgeEl.innerText = histItem.badgeText || "已結算";
         badgeEl.className = "text-xs bg-amber-950 text-amber-300 border border-amber-700 px-2 py-0.5 rounded font-bold";
+        
+        // 若歷史紀錄封存了當下的警長則使用之；相容舊紀錄 fallback
+        if (histItem.badgeHolder !== undefined) {
+          effectiveBadgeHolder = histItem.badgeHolder;
+        } else {
+          effectiveBadgeHolder = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
+        }
       } else {
         currentDisplayVotes = gameState.tempVotes || {};
+        effectiveBadgeHolder = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
+
         if (gameState.phase === "POLICE_ELECTION") {
           titleEl.innerText = `即時：第 ${gameState.day} 天 警長競選首輪票型`;
         } else if (gameState.phase === "POLICE_PK") {
@@ -717,17 +726,23 @@
         let voterBallsHtml = "";
 
         voters.forEach(vSeat => {
-          const isPolice = (!gameState.isBadgeTorn && vSeat === gameState.policeSeat);
-          // 警選與 PK 輪次無警長 1.5 票加權
-          if (gameState.phase !== "POLICE_ELECTION" && gameState.phase !== "POLICE_PK" && isPolice) {
+          // 判定該輪次中此選民是否具備警長身份
+          const isPolice = (effectiveBadgeHolder !== null && vSeat === effectiveBadgeHolder);
+          
+          // 警長競選與 PK 輪次全場皆為 1 票制，不享受 1.5 票加權
+          const isElectionStage = isHistoryView
+            ? (gameState.history[currentHistoryViewIndex].title.includes("警選") || gameState.history[currentHistoryViewIndex].title.includes("警長競選"))
+            : (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
+
+          if (!isElectionStage && isPolice) {
             totalPoints += 1.5;
           } else {
             totalPoints += 1;
           }
 
           const vLabel = (vSeat < 10) ? ("0" + vSeat) : String(vSeat);
-          const ballClass = isPolice ? "ball-police-voter" : "ball-voter";
-          const crownHtml = isPolice ? '<span class="absolute -top-2 -right-1 text-[11px]">👑</span>' : '';
+          const ballClass = (!isElectionStage && isPolice) ? "ball-police-voter" : "ball-voter";
+          const crownHtml = (!isElectionStage && isPolice) ? '<span class="absolute -top-2 -right-1 text-[11px]">👑</span>' : '';
 
           voterBallsHtml += '<div class="lotto-ball ' + ballClass + '">' + crownHtml + vLabel + '</div>';
         });
@@ -887,7 +902,8 @@
         gameState.history.push({
           title: `D${gameState.day} 警選自爆`,
           badgeText: `💥 ${wolfSeat}號自爆 (保留警徽，延續名單補選)`,
-          votes: {}
+          votes: {},
+          badgeHolder: null
         });
 
         gameState.day += 1;
@@ -903,7 +919,8 @@
         gameState.history.push({
           title: `D${gameState.day} 警選二次自爆`,
           badgeText: `💥 ${wolfSeat}號自爆 (警徽流失吞警徽)`,
-          votes: {}
+          votes: {},
+          badgeHolder: null
         });
 
         gameState.day += 1;
@@ -941,7 +958,8 @@
       gameState.history.push({
         title: `D${gameState.day} 白天自爆`,
         badgeText: `💥 ${wolfSeat} 號自爆`,
-        votes: {}
+        votes: {},
+        badgeHolder: (!gameState.isBadgeTorn) ? gameState.policeSeat : null
       });
 
       gameState.tempVotes = {};
@@ -976,7 +994,8 @@
       gameState.history.push({
         title: `D${gameState.day} 技能帶走`,
         badgeText: `🎯 ${targetSeat} 號出局 (${reason})`,
-        votes: {}
+        votes: {},
+        badgeHolder: (!gameState.isBadgeTorn) ? gameState.policeSeat : null
       });
 
       currentHistoryViewIndex = gameState.history.length - 1;
@@ -985,7 +1004,6 @@
       alert(`🎯 ${targetSeat} 號玩家因【${reason}】連帶出局！`);
     }
 
-    // 核心：警長競選與 PK 抽屜面板控制
     function renderPoliceDrawerControls() {
       const isPkMode = (gameState.phase === "POLICE_PK");
       const pkCandidates = gameState.pkCandidates || [];
@@ -1029,10 +1047,8 @@
       let activeCandidates = [];
 
       if (!isPkMode) {
-        // 首輪：所有存活且上警且未退水者
         activeCandidates = gameState.players.filter(p => p.isCandidate && !p.hasDropped && p.isAlive);
       } else {
-        // PK 輪次：僅限 pkCandidates 中的玩家
         activeCandidates = gameState.players.filter(p => pkCandidates.includes(p.seat) && p.isAlive);
       }
       
@@ -1050,7 +1066,7 @@
         `;
       }
 
-      // 投票選民容器：嚴格判定誰能投票
+      // 投票選民容器
       const votersGrid = document.getElementById("drawerPoliceEligibleVotersGrid");
       votersGrid.innerHTML = gameState.players.map(p => {
         let isEligible = false;
@@ -1060,7 +1076,6 @@
           isEligible = false;
           disableReason = "出局";
         } else if (!isPkMode) {
-          // 首輪：警下玩家有投票權
           if (!p.isCandidate) {
             isEligible = true;
           } else {
@@ -1068,10 +1083,6 @@
             disableReason = p.hasDropped ? "已退水" : "在警上";
           }
         } else {
-          // PK 輪次：
-          // 1. PK 候選人不能投
-          // 2. 警上未退水但非最高票者不能投（無投票權）
-          // 3. 原始警下玩家與已退水玩家可以投
           if (pkCandidates.includes(p.seat)) {
             isEligible = false;
             disableReason = "PK候選";
@@ -1106,11 +1117,9 @@
       }).join('');
     }
 
-    // 點擊切換上警 / 退水狀態
     function toggleCandidateOrDrop(seat) {
       const p = gameState.players.find(x => x.seat === seat);
       if (gameState.phase === "POLICE_PK") {
-        // PK 模式下，僅允許非 PK 候選人的上警玩家切換退水
         if ((gameState.pkCandidates || []).includes(seat)) {
           alert("⚠️ PK 候選人不可在 PK 發言階段退水！");
           return;
@@ -1122,15 +1131,14 @@
         return;
       }
 
-      // 首輪正常切換上警
       if (!p.isCandidate) {
         p.isCandidate = true;
         p.hasDropped = false;
       } else if (!p.hasDropped) {
-        p.hasDropped = true; // 第一次點變退水
+        p.hasDropped = true;
       } else {
         p.isCandidate = false;
-        p.hasDropped = false; // 第二次點完全不上警
+        p.hasDropped = false;
       }
       pushStateToFirebase();
     }
@@ -1228,7 +1236,8 @@
             gameState.history.push({
               title: `D${gameState.day} 技能連帶`,
               badgeText: `🎯 ${triggerSeat}號帶走${targetSeat}號`,
-              votes: {}
+              votes: {},
+              badgeHolder: (!gameState.isBadgeTorn) ? gameState.policeSeat : null
             });
             alert(`🎯 已標記：${targetSeat} 號被 ${triggerSeat} 號連帶帶走！`);
             checkPoliceBadgeStatus();
@@ -1238,11 +1247,9 @@
       }, 200);
     }
 
-    // 核心：警長競選與 PK 投票結算判斷
     function confirmPoliceElection() {
       const isPkMode = (gameState.phase === "POLICE_PK");
       
-      // 統計所有非棄票候選人得票
       let voteCounts = {};
       Object.entries(gameState.tempVotes || {}).forEach(([cand, voters]) => {
         if (cand != 0 && voters.length > 0) {
@@ -1263,13 +1270,11 @@
       });
 
       if (!isPkMode) {
-        // --- 首輪警長投票結算 ---
         if (topCandidates.length === 0 || maxVotes === 0) {
           alert("⚠️ 所有人都棄票或尚未輸入任何有效投票！無法結算。");
           return;
         }
 
-        // 首輪平票判定 ➔ 進入 PK 輪次
         if (topCandidates.length > 1) {
           if (!confirm(`⚖️ 檢測到平票！【${topCandidates.join(' 號、')} 號】同獲 ${maxVotes} 票最高票！\n\n確定進入【警長競選 PK 輪次】嗎？\n（第一輪票型將自動封存，未退水玩家在 PK 輪次將喪失投票權）`)) return;
 
@@ -1277,10 +1282,10 @@
           gameState.history.push({
             title: `D${gameState.day} 警選首輪(平票)`,
             badgeText: `⚖️ ${topCandidates.join('、')}號平票 (${maxVotes}票)`,
-            votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
+            votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+            badgeHolder: null
           });
 
-          // 進入 PK 階段
           gameState.phase = "POLICE_PK";
           gameState.pkCandidates = topCandidates;
           gameState.tempVotes = {};
@@ -1292,7 +1297,6 @@
           return;
         }
 
-        // 首輪順利產生獲勝者
         const winnerSeat = topCandidates[0];
         gameState.policeSeat = winnerSeat;
         gameState.isBadgeTorn = false;
@@ -1303,7 +1307,8 @@
         gameState.history.push({
           title: `D${gameState.day} 警長競選`,
           badgeText: `👑 ${winnerSeat}號當選警長 (${maxVotes}票)`,
-          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
+          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+          badgeHolder: null
         });
 
         gameState.phase = "DAY_EXILE";
@@ -1315,13 +1320,11 @@
         alert(`🎉 恭喜！${winnerSeat} 號玩家以 ${maxVotes} 票當選警長！\n進入【第 ${gameState.day} 天 白天放逐對局】。`);
 
       } else {
-        // --- PK 決選輪次結算 ---
         if (topCandidates.length === 0 || maxVotes === 0) {
           alert("⚠️ PK 輪次無有效得票！");
           return;
         }
 
-        // PK 二次平票判定 ➔ 警徽流失（吞警徽）
         if (topCandidates.length > 1) {
           alert(`🔥 PK 輪次再次平票！【${topCandidates.join(' 號與 ')} 號】同獲 ${maxVotes} 票！\n觸發規則【警徽流失】！\n本局不再有警長，所有人回歸 1 票制！`);
 
@@ -1329,11 +1332,12 @@
           gameState.history.push({
             title: `D${gameState.day} 警選PK(二次平票)`,
             badgeText: `🔥 二次平票 (警徽流失)`,
-            votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
+            votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+            badgeHolder: null
           });
 
           gameState.policeSeat = null;
-          gameState.isBadgeTorn = true; // 警徽流失
+          gameState.isBadgeTorn = true;
           gameState.phase = "DAY_EXILE";
           gameState.pkCandidates = [];
           gameState.tempVotes = {};
@@ -1344,7 +1348,6 @@
           return;
         }
 
-        // PK 順利產生獲勝者
         const winnerSeat = topCandidates[0];
         gameState.policeSeat = winnerSeat;
         gameState.isBadgeTorn = false;
@@ -1355,7 +1358,8 @@
         gameState.history.push({
           title: `D${gameState.day} 警選PK決選`,
           badgeText: `👑 ${winnerSeat}號PK勝出 (${maxVotes}票)`,
-          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
+          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+          badgeHolder: null
         });
 
         gameState.phase = "DAY_EXILE";
@@ -1368,15 +1372,19 @@
       }
     }
 
+    // 核心修復：封存歷史時鎖定當下的 badgeHolder
     function confirmExileVote() {
       let maxPoints = 0;
       let exiledSeat = null;
+
+      // 取得結算當下真正持有警徽的玩家席位
+      const activePoliceAtThisVote = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
 
       Object.entries(gameState.tempVotes || {}).forEach(([target, voters]) => {
         if (target != 0) {
           let points = 0;
           voters.forEach(v => {
-            const isPolice = (!gameState.isBadgeTorn && v === gameState.policeSeat);
+            const isPolice = (activePoliceAtThisVote !== null && v === activePoliceAtThisVote);
             points += (isPolice ? 1.5 : 1);
           });
           if (points > maxPoints) {
@@ -1400,7 +1408,8 @@
       gameState.history.push({
         title: `D${gameState.day} 白天放逐`,
         badgeText: exiledSeat ? `❌ ${exiledSeat}號放逐出局 (${maxPoints}票)` : "平票無人出局",
-        votes: JSON.parse(JSON.stringify(gameState.tempVotes || {}))
+        votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+        badgeHolder: activePoliceAtThisVote // ★ 鎖定該輪投票當時的警長，防止後續移交/撕徽變更票權
       });
 
       currentHistoryViewIndex = gameState.history.length - 1;
