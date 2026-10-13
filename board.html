@@ -204,6 +204,21 @@
         </div>
       </div>
 
+      <!-- 模組開關配置列 (法官專屬自由開關) -->
+      <div class="mb-2.5 p-2 bg-gray-800/80 border border-gray-700 rounded-lg flex items-center justify-between">
+        <span class="text-[11px] font-bold text-gray-300 flex items-center gap-1">
+          <i class="fa-solid fa-sliders text-indigo-400"></i> 特殊角色模組：
+        </span>
+        <div class="flex gap-1.5">
+          <button id="toggleTricksterBtn" onclick="toggleModuleSetting('enableTrickster')" class="px-2 py-0.5 rounded text-[10px] font-bold border transition bg-gray-900 text-gray-400 border-gray-700">
+            🎭 詭術師：關
+          </button>
+          <button id="togglePrinceBtn" onclick="toggleModuleSetting('enablePrince')" class="px-2 py-0.5 rounded text-[10px] font-bold border transition bg-gray-900 text-gray-400 border-gray-700">
+            👑 定序王子：關
+          </button>
+        </div>
+      </div>
+
       <!-- 警徽處置操作卡片 -->
       <div id="policeBadgeTransferBox" class="mb-3 p-2.5 bg-amber-950/40 border border-amber-500/80 rounded-lg hidden">
         <div class="flex justify-between items-center mb-1.5">
@@ -272,6 +287,30 @@
 
       <!-- 模式 2：白天放逐與即時操作模組 -->
       <div id="drawerExileModule" class="space-y-2.5 hidden">
+        
+        <!-- 特殊角色卡片：詭術師夜間置換 (若開啟則顯示) -->
+        <div id="tricksterControlBox" class="bg-purple-950/30 p-2.5 rounded-lg border border-purple-800/70 hidden">
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="text-xs font-bold text-purple-300 flex items-center gap-1">
+              <i class="fa-solid fa-masks-theater text-purple-400"></i> 🎭 詭術師夜間置換紀錄 (法官私密登記)
+            </span>
+            <span class="text-[10px] text-purple-400 font-mono" id="tricksterStatusText">未置換</span>
+          </div>
+          <div class="flex items-center gap-1.5 mb-1.5">
+            <select id="tricksterSeatASelect" class="bg-gray-800 border border-gray-600 rounded p-1 text-xs text-purple-200 flex-1 outline-none"></select>
+            <span class="text-xs text-purple-400 font-bold">⇄</span>
+            <select id="tricksterSeatBSelect" class="bg-gray-800 border border-gray-600 rounded p-1 text-xs text-purple-200 flex-1 outline-none"></select>
+            <button onclick="saveTricksterSwap()" class="bg-purple-700 hover:bg-purple-600 text-white font-bold px-2 py-1 rounded text-xs transition">
+              儲存
+            </button>
+          </div>
+          <div class="flex justify-end">
+            <button onclick="clearTricksterSwap()" class="text-[10px] text-gray-400 hover:text-rose-400 underline">
+              清空/本晚空換
+            </button>
+          </div>
+        </div>
+
         <!-- 白天狼人自爆操作區 -->
         <div class="bg-rose-950/30 p-2.5 rounded-lg border border-rose-800/80">
           <div class="flex justify-between items-center mb-1.5">
@@ -315,18 +354,29 @@
 
         <!-- 放逐投票計票 -->
         <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
-          <span class="text-xs font-bold text-gray-200 block mb-1">放逐計票 (先選被投人 ➔ 點投票選民)</span>
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-xs font-bold text-gray-200 block" id="exileSectionTitle">放逐計票 (先選被投人 ➔ 點投票選民)</span>
+            <span id="princeStatusTag" class="text-[10px] font-bold text-amber-400 hidden">⏳ 王子重投輪次</span>
+          </div>
           <div class="text-[11px] text-amber-300 mb-1">選擇放逐目標：</div>
           <div class="flex flex-wrap gap-1.5 mb-2" id="drawerExileTargetContainer"></div>
           <div class="text-[11px] text-emerald-300 mb-1">存活選民投票 (警長自動計 1.5 票)：</div>
           <div class="grid grid-cols-6 gap-1 mb-2" id="drawerExileVotersGrid"></div>
 
-          <div class="flex gap-2 mt-2">
-            <button onclick="confirmExileVote()" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded text-xs shadow transition">
-              確認放逐出局並封存票型
-            </button>
-            <button onclick="enterNextDayCycle()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded text-xs shadow transition">
-              進入下一天 ➔
+          <!-- 放逐結算動作按鈕群 -->
+          <div class="space-y-1.5 mt-2">
+            <div class="flex gap-2">
+              <button onclick="confirmExileVote()" id="confirmExileBtn" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded text-xs shadow transition">
+                確認放逐出局並封存票型
+              </button>
+              <button onclick="enterNextDayCycle()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded text-xs shadow transition">
+                進入下一天 ➔
+              </button>
+            </div>
+            
+            <!-- 定序王子翻牌專用按鈕 (僅模組開啟且當天首輪時顯示) -->
+            <button id="princeTriggerBtn" onclick="handlePrinceReversal()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-1.5 rounded text-xs shadow transition hidden">
+              👑 定序王子翻牌發動【逆轉時空】(票型作廢並重投)
             </button>
           </div>
         </div>
@@ -429,7 +479,15 @@
       policeSeat: null,
       isBadgeTorn: false,
       consecutiveExplodeCount: 0,
-      pkCandidates: [], // 紀錄平票進 PK 的候選人座位號碼，例如 [1, 2]
+      pkCandidates: [],
+      // 特殊板子設定與擴充狀態
+      modules: {
+        enableTrickster: false,
+        enablePrince: false
+      },
+      tricksterSwap: null,     // { seatA: 3, seatB: 7 }
+      princeUsed: false,        // 定序王子全場限用一次
+      isPrinceRevolving: false, // 當前是否為定序時光倒流後的重投輪次
       players: Array.from({ length: 12 }, (_, i) => ({
         seat: i + 1,
         isAlive: true,
@@ -457,6 +515,7 @@
           if (!gameState.tempVotes) gameState.tempVotes = {};
           if (gameState.consecutiveExplodeCount === undefined) gameState.consecutiveExplodeCount = 0;
           if (!gameState.pkCandidates) gameState.pkCandidates = [];
+          if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
         } else {
           if (isAdmin) pushStateToFirebase();
         }
@@ -475,6 +534,12 @@
     function pushStateToFirebase() {
       if (!isAdmin) return;
       matchRef.set(gameState);
+    }
+
+    function toggleModuleSetting(moduleKey) {
+      if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
+      gameState.modules[moduleKey] = !gameState.modules[moduleKey];
+      pushStateToFirebase();
     }
 
     function renderAll() {
@@ -499,7 +564,11 @@
       } else if (gameState.phase === "POLICE_PK") {
         stageDesc = `第 ${gameState.day} 天 警長競選 ⚖️ 平票 PK 決選`;
       } else {
-        stageDesc = `第 ${gameState.day} 天 白天放逐對局`;
+        if (gameState.isPrinceRevolving) {
+          stageDesc = `第 ${gameState.day} 天 白天放逐 ⏳ 定序王子時光倒流重新投票`;
+        } else {
+          stageDesc = `第 ${gameState.day} 天 白天放逐對局`;
+        }
       }
 
       document.getElementById("currentStageText").innerText = stageDesc;
@@ -533,7 +602,9 @@
       let currentTitle = "";
       if (gameState.phase === "POLICE_ELECTION") currentTitle = `即時: D${gameState.day}警選`;
       else if (gameState.phase === "POLICE_PK") currentTitle = `即時: D${gameState.day}警長PK`;
-      else currentTitle = `即時: D${gameState.day}放逐`;
+      else {
+        currentTitle = gameState.isPrinceRevolving ? `即時: D${gameState.day}放逐重投` : `即時: D${gameState.day}放逐`;
+      }
 
       tabsHtml += `
         <button onclick="viewHistory(-1)" class="px-2.5 py-1 rounded font-bold whitespace-nowrap transition border ${isCurrentActive ? 'bg-blue-600 text-white border-blue-400' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'}">
@@ -553,10 +624,8 @@
       const isPkMode = (gameState.phase === "POLICE_PK");
       const pkCandidates = gameState.pkCandidates || [];
 
-      // 候選人區：顯示所有存活且上警者
       const candidates = gameState.players.filter(p => p.isCandidate && p.isAlive);
       
-      // 具備投票權選民判定
       const voters = gameState.players.filter(p => {
         if (!p.isAlive) return false;
         if (!isPkMode) {
@@ -670,7 +739,7 @@
       }).join('');
     }
 
-    // 核心修復：正確判定歷史與即時的警徽持有者，確保歷史票數不被後續動作篡改
+    // 彩球由小到大排序 (核心實現)
     function renderLottoVoteDisplay() {
       const container = document.getElementById("lottoVotesContainer");
       const titleEl = document.getElementById("voteSummaryTitle");
@@ -678,7 +747,7 @@
 
       let currentDisplayVotes = {};
       let isHistoryView = (currentHistoryViewIndex !== -1);
-      let effectiveBadgeHolder = null; // 當輪真正生效的警長席位
+      let effectiveBadgeHolder = null;
 
       if (isHistoryView) {
         const histItem = gameState.history[currentHistoryViewIndex];
@@ -687,7 +756,6 @@
         badgeEl.innerText = histItem.badgeText || "已結算";
         badgeEl.className = "text-xs bg-amber-950 text-amber-300 border border-amber-700 px-2 py-0.5 rounded font-bold";
         
-        // 若歷史紀錄封存了當下的警長則使用之；相容舊紀錄 fallback
         if (histItem.badgeHolder !== undefined) {
           effectiveBadgeHolder = histItem.badgeHolder;
         } else {
@@ -702,34 +770,41 @@
         } else if (gameState.phase === "POLICE_PK") {
           titleEl.innerText = `即時：第 ${gameState.day} 天 警長 PK 決選票型`;
         } else {
-          titleEl.innerText = `即時：第 ${gameState.day} 天 放逐票型`;
+          titleEl.innerText = gameState.isPrinceRevolving 
+            ? `即時：第 ${gameState.day} 天 放逐重投票型 (定序倒流)` 
+            : `即時：第 ${gameState.day} 天 放逐票型`;
         }
         badgeEl.innerText = "即時開票中";
         badgeEl.className = "text-xs bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold";
       }
 
-      const targetKeys = Object.keys(currentDisplayVotes);
-      if (targetKeys.length === 0) {
+      const allKeys = Object.keys(currentDisplayVotes).map(k => parseInt(k));
+      if (allKeys.length === 0) {
         container.innerHTML = `<div class="text-gray-500 text-xs text-center py-6">此輪尚無投票紀錄</div>`;
         return;
       }
 
+      // 1. 受票目標由小到大排序 (0號棄票固定置底)
+      const sortedTargets = allKeys.sort((a, b) => {
+        if (a === 0) return 1;
+        if (b === 0) return -1;
+        return a - b;
+      });
+
       let cardsHtml = "";
-      targetKeys.forEach(targetKey => {
-        const voters = currentDisplayVotes[targetKey] || [];
-        if (voters.length === 0) return;
+      sortedTargets.forEach(targetSeatNum => {
+        const rawVoters = currentDisplayVotes[targetSeatNum] || [];
+        if (rawVoters.length === 0) return;
 
-        const targetSeatNum = parseInt(targetKey);
+        // 2. 投票人彩球一律依號碼「由小到大」排序
+        const sortedVoters = rawVoters.slice().sort((a, b) => a - b);
+
         const isAbstain = (targetSeatNum === 0);
-
         let totalPoints = 0;
         let voterBallsHtml = "";
 
-        voters.forEach(vSeat => {
-          // 判定該輪次中此選民是否具備警長身份
+        sortedVoters.forEach(vSeat => {
           const isPolice = (effectiveBadgeHolder !== null && vSeat === effectiveBadgeHolder);
-          
-          // 警長競選與 PK 輪次全場皆為 1 票制，不享受 1.5 票加權
           const isElectionStage = isHistoryView
             ? (gameState.history[currentHistoryViewIndex].title.includes("警選") || gameState.history[currentHistoryViewIndex].title.includes("警長競選"))
             : (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
@@ -762,7 +837,7 @@
                   ${targetTitle}
                 </div>
                 <div class="text-[11px] font-mono text-gray-400">
-                  得票：<span class="text-amber-400 font-bold">${totalPoints}</span> 票 (${voters.length}人)
+                  得票：<span class="text-amber-400 font-bold">${totalPoints}</span> 票 (${sortedVoters.length}人)
                 </div>
               </div>
             </div>
@@ -785,6 +860,18 @@
       const isPoliceModuleActive = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
       document.getElementById("drawerPoliceModule").classList.toggle("hidden", !isPoliceModuleActive);
       document.getElementById("drawerExileModule").classList.toggle("hidden", isPoliceModuleActive);
+
+      // 模組按鈕高亮狀態更新
+      const btnTrickster = document.getElementById("toggleTricksterBtn");
+      const btnPrince = document.getElementById("togglePrinceBtn");
+      const isTricksterEnabled = !!gameState.modules?.enableTrickster;
+      const isPrinceEnabled = !!gameState.modules?.enablePrince;
+
+      btnTrickster.innerText = `🎭 詭術師：${isTricksterEnabled ? '開' : '關'}`;
+      btnTrickster.className = `px-2 py-0.5 rounded text-[10px] font-bold border transition ${isTricksterEnabled ? 'bg-purple-900 border-purple-400 text-purple-200' : 'bg-gray-900 text-gray-500 border-gray-700'}`;
+
+      btnPrince.innerText = `👑 定序王子：${isPrinceEnabled ? '開' : '關'}`;
+      btnPrince.className = `px-2 py-0.5 rounded text-[10px] font-bold border transition ${isPrinceEnabled ? 'bg-amber-900 border-amber-400 text-amber-200' : 'bg-gray-900 text-gray-500 border-gray-700'}`;
 
       checkPoliceBadgeStatus();
 
@@ -821,6 +908,30 @@
         skillSelect.innerHTML = alivePlayers.map(p => `
           <option value="${p.seat}">${p.seat} 號玩家</option>
         `).join('');
+      }
+
+      // 詭術師後台下拉選單與區塊連動
+      const tricksterBox = document.getElementById("tricksterControlBox");
+      if (isTricksterEnabled && !isPoliceModuleActive) {
+        tricksterBox.classList.remove("hidden");
+        const selectA = document.getElementById("tricksterSeatASelect");
+        const selectB = document.getElementById("tricksterSeatBSelect");
+        const statusText = document.getElementById("tricksterStatusText");
+
+        selectA.innerHTML = gameState.players.map(p => `<option value="${p.seat}">${p.seat} 號</option>`).join('');
+        selectB.innerHTML = gameState.players.map(p => `<option value="${p.seat}">${p.seat} 號</option>`).join('');
+
+        if (gameState.tricksterSwap) {
+          selectA.value = gameState.tricksterSwap.seatA;
+          selectB.value = gameState.tricksterSwap.seatB;
+          statusText.innerText = `已置換：${gameState.tricksterSwap.seatA} ⇄ ${gameState.tricksterSwap.seatB}`;
+          statusText.className = "text-[10px] text-amber-300 font-bold font-mono";
+        } else {
+          statusText.innerText = "本晚無置換 / 空換";
+          statusText.className = "text-[10px] text-gray-400 font-mono";
+        }
+      } else {
+        tricksterBox.classList.add("hidden");
       }
 
       if (isPoliceModuleActive) {
@@ -872,6 +983,25 @@
 
       pushStateToFirebase();
       alert(`🔥 ${oldPolice} 號選擇撕毀警徽！警徽作廢，本局後續投票皆為 1 票。`);
+    }
+
+    // 詭術師置換儲存/清空
+    function saveTricksterSwap() {
+      const a = parseInt(document.getElementById("tricksterSeatASelect").value);
+      const b = parseInt(document.getElementById("tricksterSeatBSelect").value);
+      if (a === b) {
+        alert("⚠️ 置換兩名玩家號碼牌不可相同！");
+        return;
+      }
+      gameState.tricksterSwap = { seatA: a, seatB: b };
+      pushStateToFirebase();
+      alert(`🎭 詭術師夜間技能已登記：【${a} 號 ⇄ ${b} 號】！`);
+    }
+
+    function clearTricksterSwap() {
+      gameState.tricksterSwap = null;
+      pushStateToFirebase();
+      alert("🎭 已清空詭術師置換紀錄（本晚為空換或技能失效）。");
     }
 
     function handlePoliceWolfExplode() {
@@ -1144,6 +1274,27 @@
     }
 
     function renderExileDrawerControls() {
+      const isPrinceEnabled = !!gameState.modules?.enablePrince;
+      const isPrinceRevolving = !!gameState.isPrinceRevolving;
+      const princeBtn = document.getElementById("princeTriggerBtn");
+      const princeTag = document.getElementById("princeStatusTag");
+      const sectionTitle = document.getElementById("exileSectionTitle");
+
+      if (isPrinceRevolving) {
+        sectionTitle.innerText = "放逐計票 (定序倒流重投中)";
+        princeTag.classList.remove("hidden");
+      } else {
+        sectionTitle.innerText = "放逐計票 (先選被投人 ➔ 點投票選民)";
+        princeTag.classList.add("hidden");
+      }
+
+      // 定序王子按鈕顯示邏輯：模組開啟、且整局尚未使用過、且目前不是重投狀態
+      if (isPrinceEnabled && !gameState.princeUsed && !isPrinceRevolving) {
+        princeBtn.classList.remove("hidden");
+      } else {
+        princeBtn.classList.add("hidden");
+      }
+
       const deathGrid = document.getElementById("drawerNightDeathGrid");
       deathGrid.innerHTML = gameState.players.map(p => {
         const isNightDead = (!p.isAlive && p.deathReason === "NIGHT");
@@ -1372,12 +1523,36 @@
       }
     }
 
-    // 核心修復：封存歷史時鎖定當下的 badgeHolder
+    // 定序王子翻牌發動【逆轉時空】
+    function handlePrinceReversal() {
+      if (!confirm("👑 確定現場有【定序王子】翻牌發動【逆轉時空】嗎？\n\n此動作將：\n1. 封存剛剛的票型（供全場盤邏輯）\n2. 取消放逐出局（本次無人出局）\n3. 定序王子單獨發言後進行【第二次放逐投票】")) return;
+
+      const activePoliceAtThisVote = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
+
+      if (!gameState.history) gameState.history = [];
+      gameState.history.push({
+        title: `D${gameState.day} 放逐(定序逆轉)`,
+        badgeText: `⏳ 定序王子發動時光倒流 (本次無人出局)`,
+        votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+        badgeHolder: activePoliceAtThisVote
+      });
+
+      gameState.princeUsed = true;
+      gameState.isPrinceRevolving = true;
+      gameState.tempVotes = {};
+      gameState.selectedTarget = null;
+
+      currentHistoryViewIndex = -1;
+      pushStateToFirebase();
+
+      alert(`⏳ 定序王子技能已觸發！\n票型已封存進歷史紀錄，現場請定序王子額外發言一次，隨後進行【第 ${gameState.day} 天 第二次放逐投票】！`);
+    }
+
+    // 放逐票型確認結算 (含詭術師智慧置換檢驗)
     function confirmExileVote() {
       let maxPoints = 0;
-      let exiledSeat = null;
+      let topVotedSeats = [];
 
-      // 取得結算當下真正持有警徽的玩家席位
       const activePoliceAtThisVote = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
 
       Object.entries(gameState.tempVotes || {}).forEach(([target, voters]) => {
@@ -1387,12 +1562,52 @@
             const isPolice = (activePoliceAtThisVote !== null && v === activePoliceAtThisVote);
             points += (isPolice ? 1.5 : 1);
           });
+
           if (points > maxPoints) {
             maxPoints = points;
-            exiledSeat = parseInt(target);
+            topVotedSeats = [parseInt(target)];
+          } else if (points === maxPoints && maxPoints > 0) {
+            topVotedSeats.push(parseInt(target));
           }
         }
       });
+
+      let exiledSeat = null;
+      let isTricksterSubstituted = false;
+      let originalVotedSeat = null;
+
+      if (topVotedSeats.length === 1) {
+        originalVotedSeat = topVotedSeats[0];
+        exiledSeat = originalVotedSeat;
+
+        // 詭術師機制檢驗 (僅當模組開啟且有置換紀錄時判定)
+        const isTricksterEnabled = !!gameState.modules?.enableTrickster;
+        const swap = gameState.tricksterSwap;
+
+        if (isTricksterEnabled && swap) {
+          if (swap.seatA === originalVotedSeat || swap.seatB === originalVotedSeat) {
+            const substituteSeat = (swap.seatA === originalVotedSeat) ? swap.seatB : swap.seatA;
+            const subPlayer = gameState.players.find(p => p.seat === substituteSeat);
+
+            if (subPlayer && subPlayer.isAlive) {
+              const confirmTrickster = confirm(
+                `🎭 【檢測到詭術師置換！】\n\n` +
+                `最高票為【${originalVotedSeat} 號】(${maxPoints}票)！\n` +
+                `夜間詭術師曾將【${swap.seatA} 號 ⇄ ${swap.seatB} 號】號碼牌置換！\n\n` +
+                `點擊【確定】：發動詭術置換，${originalVotedSeat} 號存活，改由【${substituteSeat} 號】代替放逐出局！\n` +
+                `點擊【取消】：不發動（技能失效或抵消），依正常票型由 ${originalVotedSeat} 號出局。`
+              );
+
+              if (confirmTrickster) {
+                exiledSeat = substituteSeat;
+                isTricksterSubstituted = true;
+              }
+            } else {
+              alert(`🎭 詭術師置換對象【${substituteSeat} 號】早已出局，置換技能失敗，仍由 ${originalVotedSeat} 號出局。`);
+            }
+          }
+        }
+      }
 
       if (exiledSeat) {
         const p = gameState.players.find(x => x.seat === exiledSeat);
@@ -1404,21 +1619,44 @@
 
       gameState.consecutiveExplodeCount = 0;
 
+      // 產生歷史記錄標籤文字
+      let historyBadgeText = "";
+      if (topVotedSeats.length > 1) {
+        historyBadgeText = `⚖️ 平票無人出局 (${topVotedSeats.join('、')}號同得${maxPoints}票)`;
+      } else if (exiledSeat) {
+        if (isTricksterSubstituted) {
+          historyBadgeText = `❌ ${exiledSeat}號替罪出局 (🎭詭術置換原投${originalVotedSeat}號)`;
+        } else {
+          historyBadgeText = `❌ ${exiledSeat}號放逐出局 (${maxPoints}票)`;
+        }
+      } else {
+        historyBadgeText = "平票或全體棄票，無人出局";
+      }
+
+      const historyTitle = gameState.isPrinceRevolving 
+        ? `D${gameState.day} 放逐重投` 
+        : `D${gameState.day} 白天放逐`;
+
       if (!gameState.history) gameState.history = [];
       gameState.history.push({
-        title: `D${gameState.day} 白天放逐`,
-        badgeText: exiledSeat ? `❌ ${exiledSeat}號放逐出局 (${maxPoints}票)` : "平票無人出局",
+        title: historyTitle,
+        badgeText: historyBadgeText,
         votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
-        badgeHolder: activePoliceAtThisVote // ★ 鎖定該輪投票當時的警長，防止後續移交/撕徽變更票權
+        badgeHolder: activePoliceAtThisVote
       });
+
+      // 結算後重置重投狀態與單日詭術置換
+      gameState.isPrinceRevolving = false;
+      gameState.tricksterSwap = null; 
 
       currentHistoryViewIndex = gameState.history.length - 1;
       pushStateToFirebase();
 
       if (exiledSeat) {
-        promptChainedSkillDeath(exiledSeat, "白天放逐");
+        promptChainedSkillDeath(exiledSeat, isTricksterSubstituted ? "詭術替罪出局" : "白天放逐");
       }
-      alert(`✅ 第 ${gameState.day} 天放逐票型已同步封存！${exiledSeat ? `\${exiledSeat} 號玩家出局。` : '平票無人出局。'}`);
+
+      alert(`✅ 第 ${gameState.day} 天放逐票型已同步封存！\n${historyBadgeText}`);
     }
 
     function enterNextDayCycle(auto = false) {
@@ -1429,6 +1667,8 @@
       gameState.tempVotes = {};
       gameState.selectedTarget = null;
       gameState.pkCandidates = [];
+      gameState.isPrinceRevolving = false;
+      gameState.tricksterSwap = null;
       currentHistoryViewIndex = -1;
 
       pushStateToFirebase();
