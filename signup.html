@@ -9,7 +9,7 @@
   <title>基地狼人殺 報名櫃台</title>
   
   <script>
-    const APP_VERSION = "1.3.1";
+    const APP_VERSION = "1.3.2";
     
     (function autoUpdateCheck() {
       const savedVersion = localStorage.getItem('werewolf_app_version');
@@ -220,6 +220,18 @@
       color: #fc8181;
       line-height: 1.5;
     }
+
+    .priority-tip-box {
+      display: none;
+      background: rgba(56, 161, 105, 0.15);
+      border: 1px solid rgba(56, 161, 105, 0.5);
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: #68d391;
+      line-height: 1.5;
+    }
     
     .btn-submit { width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 6px; }
     .btn-submit:active { background: var(--accent-hover); }
@@ -358,7 +370,7 @@
       <div class="venue-info">
         <p>📍 <strong>地點：</strong>台中市北屯區天津路三段57號</p>
         <p>💰 <strong>費用：</strong><span class="venue-highlight">入場費 $200 打到破桌</span></p>
-        <p>👥 <strong>限制：</strong><span style="color:#63b3ed;">單一時段上限 20 人，避免候補過多</span></p>
+        <p>👥 <strong>限制：</strong><span style="color:#63b3ed;">晚到時段上限 20 人（14:00 準時到者不受限）</span></p>
       </div>
       <div class="rules-box">
         <p><span class="rules-diamond">◆</span>禁止情緒激動、脾氣大的人</p>
@@ -457,6 +469,11 @@
             <div class="chart-axis-x" id="chartAxisContainer"></div>
           </div>
 
+          <!-- 14:00 優先保證席提示 -->
+          <div id="priorityNotice" class="priority-tip-box">
+            ✨ <strong>開局保障席：</strong> 感謝 14:00 準時到場支援開局！本場次晚間全時段均無限制，歡迎盡情暢玩到底。
+          </div>
+
           <!-- 滿額警示提示 -->
           <div id="limitWarningNotice" class="limit-warning-box"></div>
 
@@ -506,7 +523,6 @@
     const SHEET_ID = "1PABHGXq9LJr7Y-Qg7kRqAYbfrSezW8pR12fQcOyWzNQ";
     const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=本週名單`;
 
-    // 時段區間：14 代表 14:00~15:00，依此類推到 25 代表 01:00~02:00
     const TIMELINE_SLOTS = [
       { start: 14, label: "14-15" },
       { start: 15, label: "15-16" },
@@ -582,9 +598,7 @@
         } catch (e) {}
       }
 
-      // 一進網頁立即繪製圖表，確保不留白
       validateTimeSlotCapacity();
-
       initLiffAsync();
       fetchLatestPlayers(false);
     };
@@ -735,23 +749,19 @@
       return m ? parseInt(m[1], 10) : null;
     }
 
-    // 檢查該玩家是否在特定時段 slotStart (如 18 代表 18:00~19:00) 在場
     function isPlayerPresentInSlot(p, slotStart) {
       const arrH = parseHour(p['到場時間']);
       if (arrH === null) return false;
-      // 到場時間比該時段結束還晚，就不在
       if (arrH > slotStart) return false;
 
       const leaveStr = p['離場時間'] || '打到底';
       if (leaveStr !== '打到底') {
         const leaveH = parseHour(leaveStr);
-        // 若在該時段起始或之前就離開（例如 20:00 前走，則 20-21 不在），就不在
         if (leaveH !== null && leaveH <= slotStart) return false;
       }
       return true;
     }
 
-    // 計算特定場次各時段在場人數（可排除指定玩家，用於防自我衝突）
     function calculateSlotOccupancy(session, excludeUserId = null) {
       const records = allPlayersData.filter(p => 
         (p['場次日期'] || '').trim() === session.trim() &&
@@ -766,7 +776,7 @@
       return counts;
     }
 
-    // 檢查使用者選取的時間區間，並即時渲染視覺圖表
+    // 檢查使用者選取的時間區間，支援「14:00 準時到者突破限制」
     function validateTimeSlotCapacity() {
       const session = document.getElementById('sessionDate').value;
       const arrival = document.getElementById('arrivalTime').value;
@@ -774,14 +784,14 @@
       const submitBtn = document.getElementById('submitBtn');
       const updateBtn = document.getElementById('updateBtn');
       const warnBox = document.getElementById('limitWarningNotice');
+      const priorityNotice = document.getElementById('priorityNotice');
 
-      // 1. 真實總人數：圖表一律顯示客觀全場實際在場人數（不扣除任何人）
+      // 1. 真實總人數：圖表一律顯示實際客觀在場總人數
       const realOccupancy = calculateSlotOccupancy(session, null);
 
-      // 2. 額滿容量判定：若是已報名玩家，扣除自己舊佔位，避免自己卡自己；未報名玩家則不扣除
+      // 2. 額滿容量判定：排除自己舊佔位
       const checkOccupancy = calculateSlotOccupancy(session, verifiedUserId);
 
-      // 計算目前選擇覆蓋哪些「時間段」
       const selectedSlots = [];
       const arrH = parseHour(arrival);
       const leaveH = (leave === '打到底') ? 26 : parseHour(leave);
@@ -794,6 +804,9 @@
         });
       }
 
+      // 檢查是否為 14:00 準時到場（享有開局豁免權）
+      const isOnTimePlayer = (arrival === '14:00');
+
       // 檢查是否踩到滿額 (>= 20人)
       const fullSlots = [];
       selectedSlots.forEach(slotStart => {
@@ -802,28 +815,36 @@
         }
       });
 
-      // 繪製圖表：傳入真實全場人數
       renderCapacityChart(realOccupancy, selectedSlots);
 
-      if (fullSlots.length > 0) {
-        const fullLabels = fullSlots.map(s => {
-          const slotObj = TIMELINE_SLOTS.find(item => item.start === s);
-          return slotObj ? `【${slotObj.label}】` : '';
-        }).join('、');
-
-        warnBox.innerHTML = `⚠️ <strong>時段額滿警示：</strong> 您所選擇的時段中，${fullLabels} 在場人數已達 <strong>${MAX_PLAYERS_PER_SLOT} 人上限</strong>。請調整進/離場時間！`;
-        warnBox.style.display = 'block';
-
-        if (submitBtn) submitBtn.disabled = true;
-        if (updateBtn) updateBtn.disabled = true;
-      } else {
+      if (isOnTimePlayer) {
+        // 🌟 14:00 準時到的玩家：突破限制，一律放行
         warnBox.style.display = 'none';
+        priorityNotice.style.display = 'block';
         if (submitBtn && verifiedUserId) submitBtn.disabled = false;
         if (updateBtn && verifiedUserId) updateBtn.disabled = false;
+      } else {
+        // 🟡 晚到玩家：嚴格執行 20 人限制
+        priorityNotice.style.display = 'none';
+        if (fullSlots.length > 0) {
+          const fullLabels = fullSlots.map(s => {
+            const slotObj = TIMELINE_SLOTS.find(item => item.start === s);
+            return slotObj ? `【${slotObj.label}】` : '';
+          }).join('、');
+
+          warnBox.innerHTML = `⚠️ <strong>晚到時段額滿警示：</strong> 您所選擇的時段中，${fullLabels} 在場人數已達 <strong>${MAX_PLAYERS_PER_SLOT} 人上限</strong>。請調整進/離場時間，或選擇 14:00 準時到場開局！`;
+          warnBox.style.display = 'block';
+
+          if (submitBtn) submitBtn.disabled = true;
+          if (updateBtn) updateBtn.disabled = true;
+        } else {
+          warnBox.style.display = 'none';
+          if (submitBtn && verifiedUserId) submitBtn.disabled = false;
+          if (updateBtn && verifiedUserId) updateBtn.disabled = false;
+        }
       }
     }
 
-    // 繪製動態長條趨勢圖（時段區間版）
     function renderCapacityChart(occupancy, selectedSlots) {
       const barContainer = document.getElementById('chartBarsContainer');
       const axisContainer = document.getElementById('chartAxisContainer');
@@ -891,25 +912,29 @@
       const arrival = document.getElementById('arrivalTime').value;
       const leave = document.getElementById('leaveTime').value;
 
-      // 再次檢查容量上限
-      const checkOccupancy = calculateSlotOccupancy(session, verifiedUserId);
-      const arrH = parseHour(arrival);
-      const leaveH = (leave === '打到底') ? 26 : parseHour(leave);
-      let isBlocked = false;
+      // 檢查是否為 14:00 準時到者
+      const isOnTimePlayer = (arrival === '14:00');
 
-      if (arrH !== null && leaveH !== null) {
-        TIMELINE_SLOTS.forEach(slot => {
-          if (slot.start >= arrH && slot.start < leaveH) {
-            if ((checkOccupancy[slot.start] || 0) >= MAX_PLAYERS_PER_SLOT) {
-              isBlocked = true;
+      if (!isOnTimePlayer) {
+        const checkOccupancy = calculateSlotOccupancy(session, verifiedUserId);
+        const arrH = parseHour(arrival);
+        const leaveH = (leave === '打到底') ? 26 : parseHour(leave);
+        let isBlocked = false;
+
+        if (arrH !== null && leaveH !== null) {
+          TIMELINE_SLOTS.forEach(slot => {
+            if (slot.start >= arrH && slot.start < leaveH) {
+              if ((checkOccupancy[slot.start] || 0) >= MAX_PLAYERS_PER_SLOT) {
+                isBlocked = true;
+              }
             }
-          }
-        });
-      }
+          });
+        }
 
-      if (isBlocked) {
-        alert(`抱歉！您選擇的時段已滿 ${MAX_PLAYERS_PER_SLOT} 人，無法完成預約。請調整時間！`);
-        return;
+        if (isBlocked) {
+          alert(`抱歉！晚到時段已達 ${MAX_PLAYERS_PER_SLOT} 人上限，無法完成預約。請調整時間或選擇 14:00 準時到場！`);
+          return;
+        }
       }
 
       submitBtn.disabled = true;
@@ -1140,7 +1165,7 @@
         const summaryText = events.join("，");
         return {
           type: onTimeCount >= TARGET ? "ready" : "late-ready",
-          text: `🎉 ${summaryText} (最高在場 ${maxPresentCount}/${MAX_PLAYERS_PER_SLOT} 人)`,
+          text: `🎉 ${summaryText} (最高在場 ${maxPresentCount} 人)`,
           summaryText: summaryText
         };
       } else {
@@ -1182,7 +1207,7 @@
       gameStatusEl.innerHTML = `
         <div class="game-status-banner ${statusClass}">
           <span>${readiness.text}</span>
-          <span style="font-size: 11px; opacity: 0.85; white-space: nowrap; margin-left: 8px;">目標 12 人 / 上限 20 人</span>
+          <span style="font-size: 11px; opacity: 0.85; white-space: nowrap; margin-left: 8px;">目標 12 人 / 晚段上限 20 人</span>
         </div>
       `;
 
@@ -1290,7 +1315,7 @@
       const readiness = calculateGameReadiness(actualPlayers);
 
       let text = `🐺 基地狼人殺 ${currentSelectedSession}\n`;
-      text += `📍 天津路三段57號｜💰 $200打到破桌 (時段上限20人)\n`;
+      text += `📍 天津路三段57號｜💰 $200打到破桌 (晚到時段上限20人)\n`;
       if (godUser) {
         text += `👑 法官：${getPlayerDisplayName(godUser)}\n`;
       }
