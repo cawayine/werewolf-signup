@@ -37,7 +37,7 @@ const ROLE_DEFINITIONS = {
   "覺醒預言家": { seatType: "GOD", faction: "villager", canPeep: true, peepTwoTargets: true },
   "通靈師": { seatType: "GOD", faction: "villager", canCheckExactRole: true, canCheckSelf: false, allowRepeatCheck: false },
   "覺醒攝夢人": { seatType: "GOD", faction: "villager", canDreamWord: true, canDreamSelf: true, dreamerImmuneDamage: true, activeExileStart: 2, suppressVictimSkill: true, immunePoison: true },
-  "黑市商人": { seatType: "GOD", faction: "villager", activeNight: 1, canTradeSkill: true, threeGiftsMode: true },
+  "黑市商人": { seatType: "GOD", faction: "villager", activeNight: 1, canTradeSkill: true, canTradeSelf: false, threeGiftsMode: true },
 
   // --- 好人陣營：平民坑 (VILLAGER) ---
   "平民": { seatType: "VILLAGER", faction: "villager" },
