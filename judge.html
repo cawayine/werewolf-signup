@@ -16,8 +16,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-  <!-- 引入規則大腦與獨立設定檔 -->
-  <script src="rules_config.js"></script>
+  <!-- 引入規則大腦與獨立設定檔 (加入版本號破除瀏覽器快取) -->
+  <script src="rules_config.js?v=20261015_patch"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -170,7 +170,7 @@
               </select>
             </div>
             
-            <!-- ⚡ 報名系統即時簽到名單來源[cite: 4] -->
+            <!-- 報名系統即時簽到名單來源 -->
             <div class="flex-1">
               <div class="flex justify-between items-center mb-0.5">
                 <label class="text-[10px] text-gray-400 block">匯入簽到名單來源</label>
@@ -257,7 +257,7 @@
           </span>
         </div>
 
-        <!-- 獵人/狼王出局開槍提示區 (出局自動觸發)[cite: 1] -->
+        <!-- 獵人/狼王出局開槍提示區 (出局自動觸發) -->
         <div id="hunterActionBox" class="hidden p-2.5 bg-amber-950/40 border border-amber-600/80 rounded-lg text-xs">
           <div class="font-bold text-amber-300 mb-1 flex items-center gap-1">
             <i class="fa-solid fa-crosshairs"></i> <span id="gunTriggerTitle">觸發出局開槍技能：</span>
@@ -454,6 +454,10 @@
           if (!gameState.tempVotes) gameState.tempVotes = {};
           if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
 
+          // 確保數值型態一致性
+          gameState.players.forEach(p => { p.seat = Number(p.seat); });
+          if (gameState.policeSeat !== null) gameState.policeSeat = Number(gameState.policeSeat);
+
           renderAllViews();
           isRemoteUpdate = false;
         }
@@ -649,7 +653,7 @@
         const assignedName = currentRosterMembers[i - 1] || "";
         select.value = assignedName;
 
-        const p = gameState.players.find(x => x.seat === i);
+        const p = gameState.players.find(x => Number(x.seat) === i);
         if (p) p.name = assignedName;
       }
 
@@ -671,7 +675,9 @@
     function onBoardSelectChange() {
       currentBoardKey = document.getElementById("boardSelect").value;
       document.getElementById("currentBoardLabel").innerText = BOARD_DATABASE[currentBoardKey].name;
-      initSeats();
+      if (gameState.phase === "SETUP") {
+        initSeats();
+      }
     }
 
     function initSeats() {
@@ -745,7 +751,7 @@
 
       let hasDup = false;
       selects.forEach(sel => {
-        const seat = sel.id.replace("userSelect-", "");
+        const seat = Number(sel.id.replace("userSelect-", ""));
         const card = document.getElementById("seatCard-" + seat);
         const dupTag = document.getElementById("seatDupTag-" + seat);
         const currentVal = sel.value.trim();
@@ -761,7 +767,7 @@
           if (dupTag) dupTag.style.display = "none";
         }
 
-        const p = gameState.players.find(x => x.seat === parseInt(seat));
+        const p = gameState.players.find(x => Number(x.seat) === seat);
         if (p) p.name = currentVal;
       });
 
@@ -771,15 +777,34 @@
     function onRoleChange(seat) {
       const selected = document.getElementById("roleSelect-" + seat).value;
       document.getElementById("roleTag-" + seat).innerText = selected;
-      const p = gameState.players.find(x => x.seat === seat);
-      p.role = selected;
-      p.seatType = ROLE_DEFINITIONS[selected]?.seatType || "VILLAGER";
-      p.victoryFaction = ROLE_DEFINITIONS[selected]?.faction || "villager";
+      const p = gameState.players.find(x => Number(x.seat) === Number(seat));
+      if (p) {
+        p.role = selected;
+        p.seatType = ROLE_DEFINITIONS[selected]?.seatType || "VILLAGER";
+        p.victoryFaction = ROLE_DEFINITIONS[selected]?.faction || "villager";
+      }
       updateCounts();
     }
 
     function confirmSetup() {
       const checkResult = checkSeatDuplicates();
+
+      // 強制同步所有席位下拉選單的值
+      for (let i = 1; i <= 12; i++) {
+        const selRole = document.getElementById(`roleSelect-${i}`)?.value;
+        const selName = document.getElementById(`userSelect-${i}`)?.value;
+        const p = gameState.players.find(x => Number(x.seat) === i);
+        if (p) {
+          p.seat = i;
+          if (selName) p.name = selName;
+          if (selRole) {
+            p.role = selRole;
+            p.seatType = ROLE_DEFINITIONS[selRole]?.seatType || "VILLAGER";
+            p.victoryFaction = ROLE_DEFINITIONS[selRole]?.faction || "villager";
+          }
+        }
+      }
+
       const emptySeats = gameState.players.filter(p => !p.name);
       if (emptySeats.length > 0) {
         alert(`⚠️ 還有 ${emptySeats.length} 個席位尚未指派玩家（${emptySeats.map(s => s.seat + '號').join(', ')}），請指派完整後再開局！`);
@@ -842,14 +867,14 @@
           else if (p.deathReason === "EXILE") { statusBadge = "❌"; statusText = "放逐"; }
           else if (p.deathReason === "SKILL") { statusBadge = "🎯"; statusText = "技能"; }
           else if (p.deathReason === "EXPLODE") { statusBadge = "💥"; statusText = "自爆"; }
-        } else if (gameState.policeSeat === p.seat) {
+        } else if (Number(gameState.policeSeat) === Number(p.seat)) {
           borderStyle = "border-amber-500 bg-amber-950/40 text-amber-300 font-bold";
           statusBadge = "👑";
         }
 
         return `
           <div class="h-10 rounded border ${borderStyle} flex flex-col items-center justify-center text-xs relative font-mono">
-            ${statusBadge ? `<span class="absolute -top-1.5 -right-1 text-[10px]">\${statusBadge}</span>` : ''}
+            ${statusBadge ? `<span class="absolute -top-1.5 -right-1 text-[10px]">${statusBadge}</span>` : ''}
             <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
             <span class="text-[8px] truncate px-0.5">${statusText}</span>
           </div>
@@ -1001,7 +1026,6 @@
             </div>
           `;
         } else {
-          // 一般目標選擇卡片 (相容狼刀與各神職)
           bodyHtml = `
             <div class="flex items-center gap-2">
               <span class="text-gray-400">選擇目標：</span>
@@ -1036,7 +1060,6 @@
       }
     }
 
-    // 核心修復：相容所有狼人落刀元素 ID (wolf 或 wolf_team_confirm)
     function onFormActionChange(triggerId) {
       const wolfEl = document.getElementById('target-wolf') || 
                      document.getElementById('target-wolf_team_confirm') ||
@@ -1044,9 +1067,9 @@
       const hint = document.getElementById('witchRawKillHint');
 
       if (wolfEl && hint) {
-        const val = parseInt(wolfEl.value || 0);
+        const val = Number(wolfEl.value || 0);
         if (val) {
-          const p = gameState.players.find(x => x.seat === val);
+          const p = gameState.players.find(x => Number(x.seat) === val);
           hint.innerText = `原始刀口：${val} 號 (${p ? p.name : ''})`;
         } else {
           hint.innerText = `原始刀口：空刀`;
@@ -1065,18 +1088,17 @@
       refreshAllRuleDisplays();
     }
 
-    // 核心修復：委託 RULES_ENGINE 即時計算預言家查驗與手勢
     function refreshAllRuleDisplays() {
       if (typeof RULES_ENGINE === 'undefined' || !gameState.players || gameState.players.length === 0) return;
 
       const swapPair = [
-        parseInt(document.getElementById("swapTargetA")?.value || 0) || 0,
-        parseInt(document.getElementById("swapTargetB")?.value || 0) || 0
+        Number(document.getElementById("swapTargetA")?.value || 0) || 0,
+        Number(document.getElementById("swapTargetB")?.value || 0) || 0
       ];
 
       // 1. 預言家查驗反饋
       const seerSelect = document.getElementById("seerTarget");
-      const seerSeat = parseInt(seerSelect?.value || 0) || 0;
+      const seerSeat = Number(seerSelect?.value || 0) || 0;
       const seerBadge = document.getElementById("seerResultBadge");
       
       if (seerBadge) {
@@ -1094,7 +1116,7 @@
 
       // 2. 所有手勢即時反饋
       const context = {
-        rawPoisonTarget: parseInt(document.getElementById("poisonTarget")?.value || 0) || 0,
+        rawPoisonTarget: Number(document.getElementById("poisonTarget")?.value || 0) || 0,
         swapPair: swapPair,
         players: gameState.players,
         blackMarketTransformedWolf: gameState.nightMemory.blackMarketTransformedWolf
@@ -1113,23 +1135,27 @@
     }
 
     // ==========================================
-    // 7. 天亮死訊結算 (委託 RULES_ENGINE.resolveNight)
+    // 7. 天亮死訊結算
     // ==========================================
     function resolveNight() {
       const wolfEl = document.getElementById('target-wolf') || 
                      document.getElementById('target-wolf_team_confirm') ||
                      document.querySelector("select[id^='target-wolf']");
       const inputs = {
-        rawWolfTarget: parseInt(wolfEl?.value || 0) || 0,
-        rawPoisonTarget: parseInt(document.getElementById("poisonTarget")?.value || 0) || 0,
-        guardTarget: parseInt(document.getElementById("target-guard")?.value || 0) || 0,
-        antidoteUsed: antidoteUsedThisNight
+        rawWolfTarget: Number(wolfEl?.value || 0) || 0,
+        rawPoisonTarget: Number(document.getElementById("poisonTarget")?.value || 0) || 0,
+        guardTarget: Number(document.getElementById("target-guard")?.value || 0) || 0,
+        antidoteUsed: antidoteUsedThisNight,
+        swapPair: [
+          Number(document.getElementById("swapTargetA")?.value || 0) || 0,
+          Number(document.getElementById("swapTargetB")?.value || 0) || 0
+        ]
       };
 
       const nResult = RULES_ENGINE.resolveNight(inputs, gameState.nightMemory);
 
       nResult.deaths.forEach(seat => {
-        const p = gameState.players.find(x => x.seat === seat);
+        const p = gameState.players.find(x => Number(x.seat) === Number(seat));
         if (p) { p.isAlive = false; p.deathReason = "NIGHT"; }
       });
 
@@ -1137,14 +1163,16 @@
       if (inputs.rawPoisonTarget) gameState.nightMemory.witchPoisonUsed = true;
 
       // 獵人 / 狼王 出局開槍判定
-      const deadHunter = gameState.players.find(p => p.role === "獵人" && nResult.deaths.includes(p.seat));
-      const deadWolfKing = gameState.players.find(p => p.role === "狼王" && nResult.deaths.includes(p.seat));
+      const deadHunter = gameState.players.find(p => p.role === "獵人" && nResult.deaths.includes(Number(p.seat)));
+      const deadWolfKing = gameState.players.find(p => p.role === "狼王" && nResult.deaths.includes(Number(p.seat)));
 
       if (deadHunter && nResult.hunterCanShoot) {
         triggerGunAction("獵人", deadHunter.seat);
       } else if (deadWolfKing && nResult.wolfKingCanShoot) {
         triggerGunAction("狼王", deadWolfKing.seat);
       }
+
+      gameState.day = gameState.round;
 
       if (gameState.day === 1 && !gameState.policeSeat && !gameState.isBadgeTorn) {
         gameState.phase = "POLICE_ELECTION";
@@ -1168,18 +1196,20 @@
     }
 
     function applyHunterShot() {
-      const targetSeat = parseInt(document.getElementById("hunterTarget").value);
+      const targetSeat = Number(document.getElementById("hunterTarget").value);
       if (!targetSeat) return;
-      const target = gameState.players.find(p => p.seat === targetSeat);
+      const target = gameState.players.find(p => Number(p.seat) === targetSeat);
       if (target) { target.isAlive = false; target.deathReason = "SKILL"; }
       alert(`💥 開槍技能發動，帶走了 ${targetSeat} 號 (${target ? target.name : ''})！`);
       document.getElementById("hunterActionBox").classList.add("hidden");
+      
+      checkPoliceBadgeStatus();
       pushStateToFirebase(`🎯 出局開槍帶走：${targetSeat} 號`);
       renderAllViews();
     }
 
     // ==========================================
-    // 8. 白天工作流 (委託 RULES_ENGINE)
+    // 8. 白天工作流
     // ==========================================
     function renderDayWorkflow() {
       const isPoliceStage = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
@@ -1249,11 +1279,11 @@
 
       const targetBox = document.getElementById("policeTargetCandidateContainer");
       targetBox.innerHTML = activeCandidates.map(p => `
-        <button onclick="selectTargetForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === p.seat ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
+        <button onclick="selectTargetForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border transition ${Number(gameState.selectedTarget) === Number(p.seat) ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
           投 ${p.seat}號
         </button>
       `).join('') + `
-        <button onclick="selectTargetForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
+        <button onclick="selectTargetForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border transition ${Number(gameState.selectedTarget) === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
           棄票
         </button>
       `;
@@ -1275,7 +1305,7 @@
 
         let voted = null;
         Object.entries(gameState.tempVotes || {}).forEach(([cand, list]) => {
-          if (list.includes(p.seat)) voted = cand;
+          if (Array.isArray(list) && list.includes(p.seat)) voted = cand;
         });
 
         if (!isEligible) {
@@ -1297,7 +1327,8 @@
     }
 
     function toggleCandidateOrDrop(seat) {
-      const p = gameState.players.find(x => x.seat === seat);
+      const p = gameState.players.find(x => Number(x.seat) === Number(seat));
+      if (!p) return;
       if (gameState.phase === "POLICE_PK") {
         if ((gameState.pkCandidates || []).includes(seat)) { alert("⚠️ PK 候選人不可退水！"); return; }
         if (p.isCandidate) p.hasDropped = !p.hasDropped;
@@ -1361,7 +1392,7 @@
       }
 
       if (pResult.status === "WINNER") {
-        const winner = pResult.winner;
+        const winner = Number(pResult.winner);
         gameState.policeSeat = winner;
         gameState.isBadgeTorn = false;
         gameState.consecutiveExplodeCount = 0;
@@ -1395,11 +1426,11 @@
 
       const targetContainer = document.getElementById("exileTargetContainer");
       targetContainer.innerHTML = alive.map(p => `
-        <button onclick="selectTargetForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === p.seat ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
+        <button onclick="selectTargetForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border transition ${Number(gameState.selectedTarget) === Number(p.seat) ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
           投 ${p.seat}號
         </button>
       `).join('') + `
-        <button onclick="selectTargetForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
+        <button onclick="selectTargetForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border transition ${Number(gameState.selectedTarget) === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
           棄票
         </button>
       `;
@@ -1408,10 +1439,10 @@
       votersGrid.innerHTML = alive.map(p => {
         let voted = null;
         Object.entries(gameState.tempVotes || {}).forEach(([target, list]) => {
-          if (list.includes(p.seat)) voted = target;
+          if (Array.isArray(list) && list.includes(p.seat)) voted = target;
         });
 
-        const isPolice = (!gameState.isBadgeTorn && p.seat === gameState.policeSeat);
+        const isPolice = (!gameState.isBadgeTorn && Number(p.seat) === Number(gameState.policeSeat));
         return `
           <button onclick="assignVote(${p.seat})" class="h-9 rounded text-xs border font-mono flex flex-col items-center justify-center transition ${voted !== null ? 'bg-indigo-950 border-indigo-400 text-indigo-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
             <span>${p.seat}號${isPolice ? '👑' : ''}</span>
@@ -1424,21 +1455,22 @@
     }
 
     function selectTargetForVote(targetSeat) {
-      gameState.selectedTarget = targetSeat;
+      gameState.selectedTarget = Number(targetSeat);
       renderDayWorkflow();
     }
 
     function assignVote(voterSeat) {
       if (gameState.selectedTarget === null) { alert("請先點選受票目標或棄票！"); return; }
-      const target = gameState.selectedTarget;
+      const target = Number(gameState.selectedTarget);
+      const voter = Number(voterSeat);
 
       if (!gameState.tempVotes) gameState.tempVotes = {};
       Object.keys(gameState.tempVotes).forEach(k => {
-        gameState.tempVotes[k] = gameState.tempVotes[k].filter(s => s !== voterSeat);
+        gameState.tempVotes[k] = gameState.tempVotes[k].filter(s => Number(s) !== voter);
       });
 
       if (!gameState.tempVotes[target]) gameState.tempVotes[target] = [];
-      gameState.tempVotes[target].push(voterSeat);
+      gameState.tempVotes[target].push(voter);
 
       pushStateToFirebase();
       renderDayWorkflow();
@@ -1491,7 +1523,7 @@
       if (eResult.status === "TIE_NO_EXILE") {
         badgeText = `⚖️ 平票無人出局 (${eResult.topSeats.join('、')}號同得${eResult.maxPoints}票)`;
       } else if (eResult.status === "EXILED") {
-        const exiledPlayer = gameState.players.find(x => x.seat === eResult.exiledSeat);
+        const exiledPlayer = gameState.players.find(x => Number(x.seat) === Number(eResult.exiledSeat));
         if (exiledPlayer) {
           if (exiledPlayer.role === "白痴") {
             alert(`🔔 ${exiledPlayer.seat} 號為白痴，觸發翻牌免死技能！保留發言權，拔除投票權。`);
@@ -1527,6 +1559,7 @@
       gameState.tempVotes = {};
       gameState.selectedTarget = null;
 
+      checkPoliceBadgeStatus();
       pushStateToFirebase(`放逐結算：${badgeText}`);
       renderAllViews();
       alert(`✅ 第 ${gameState.day} 天放逐票型已同步封存至公播！\n${badgeText}`);
@@ -1554,13 +1587,13 @@
 
     // --- 自爆與技能處理 ---
     function handlePoliceWolfExplode() {
-      const seat = parseInt(document.getElementById("policeWolfExplodeSelect").value);
+      const seat = Number(document.getElementById("policeWolfExplodeSelect").value);
       if (!seat) return;
 
       const expRes = RULES_ENGINE.resolvePoliceExplode(gameState.consecutiveExplodeCount || 0);
       if (!confirm(`⚠️ 確定要由【${seat} 號】競選自爆嗎？\n${expRes.alertText}`)) return;
 
-      const p = gameState.players.find(x => x.seat === seat);
+      const p = gameState.players.find(x => Number(x.seat) === seat);
       if (p) { p.isAlive = false; p.deathReason = "EXPLODE"; p.isCandidate = false; }
 
       gameState.consecutiveExplodeCount = expRes.nextCount;
@@ -1574,19 +1607,19 @@
         badgeHolder: null
       });
 
-      gameState.day += 1;
       gameState.phase = expRes.nextPhase;
       gameState.tempVotes = {};
 
+      checkPoliceBadgeStatus();
       pushStateToFirebase(`💥 競選階段自爆：${seat} 號`);
       renderAllViews();
     }
 
     function handleDayWolfExplode() {
-      const seat = parseInt(document.getElementById("dayWolfExplodeSelect").value);
+      const seat = Number(document.getElementById("dayWolfExplodeSelect").value);
       if (!seat || !confirm(`⚠️ 確定要確認 ${seat} 號玩家【白天自爆】嗎？白天將直接中斷並進入天黑！`)) return;
 
-      const p = gameState.players.find(x => x.seat === seat);
+      const p = gameState.players.find(x => Number(x.seat) === seat);
       if (p) { p.isAlive = false; p.deathReason = "EXPLODE"; }
 
       gameState.history.push({
@@ -1596,6 +1629,7 @@
         badgeHolder: (!gameState.isBadgeTorn) ? gameState.policeSeat : null
       });
 
+      checkPoliceBadgeStatus();
       pushStateToFirebase(`💥 ${seat} 號狼人白天自爆出局`);
       renderAllViews();
 
@@ -1603,12 +1637,12 @@
     }
 
     function handleDaySkillKill() {
-      const seat = parseInt(document.getElementById("daySkillKillSelect").value);
+      const seat = Number(document.getElementById("daySkillKillSelect").value);
       if (!seat) return;
       const reason = prompt("請輸入技能帶走原因（例如：獵人開槍、狼王開槍、狼美人魅惑）：", "技能開槍");
       if (reason === null) return;
 
-      const p = gameState.players.find(x => x.seat === seat);
+      const p = gameState.players.find(x => Number(x.seat) === seat);
       if (p) { p.isAlive = false; p.deathReason = "SKILL"; }
 
       gameState.history.push({
@@ -1618,6 +1652,7 @@
         badgeHolder: (!gameState.isBadgeTorn) ? gameState.policeSeat : null
       });
 
+      checkPoliceBadgeStatus();
       pushStateToFirebase(`🎯 ${seat} 號因【${reason}】連帶出局`);
       renderAllViews();
       alert(`🎯 已標記 ${seat} 號因【${reason}】連帶出局！`);
@@ -1627,7 +1662,7 @@
     function checkPoliceBadgeStatus() {
       const box = document.getElementById("policeBadgeTransferBox");
       if (!gameState.policeSeat || gameState.isBadgeTorn) { box.classList.add("hidden"); return; }
-      const pol = gameState.players.find(p => p.seat === gameState.policeSeat);
+      const pol = gameState.players.find(p => Number(p.seat) === Number(gameState.policeSeat));
       if (pol && !pol.isAlive) {
         box.classList.remove("hidden");
         const alive = gameState.players.filter(p => p.isAlive);
@@ -1640,11 +1675,19 @@
     }
 
     function applyTransferBadge() {
-      const target = parseInt(document.getElementById("transferBadgeTargetSelect").value);
+      const target = Number(document.getElementById("transferBadgeTargetSelect").value);
       if (!target) return;
       const old = gameState.policeSeat;
       gameState.policeSeat = target;
       document.getElementById("policeBadgeTransferBox").classList.add("hidden");
+
+      gameState.history.push({
+        title: `D${gameState.day} 警徽移交`,
+        badgeText: `👑 警徽移交：${old} 號 ➔ ${target} 號`,
+        votes: {},
+        badgeHolder: target
+      });
+
       pushStateToFirebase(`👑 警徽移交：${old} 號 ➔ ${target} 號`);
       renderAllViews();
       alert(`👑 警徽已移交給 ${target} 號！`);
@@ -1656,6 +1699,14 @@
       gameState.policeSeat = null;
       gameState.isBadgeTorn = true;
       document.getElementById("policeBadgeTransferBox").classList.add("hidden");
+
+      gameState.history.push({
+        title: `D${gameState.day} 警徽撕毀`,
+        badgeText: `🔥 警長 ${old} 號撕毀警徽 (警徽流失)`,
+        votes: {},
+        badgeHolder: null
+      });
+
       pushStateToFirebase(`🔥 警長 ${old} 號撕毀警徽`);
       renderAllViews();
       alert(`🔥 警徽已撕毀！本局後續投票皆為 1 票制。`);
@@ -1682,7 +1733,6 @@
     // ==========================================
     function enterNextNight() {
       gameState.round += 1;
-      gameState.day += 1;
       gameState.phase = "NIGHT";
       gameState.tempVotes = {};
       gameState.selectedTarget = null;
