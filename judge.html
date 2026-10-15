@@ -1133,7 +1133,48 @@
         }
       }
 
-      // 2. 所有手勢即時反饋
+      // 2. 狼刀命中女巫：紅底警戒樣式與按鈕鎖定
+      const witchCard = document.getElementById("action-card-witch");
+      const wolfEl = document.getElementById('target-wolf') || 
+                     document.getElementById('target-wolf_team_confirm') ||
+                     document.querySelector("select[id^='target-wolf']");
+      const rawWolfTarget = Number(wolfEl?.value || 0);
+      const witchPlayer = gameState.players.find(p => p.role === "女巫");
+      const isWitchTargeted = (witchPlayer && rawWolfTarget > 0 && Number(witchPlayer.seat) === rawWolfTarget);
+
+      if (witchCard) {
+        const hint = document.getElementById('witchRawKillHint');
+        const antBtn = document.getElementById("antidoteBtn");
+
+        if (isWitchTargeted) {
+          // 命中女巫：套用紅底警示樣式（同獵人欄位的警告風格）
+          witchCard.classList.remove("bg-gray-800/70", "border-gray-700");
+          witchCard.classList.add("bg-rose-950/40", "border-rose-600/80");
+
+          if (hint) {
+            hint.innerHTML = `原始刀口：<span class="text-rose-400 font-bold">${rawWolfTarget} 號 (女巫中刀，不可自救)</span>`;
+          }
+          if (antBtn && !gameState.nightMemory.witchAntidoteUsed) {
+            antBtn.disabled = true;
+            antBtn.innerText = "不可自救";
+            antBtn.className = "bg-gray-800 text-rose-400/60 border border-rose-900/50 text-[11px] px-2 py-0.5 rounded cursor-not-allowed";
+          }
+        } else {
+          // 未命中女巫：還原一般樣式
+          witchCard.classList.remove("bg-rose-950/40", "border-rose-600/80");
+          witchCard.classList.add("bg-gray-800/70", "border-gray-700");
+
+          if (antBtn && !gameState.nightMemory.witchAntidoteUsed) {
+            antBtn.disabled = false;
+            antBtn.innerText = antidoteUsedThisNight ? "已使用 (救人)" : "未使用";
+            antBtn.className = antidoteUsedThisNight 
+              ? "bg-emerald-600 text-white text-[11px] px-2 py-0.5 rounded font-bold transition" 
+              : "bg-gray-700 text-gray-300 text-[11px] px-2 py-0.5 rounded transition";
+          }
+        }
+      }
+
+      // 3. 所有手勢即時反饋
       const context = {
         rawPoisonTarget: Number(document.getElementById("poisonTarget")?.value || 0) || 0,
         swapPair: swapPair,
