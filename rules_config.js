@@ -1,6 +1,6 @@
 /**
  * 基地狼人殺 - 規則與板型獨立設定檔 (rules_config.js)
- * 基準版本：全域規則大腦 + 26位角色字典 + 8套定案板型 + RULES_ENGINE 核心運算引擎 (完整修復版)
+ * 基準版本：全域規則大腦 + 26位角色字典 + 8套定案板型 + RULES_ENGINE 核心運算引擎 (完整修復增強版)
  */
 
 // ==========================================
@@ -57,8 +57,8 @@ const ROLE_DEFINITIONS = {
   "夢魘": { seatType: "WEREWOLF", faction: "werewolf", canFear: true, priority: "FIRST", canFearSameTargetConsecutively: false, canFearSelf: false },
   "覺醒石像鬼": { seatType: "WEREWOLF", faction: "werewolf", canConvertNeighbor: true, activeNight: 1 },
   "寂夜導師": { seatType: "WEREWOLF", faction: "werewolf", canBuffOrDebuff: true, activeNightStart: 2, canSelfExplode: false },
-  "狼兄": { seatType: "WEREWOLF", faction: "werewolf" },
-  "狼弟": { seatType: "WEREWOLF", faction: "werewolf" }
+  "狼兄": { seatType: "WEREWOLF", faction: "werewolf", canNightKill: true, canSelfExplode: false },
+  "狼弟": { seatType: "WEREWOLF", faction: "werewolf", canNightKill: false, canSelfExplode: true, seerCheckBeforeBrotherDead: "villager", seerCheckAfterBrotherDead: "werewolf" }
 };
 
 // ==========================================
@@ -293,7 +293,7 @@ const RULES_ENGINE = {
     };
   },
 
-  // 1. 預言家查驗判定 (支援魔術師號碼牌置換映射 + 強制轉型比對)
+  // 1. 預言家查驗判定 (支援魔術師號碼牌置換 + 狼弟在狼兄死前為好人金水)
   resolveCheck(targetSeat, swapPair = [0, 0], players = []) {
     const tSeat = Number(targetSeat) || 0;
     if (!tSeat) return { isReady: false, isWolf: false, text: "待查驗" };
@@ -308,7 +308,19 @@ const RULES_ENGINE = {
     const targetPlayer = players.find(p => Number(p.seat) === effectiveSeat);
     if (!targetPlayer) return { isReady: false, isWolf: false, text: "查無此人" };
 
-    const isWolf = (targetPlayer.seatType === "WEREWOLF");
+    let isWolf = (targetPlayer.seatType === "WEREWOLF");
+
+    // 狼弟專屬規則：狼兄存活時，狼弟查驗結果為好人 (金水)；狼兄出局後為狼人 (查殺)
+    if (targetPlayer.role === "狼弟") {
+      const brother = players.find(p => p.role === "狼兄");
+      const isBrotherAlive = brother ? brother.isAlive : false;
+      if (isBrotherAlive) {
+        isWolf = false; // 狼兄尚在，查驗顯示好人
+      } else {
+        isWolf = true;  // 狼兄出局，查驗顯示狼人
+      }
+    }
+
     return {
       isReady: true,
       isWolf: isWolf,
@@ -521,9 +533,10 @@ const RULES_ENGINE = {
     }
   },
 
-  // 7. 夜間死訊綜合結算演算法 (含魔術師號碼牌交換與技能禁槍)
+  // 7. 夜間死訊綜合結算演算法 (含狼兄弟同刀穿透、守衛、女巫與魔術師換位)
   resolveNight(inputs = {}, nightMemory = {}) {
     const rawWolf = Number(inputs.rawWolfTarget) || 0;
+    const rawSoloWolf = Number(inputs.youngWolfSoloTarget) || 0; // 狼弟覺醒單獨刀
     const rawPoison = Number(inputs.rawPoisonTarget) || 0;
     const guard = Number(inputs.guardTarget) || 0;
     const antidoteUsed = !!inputs.antidoteUsed;
@@ -540,6 +553,7 @@ const RULES_ENGINE = {
     };
 
     const effectiveWolf = applySwap(rawWolf);
+    const effectiveSoloWolf = applySwap(rawSoloWolf);
     const effectivePoison = applySwap(rawPoison);
     const effectiveGuard = applySwap(guard);
 
@@ -547,14 +561,30 @@ const RULES_ENGINE = {
     let hunterCanShoot = true;
     let wolfKingCanShoot = true;
 
-    // 狼刀 + 守衛 + 女巫解藥 (同守同救奶穿)
-    if (effectiveWolf) {
-      if (antidoteUsed && effectiveGuard === effectiveWolf) {
-        deaths.push(effectiveWolf); // 同守同救奶穿
-      } else if (antidoteUsed || effectiveGuard === effectiveWolf) {
-        // 平安
-      } else {
-        deaths.push(effectiveWolf);
+    // 核心規則：狼人與狼弟同刀（擊殺同一名玩家），解藥與守衛皆無效直接穿透倒牌
+    const isBrotherDualKilled = (effectiveWolf > 0 && effectiveWolf === effectiveSoloWolf);
+
+    if (isBrotherDualKilled) {
+      deaths.push(effectiveWolf);
+    } else {
+      // 處理常規狼刀
+      if (effectiveWolf) {
+        if (antidoteUsed && effectiveGuard === effectiveWolf) {
+          deaths.push(effectiveWolf); // 同守同救奶穿
+        } else if (antidoteUsed || effectiveGuard === effectiveWolf) {
+          // 平安 (守衛守護或女巫開解藥)
+        } else {
+          deaths.push(effectiveWolf);
+        }
+      }
+
+      // 處理狼弟覺醒刀
+      if (effectiveSoloWolf && !deaths.includes(effectiveSoloWolf)) {
+        if (effectiveGuard === effectiveSoloWolf) {
+          // 守衛守護成功
+        } else {
+          deaths.push(effectiveSoloWolf);
+        }
       }
     }
 
