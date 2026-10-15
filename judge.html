@@ -16,8 +16,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-  <!-- 引入規則大腦與獨立設定檔 (加入版本號破除瀏覽器快取) -->
-  <script src="rules_config.js?v=20261015_patch"></script>
+  <!-- 引入規則大腦與獨立設定檔 (加入時間戳參數破除瀏覽器快取) -->
+  <script src="rules_config.js?v=20261015_patch_v2"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -257,7 +257,7 @@
           </span>
         </div>
 
-        <!-- 獵人/狼王出局開槍提示區 (出局自動觸發) -->
+        <!-- 獵人/狼王出局開槍提示區 (出局自動觸發)[cite: 1] -->
         <div id="hunterActionBox" class="hidden p-2.5 bg-amber-950/40 border border-amber-600/80 rounded-lg text-xs">
           <div class="font-bold text-amber-300 mb-1 flex items-center gap-1">
             <i class="fa-solid fa-crosshairs"></i> <span id="gunTriggerTitle">觸發出局開槍技能：</span>
@@ -454,9 +454,11 @@
           if (!gameState.tempVotes) gameState.tempVotes = {};
           if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
 
-          // 確保數值型態一致性
+          // 強制型別對齊，保證 seat 與 policeSeat 為純數字
           gameState.players.forEach(p => { p.seat = Number(p.seat); });
-          if (gameState.policeSeat !== null) gameState.policeSeat = Number(gameState.policeSeat);
+          if (gameState.policeSeat !== null && gameState.policeSeat !== undefined) {
+            gameState.policeSeat = Number(gameState.policeSeat);
+          }
 
           renderAllViews();
           isRemoteUpdate = false;
@@ -789,7 +791,7 @@
     function confirmSetup() {
       const checkResult = checkSeatDuplicates();
 
-      // 強制同步所有席位下拉選單的值
+      // 強制同步所有席位下拉選單的值，確保型別與身分完全對齊
       for (let i = 1; i <= 12; i++) {
         const selRole = document.getElementById(`roleSelect-${i}`)?.value;
         const selName = document.getElementById(`userSelect-${i}`)?.value;
@@ -874,7 +876,7 @@
 
         return `
           <div class="h-10 rounded border ${borderStyle} flex flex-col items-center justify-center text-xs relative font-mono">
-            ${statusBadge ? `<span class="absolute -top-1.5 -right-1 text-[10px]">${statusBadge}</span>` : ''}
+            ${statusBadge ? `<span class="absolute -top-1.5 -right-1 text-[10px]">\${statusBadge}</span>` : ''}
             <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
             <span class="text-[8px] truncate px-0.5">${statusText}</span>
           </div>
@@ -1079,33 +1081,31 @@
       refreshAllRuleDisplays();
     }
 
+    // 完整修復：女巫一律不可自救判定
     function toggleAntidote() {
-  if (gameState.nightMemory.witchAntidoteUsed) return;
+      if (gameState.nightMemory.witchAntidoteUsed) return;
 
-  // 1. 抓取女巫玩家席位
-  const witch = gameState.players.find(p => p.role === "女巫");
-  
-  // 2. 抓取當前狼刀目標
-  const wolfEl = document.getElementById('target-wolf') || 
-                 document.getElementById('target-wolf_team_confirm') ||
-                 document.querySelector("select[id^='target-wolf']");
-  const rawWolfTarget = Number(wolfEl?.value || 0);
+      const witch = gameState.players.find(p => p.role === "女巫");
+      const wolfEl = document.getElementById('target-wolf') || 
+                     document.getElementById('target-wolf_team_confirm') ||
+                     document.querySelector("select[id^='target-wolf']");
+      const rawWolfTarget = Number(wolfEl?.value || 0);
 
-  // 3. 判定一律不可自救
-  if (!antidoteUsedThisNight && witch && rawWolfTarget === Number(witch.seat)) {
-    alert("⚠️ 本局規則：女巫一律不可自救！");
-    return;
-  }
+      // 當狼刀指向女巫本人時，阻擋開解藥
+      if (!antidoteUsedThisNight && witch && rawWolfTarget === Number(witch.seat)) {
+        alert("⚠️ 本局規則：女巫一律不可自救！");
+        return;
+      }
 
-  antidoteUsedThisNight = !antidoteUsedThisNight;
-  const btn = document.getElementById("antidoteBtn");
-  btn.innerText = antidoteUsedThisNight ? "已使用 (救人)" : "未使用";
-  btn.className = antidoteUsedThisNight 
-    ? "bg-emerald-600 text-white text-[11px] px-2 py-0.5 rounded font-bold transition" 
-    : "bg-gray-700 text-gray-300 text-[11px] px-2 py-0.5 rounded transition";
-    
-  refreshAllRuleDisplays();
-}
+      antidoteUsedThisNight = !antidoteUsedThisNight;
+      const btn = document.getElementById("antidoteBtn");
+      btn.innerText = antidoteUsedThisNight ? "已使用 (救人)" : "未使用";
+      btn.className = antidoteUsedThisNight 
+        ? "bg-emerald-600 text-white text-[11px] px-2 py-0.5 rounded font-bold transition" 
+        : "bg-gray-700 text-gray-300 text-[11px] px-2 py-0.5 rounded transition";
+        
+      refreshAllRuleDisplays();
+    }
 
     function refreshAllRuleDisplays() {
       if (typeof RULES_ENGINE === 'undefined' || !gameState.players || gameState.players.length === 0) return;
