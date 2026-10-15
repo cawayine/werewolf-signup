@@ -3,18 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>基地狼人殺 - 上帝專屬記分台</title>
+  <title>基地狼人殺 - 上帝專屬記分主控台 (瘦身整合版)</title>
+  
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   
-  <!-- 核心：引入外部規則大腦與獨立設定檔 -->
+  <!-- Firebase 官方 SDK (Compat 模式) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <!-- 引入升級版規則大腦與獨立設定檔 -->
   <script src="rules_config.js"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .neon-border { border: 1px solid #30363d; }
     .active-card { border-color: #388bfd; box-shadow: 0 0 12px rgba(56, 139, 253, 0.15); }
-    .gold-glow { text-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
     select, input { background-color: #161b22; border-color: #30363d; color: #f0f6fc; }
     
     .seat-duplicate-box {
@@ -28,6 +36,32 @@
       color: #fca5a5 !important;
       font-weight: bold !important;
     }
+
+    /* 樂透彩球專屬立體視覺 (與公播端對齊) */
+    .lotto-ball {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 900;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #ffffff;
+      box-shadow: inset -2px -2px 4px rgba(0, 0, 0, 0.45), inset 1px 1px 3px rgba(255, 255, 255, 0.4), 0 2px 4px rgba(0,0,0,0.5);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .lotto-ball-lg { width: 38px; height: 38px; font-size: 16px; }
+    .ball-target { background: radial-gradient(circle at 35% 35%, #f59e0b, #b45309); border: 1px solid #fbbf24; }
+    .ball-voter { background: radial-gradient(circle at 35% 35%, #3b82f6, #1d4ed8); border: 1px solid #60a5fa; }
+    .ball-police-voter {
+      background: radial-gradient(circle at 35% 35%, #ec4899, #be185d);
+      border: 2px solid #fde047;
+      box-shadow: inset -2px -2px 4px rgba(0, 0, 0, 0.45), inset 1px 1px 3px rgba(255, 255, 255, 0.4), 0 0 8px rgba(234, 179, 8, 0.6);
+    }
+    .ball-abstain { background: radial-gradient(circle at 35% 35%, #6b7280, #374151); border: 1px solid #9ca3af; }
   </style>
 </head>
 <body class="p-3 max-w-xl lg:max-w-7xl mx-auto pb-28 lg:pb-10">
@@ -41,8 +75,12 @@
       <div>
         <h1 class="text-sm lg:text-base font-black text-gray-100 flex items-center gap-1.5">
           基地狼人殺 - 上帝記分主控台
+          <span id="syncStatusBadge" class="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[10px] px-1.5 py-0.2 rounded font-bold">雲端同步中...</span>
         </h1>
-        <span class="text-[11px] text-amber-300 font-bold" id="currentBoardLabel">讀取中...</span>
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] text-amber-300 font-bold" id="currentBoardLabel">讀取中...</span>
+          <span class="text-[10px] text-amber-400 font-bold font-mono" id="policeBadgeIndicator">警長：未指定</span>
+        </div>
       </div>
     </div>
     <div class="flex items-center gap-2">
@@ -50,7 +88,7 @@
         第 1 夜
       </span>
       <button onclick="abandonMatch()" class="bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 text-xs px-2.5 py-1 rounded font-bold transition flex items-center gap-1">
-        <i class="fa-solid fa-ban"></i> 流局作廢
+        <i class="fa-solid fa-ban"></i> 流局
       </button>
       <button onclick="resetMatch()" class="bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 text-xs px-2.5 py-1 rounded border border-gray-700 transition">
         重置
@@ -58,13 +96,29 @@
     </div>
   </header>
 
-  <!-- 電腦橫式佈局容器 -->
+  <!-- 特殊角色模組開關列 -->
+  <div class="mb-3 p-2 bg-gray-900 rounded-xl neon-border flex items-center justify-between text-xs">
+    <div class="flex items-center gap-1.5 font-bold text-gray-300">
+      <i class="fa-solid fa-sliders text-indigo-400"></i>
+      <span>特殊模組 (與公播連動)：</span>
+    </div>
+    <div class="flex gap-2">
+      <button id="toggleTricksterBtn" onclick="toggleModuleSetting('enableTrickster')" class="px-2.5 py-1 rounded text-xs font-bold border transition bg-gray-800 text-gray-400 border-gray-700">
+        🎭 詭術師：關
+      </button>
+      <button id="togglePrinceBtn" onclick="toggleModuleSetting('enablePrince')" class="px-2.5 py-1 rounded text-xs font-bold border transition bg-gray-800 text-gray-400 border-gray-700">
+        👑 定序王子：關
+      </button>
+    </div>
+  </div>
+
+  <!-- 主版面容器 -->
   <div class="lg:grid lg:grid-cols-12 lg:gap-4 lg:items-start">
     
-    <!-- 左側欄位（佔 7 欄）：坑位存活監控 + 12 席座位配置管理 -->
+    <!-- 左側欄位（佔 7 欄）：坑位監控 + 座位存活 + 警徽處置 -->
     <div class="lg:col-span-7 space-y-3 mb-3 lg:mb-0">
       
-      <!-- 區塊：存活坑位即時監控面板 -->
+      <!-- 坑位即時監控面板 -->
       <section class="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
         <div class="bg-gray-900 p-2.5 rounded-xl border border-blue-900/60 shadow">
           <div class="text-blue-400 font-bold">神職存活 (GOD)</div>
@@ -80,7 +134,28 @@
         </div>
       </section>
 
-      <!-- 區塊：開局座位與名單配置 -->
+      <!-- 警徽處置提示卡片 (警長出局時自動彈出) -->
+      <div id="policeBadgeTransferBox" class="p-2.5 bg-amber-950/40 border border-amber-500/80 rounded-xl hidden">
+        <div class="flex justify-between items-center mb-1.5">
+          <span class="text-xs font-bold text-amber-300 flex items-center gap-1">
+            <i class="fa-solid fa-crown text-amber-400"></i> ⚠️ 警長出局！請移交或撕毀警徽：
+          </span>
+        </div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-xs text-gray-300">移交給：</span>
+          <select id="transferBadgeTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-amber-200 font-bold outline-none"></select>
+          <button onclick="applyTransferBadge()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3 py-1 rounded text-xs transition">
+            確認移交
+          </button>
+        </div>
+        <div class="pt-1.5 border-t border-amber-900/60 flex justify-end">
+          <button onclick="applyTearBadge()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold px-3 py-1 rounded text-xs transition">
+            🔥 撕毀警徽 (本局不再有警長)
+          </button>
+        </div>
+      </div>
+
+      <!-- 開局配置抽屜 -->
       <details open id="setupPanel" class="bg-gray-900 rounded-xl neon-border overflow-hidden shadow">
         <summary class="px-3 py-2.5 font-bold text-xs bg-gray-800/80 cursor-pointer flex justify-between items-center text-gray-200">
           <span><i class="fa-solid fa-users-gear mr-1.5 text-blue-400"></i> 開局配置：選擇板型與指派 12 席座位</span>
@@ -102,16 +177,27 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-2 lg:grid-cols-3 gap-2 text-xs max-h-[60vh] overflow-y-auto pr-1" id="seatAssignmentGrid">
+          <div class="grid grid-cols-2 lg:grid-cols-3 gap-2 text-xs max-h-[50vh] overflow-y-auto pr-1" id="seatAssignmentGrid">
           </div>
 
           <button onclick="confirmSetup()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-xs shadow mt-2 transition flex items-center justify-center gap-1.5">
-            <i class="fa-solid fa-check"></i> 確認座位與身分，進入第 1 夜
+            <i class="fa-solid fa-check"></i> 確認座位與身分，進入第 1 夜 (同步至公播)
           </button>
         </div>
       </details>
 
-      <!-- 電腦端專屬：左側常駐對局狀態與存檔欄 -->
+      <!-- 12 席座位存活總覽點陣 (同步公播樣式) -->
+      <section class="bg-gray-900 rounded-xl neon-border p-3 shadow">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+            <i class="fa-solid fa-users"></i> 全場席位存活狀態總覽
+          </span>
+          <span class="text-[11px] text-emerald-400 font-mono font-bold" id="aliveRatioDisplay">存活 12 / 12 人</span>
+        </div>
+        <div class="grid grid-cols-6 lg:grid-cols-12 gap-1.5" id="liveSeatsOverviewGrid"></div>
+      </section>
+
+      <!-- 底部常駐對局狀態與存檔欄 -->
       <div class="hidden lg:flex bg-gray-900 rounded-xl neon-border p-3 justify-between items-center shadow">
         <div>
           <span class="text-xs text-gray-400">目前勝負判定：</span>
@@ -124,10 +210,10 @@
 
     </div>
 
-    <!-- 右側欄位（佔 5 欄）：現場法官流程執行台 -->
+    <!-- 右側欄位（佔 5 欄）：夜間主持台 + 白天競選/放逐工作台 -->
     <div class="lg:col-span-5 space-y-3">
       
-      <!-- 區塊：夜間行動流程引導 (卡片式，依板型與 inputSchema 動態生成) -->
+      <!-- 區塊 1：夜間行動流程引導 (卡片式) -->
       <section id="nightPanel" class="bg-gray-900 rounded-xl neon-border p-3 active-card shadow">
         <div class="flex justify-between items-center mb-2.5 pb-2 border-b border-gray-800">
           <h2 class="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
@@ -136,72 +222,166 @@
           <span class="text-[10px] text-amber-400 font-mono" id="nightPhaseHint">請照順序喚醒確認</span>
         </div>
 
-        <!-- 動態夜間卡片容器 -->
-        <div class="space-y-2 text-xs" id="nightActionsContainer">
+        <!-- 詭術師夜間號碼置換卡片 (若模組開啟顯示) -->
+        <div id="tricksterNightBox" class="hidden mb-2.5 p-2 bg-purple-950/40 border border-purple-800/80 rounded-lg text-xs">
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-bold text-purple-300">🎭 詭術師夜間置換 (私密登記)：</span>
+            <span id="tricksterStatusText" class="text-[10px] text-gray-400">未置換</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <select id="tricksterA" class="flex-1 rounded p-1 text-xs border bg-gray-800"></select>
+            <span class="text-purple-400 font-bold">⇄</span>
+            <select id="tricksterB" class="flex-1 rounded p-1 text-xs border bg-gray-800"></select>
+            <button onclick="saveTricksterSwap()" class="bg-purple-700 hover:bg-purple-600 text-white font-bold px-2 py-1 rounded text-xs transition">
+              儲存
+            </button>
+            <button onclick="clearTricksterSwap()" class="text-gray-400 hover:text-rose-400 text-xs px-1">
+              清空
+            </button>
+          </div>
         </div>
+
+        <!-- 動態夜間卡片容器 -->
+        <div class="space-y-2 text-xs" id="nightActionsContainer"></div>
 
         <div class="mt-3 pt-2.5 border-t border-gray-800 flex justify-end">
           <button onclick="resolveNight()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-xs shadow flex items-center justify-center gap-1.5 transition">
-            <i class="fa-solid fa-sun text-amber-300"></i> 天亮結算死訊 ➔
+            <i class="fa-solid fa-sun text-amber-300"></i> 天亮結算死訊 (同步公播) ➔
           </button>
         </div>
       </section>
 
-      <!-- 區塊：天亮死訊與白天票決 -->
-      <section id="dayPanel" class="bg-gray-900 rounded-xl neon-border p-3 hidden shadow">
-        <div class="flex justify-between items-center mb-2 pb-2 border-b border-gray-800">
+      <!-- 區塊 2：白天綜合執行台 (警選 + 白天突發 + 公投放逐) -->
+      <section id="dayPanel" class="bg-gray-900 rounded-xl neon-border p-3 hidden shadow space-y-3">
+        
+        <!-- 白天頂部資訊列 -->
+        <div class="flex justify-between items-center pb-2 border-b border-gray-800">
           <h2 class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-            <i class="fa-solid fa-sun text-amber-400"></i> 白天環節與公投
+            <i class="fa-solid fa-sun text-amber-400"></i> <span id="dayHeaderStageText">白天環節</span>
           </h2>
           <span id="nightDeathSummary" class="text-xs bg-rose-950 text-rose-300 px-2 py-0.5 rounded border border-rose-800 font-bold">
             昨夜死訊計算中
           </span>
         </div>
 
-        <!-- 獵人/狼王出局開槍提示區 -->
-        <div id="hunterActionBox" class="hidden mb-2.5 p-2.5 bg-amber-950/40 border border-amber-600/80 rounded-lg text-xs">
-          <div class="font-bold text-amber-300 mb-1 flex items-center gap-1">
-            <i class="fa-solid fa-crosshairs"></i> <span id="gunTriggerTitle">觸發出局開槍技能：</span>
+        <!-- 白天突發中斷功能列：自爆與技能連帶 -->
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="bg-rose-950/30 p-2 rounded-lg border border-rose-800/60">
+            <div class="text-[11px] font-bold text-rose-300 mb-1 flex items-center gap-1">
+              <i class="fa-solid fa-bomb"></i> 狼人白天自爆：
+            </div>
+            <div class="flex gap-1">
+              <select id="dayWolfExplodeSelect" class="flex-1 rounded p-1 text-[11px] bg-gray-800 border"></select>
+              <button onclick="handleDayWolfExplode()" class="bg-rose-600 hover:bg-rose-500 text-white px-2 py-1 rounded font-bold text-[11px] transition">
+                自爆
+              </button>
+            </div>
           </div>
-          <div class="flex items-center gap-2">
-            <span>帶走目標：</span>
-            <select id="hunterTarget" class="flex-1 rounded p-1 text-xs border">
-              <option value="">選擇開槍帶走對象</option>
-            </select>
-            <button onclick="applyHunterShot()" class="bg-amber-600 hover:bg-amber-500 text-white px-2.5 py-1 rounded font-bold transition">
-              確定開槍
-            </button>
+
+          <div class="bg-orange-950/30 p-2 rounded-lg border border-orange-800/60">
+            <div class="text-[11px] font-bold text-orange-300 mb-1 flex items-center gap-1">
+              <i class="fa-solid fa-crosshairs"></i> 技能連帶帶走：
+            </div>
+            <div class="flex gap-1">
+              <select id="daySkillKillSelect" class="flex-1 rounded p-1 text-[11px] bg-gray-800 border"></select>
+              <button onclick="handleDaySkillKill()" class="bg-orange-600 hover:bg-orange-500 text-white px-2 py-1 rounded font-bold text-[11px] transition">
+                帶走
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- 快速歸票器 -->
-        <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700 text-xs space-y-2">
+        <!-- 【階段 A】警長競選 / PK 決選模組 -->
+        <div id="dayPoliceModule" class="space-y-2.5 p-2.5 bg-gray-800/50 rounded-xl border border-amber-500/40">
           <div class="flex justify-between items-center">
-            <span class="font-bold text-gray-200">🗳️ 放逐投票計票</span>
-            <span class="text-[10px] text-gray-400">先選目標 ➔ 點選投票人</span>
+            <span class="text-xs font-bold text-amber-400 flex items-center gap-1">
+              <i class="fa-solid fa-crown"></i> 👑 警長競選環節
+            </span>
+            <span id="policeExplodeCountLabel" class="text-[10px] text-amber-300 font-bold">自爆計數：0 / 2</span>
           </div>
 
-          <div class="flex flex-wrap gap-1.5" id="voteTargetsContainer"></div>
-
-          <div class="text-[11px] text-gray-400 mt-2 mb-1">存活選民點擊歸票：</div>
-          <div class="flex flex-wrap gap-1.5" id="votersBadgeContainer"></div>
-
-          <div class="bg-gray-950 p-2.5 rounded border border-gray-800 text-[11px] font-mono space-y-0.5" id="voteSummaryBox">
-            票型統計即時顯示於此...
+          <!-- 競選中自爆專屬操作 -->
+          <div class="flex items-center gap-1.5 p-1.5 bg-rose-950/40 rounded border border-rose-800/60 text-xs">
+            <span class="text-[10px] text-rose-300 font-bold">競選自爆：</span>
+            <select id="policeWolfExplodeSelect" class="flex-1 rounded p-1 text-[11px] bg-gray-800 border"></select>
+            <button onclick="handlePoliceWolfExplode()" class="bg-rose-700 hover:bg-rose-600 text-white px-2 py-1 rounded font-bold text-[11px] transition">
+              確認自爆
+            </button>
           </div>
 
-          <div class="flex justify-between items-center pt-2 border-t border-gray-700">
-            <button onclick="confirmExile()" class="w-full bg-rose-600 hover:bg-rose-500 text-white text-xs py-2 px-3 rounded-lg font-bold shadow transition">
-              確認放逐出局
+          <!-- 步驟 1：登記上警 / 退水 -->
+          <div class="bg-gray-900/60 p-2 rounded-lg border border-gray-700">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-[11px] font-bold text-gray-200" id="step1PoliceLabel">點選登記上警名單：</span>
+              <span class="text-[10px] text-gray-400">點擊切換 上警/退水</span>
+            </div>
+            <div class="grid grid-cols-6 gap-1" id="policeCandidateToggleGrid"></div>
+          </div>
+
+          <!-- 步驟 2：警長計票 -->
+          <div class="bg-gray-900/60 p-2 rounded-lg border border-gray-700">
+            <div class="text-[11px] font-bold text-amber-300 mb-1">受票候選人：</div>
+            <div class="flex flex-wrap gap-1 mb-2" id="policeTargetCandidateContainer"></div>
+            
+            <div class="text-[11px] font-bold text-blue-300 mb-1">警下選民投票：</div>
+            <div class="grid grid-cols-6 gap-1 mb-2" id="policeVoterGrid"></div>
+
+            <button onclick="confirmPoliceElection()" id="confirmPoliceBtn" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded text-xs shadow transition">
+              確認開票並結算警長 (同步至公播)
             </button>
           </div>
         </div>
 
-        <div class="mt-3 flex justify-between items-center">
-          <button onclick="backToNight()" class="text-xs text-gray-400 hover:text-white underline">
-            ↩ 返回上一夜操作
+        <!-- 【階段 B】放逐公投與彩球票型模組 -->
+        <div id="dayExileModule" class="space-y-2.5 p-2.5 bg-gray-800/50 rounded-xl border border-gray-700">
+          <div class="flex justify-between items-center">
+            <span class="text-xs font-bold text-gray-200 flex items-center gap-1">
+              <i class="fa-solid fa-square-poll-vertical text-amber-400"></i> 放逐投票計票 (警長 1.5 票)
+            </span>
+            <span id="princeStatusTag" class="text-[10px] font-bold text-amber-400 hidden">⏳ 王子重投輪次</span>
+          </div>
+
+          <!-- 選擇受票目標 -->
+          <div class="text-[11px] text-amber-300">選擇放逐目標：</div>
+          <div class="flex flex-wrap gap-1" id="exileTargetContainer"></div>
+
+          <!-- 存活選民點擊歸票 -->
+          <div class="text-[11px] text-emerald-300">存活選民歸票：</div>
+          <div class="grid grid-cols-6 gap-1" id="exileVotersGrid"></div>
+
+          <!-- 實時彩球票型預覽 (委託 RULES_ENGINE 排序) -->
+          <div class="bg-gray-950 p-2.5 rounded-lg border border-gray-800 space-y-1.5" id="lottoPreviewContainer">
+            <div class="text-[11px] text-gray-500 text-center">點擊上方選民輸入票型...</div>
+          </div>
+
+          <!-- 定序王子翻牌按鈕 -->
+          <button id="princeTriggerBtn" onclick="handlePrinceReversal()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-1.5 rounded text-xs shadow transition hidden">
+            👑 定序王子翻牌發動【逆轉時空】(票型封存並重投)
           </button>
-          <button onclick="enterNextNight()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-1.5 px-4 rounded-lg text-xs shadow transition">
+
+          <!-- 放逐結算 -->
+          <div class="flex gap-2 pt-1 border-t border-gray-700">
+            <button onclick="confirmExileVote()" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded text-xs shadow transition">
+              確認放逐出局並封存票型
+            </button>
+          </div>
+        </div>
+
+        <!-- 歷史票型紀錄標籤列 (與公播一致) -->
+        <div class="p-2 bg-gray-900 rounded-lg border border-gray-800">
+          <div class="text-[10px] text-gray-400 mb-1 flex items-center justify-between">
+            <span>📜 本局開票歷史紀錄：</span>
+            <span class="text-[9px] text-gray-500">點擊查看</span>
+          </div>
+          <div class="flex gap-1 overflow-x-auto pb-1 text-xs" id="judgeHistoryTabContainer"></div>
+        </div>
+
+        <!-- 白天底端流程切換 -->
+        <div class="pt-2 border-t border-gray-800 flex justify-between items-center">
+          <button onclick="backToNight()" class="text-xs text-gray-400 hover:text-white underline">
+            ↩ 返回上一夜重新結算
+          </button>
+          <button onclick="enterNextNight()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-5 rounded-lg text-xs shadow transition flex items-center gap-1.5">
             進入下一個夜晚 ➔
           </button>
         </div>
@@ -210,75 +390,215 @@
     </div>
   </div>
 
-  <!-- 手機端底部固定結算列 -->
-  <footer class="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-50">
-    <div class="max-w-xl mx-auto flex justify-between items-center">
-      <div class="text-xs">
-        <span class="text-gray-400">對局狀態：</span>
-        <span id="gameStatusText" class="text-emerald-400 font-bold">進行中</span>
-      </div>
-      <button onclick="commitMatchResults()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow transition">
-        <i class="fa-solid fa-cloud-arrow-up"></i> 結算並寫入資料庫
-      </button>
-    </div>
-  </footer>
-
   <script>
     const MOCK_MEMBERS = [
       "小前 (Chien)", "郭郭", "King", "底迪", "Lucas", "提摩", 
       "hokai", "霏霏", "慶", "崇朗", "皓晴", "貓貓"
     ];
 
-    let currentBoardKey = "";
-
-    let gameState = {
-      round: 1,
-      phase: "SETUP",
-      winner: null,
-      policeSeat: null,
-      lastExiledPlayer: null,
-      players: [],
-      nightMemory: {
-        guardLastTarget: null,
-        dreamerLastTarget: null,
-        nightmareLastTarget: null,
-        magicianSwappedSeats: new Set(),
-        witchAntidoteUsed: false,
-        witchPoisonUsed: false,
-        gargoyleConvertedTarget: null,
-        blackMarketGifts: { seer: null, poison: null, gun: null },
-        blackMarketTransformedWolf: false,
-        youngWolfSoloKillUsed: false
-      }
+    // Firebase 配置 (與公播端共用相同 Database)[cite: 2]
+    const firebaseConfig = {
+      apiKey: "AIzaSyD-IcZrJUj4pXYxe9ZXNxU5o5A1koSwxbc",
+      authDomain: "werewolf-base.firebaseapp.com",
+      databaseURL: "https://werewolf-base-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "werewolf-base",
+      storageBucket: "werewolf-base.firebasestorage.app",
+      messagingSenderId: "1044529133849",
+      appId: "1:1044529133849:web:b79bf341b1296971252d88"
     };
 
-    let currentVoteTarget = null;
-    let votesMap = {};
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const matchRef = db.ref("currentMatch");
+
+    let currentBoardKey = "";
+    let isRemoteUpdate = false;
+    let lastHandledActionId = null;
+
+    // 直接使用 RULES_ENGINE 工廠函式初始化狀態[cite: 3]
+    let gameState = RULES_ENGINE.createInitialGameState();
     let antidoteUsedThisNight = false;
 
-    function initBoardSelector() {
-      if (typeof BOARD_DATABASE === 'undefined') {
-        alert("找不到 rules_config.js 設定檔，請確認該檔案已上傳至同層目錄！");
-        return;
+    // ==========================================
+    // 1. 初始化與 Firebase 雙向實時監聽
+    // ==========================================
+    window.onload = () => {
+      initBoardSelector();
+
+      matchRef.on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          if (data.actionId && data.actionId !== lastHandledActionId && data.lastActionBy === "RECORDER") {
+            lastHandledActionId = data.actionId;
+            alert(`🔔 【計票員已完成操作同步！】\n狀態更新：${data.lastActionSummary || '已完成開票'}`);
+          }
+
+          isRemoteUpdate = true;
+          Object.assign(gameState, data);
+          if (!gameState.players) gameState.players = [];
+          if (!gameState.history) gameState.history = [];
+          if (!gameState.tempVotes) gameState.tempVotes = {};
+          if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
+
+          renderAllViews();
+          isRemoteUpdate = false;
+        }
+
+        document.getElementById("syncStatusBadge").innerText = "● 雲端即時同步";
+        document.getElementById("syncStatusBadge").className = "bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] px-1.5 py-0.2 rounded font-bold";
+      }, (err) => {
+        console.error("Firebase 連線中斷:", err);
+        document.getElementById("syncStatusBadge").innerText = "⚠️ 離線單機模式";
+        document.getElementById("syncStatusBadge").className = "bg-rose-950 text-rose-300 border border-rose-800 text-[10px] px-1.5 py-0.2 rounded font-bold";
+      });
+    };
+
+    function pushStateToFirebase(actionSummary = null) {
+      if (isRemoteUpdate) return;
+      if (actionSummary) {
+        gameState.lastActionBy = "JUDGE";
+        gameState.actionId = "ACT_" + Date.now();
+        gameState.lastActionSummary = actionSummary;
+        lastHandledActionId = gameState.actionId;
       }
+      matchRef.set(gameState);
+    }
+
+    function toggleModuleSetting(moduleKey) {
+      if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
+      gameState.modules[moduleKey] = !gameState.modules[moduleKey];
+      pushStateToFirebase(`更新特殊模組：${moduleKey} = ${gameState.modules[moduleKey]}`);
+      renderAllViews();
+    }
+
+    // ==========================================
+    // 2. 視圖主渲染樞紐
+    // ==========================================
+    function renderAllViews() {
+      updateRoundBadge();
+      updatePoliceBadgeIndicator();
+      updateCounts();
+      renderLiveSeatsOverview();
+      checkPoliceBadgeStatus();
+
+      const btnTrickster = document.getElementById("toggleTricksterBtn");
+      const btnPrince = document.getElementById("togglePrinceBtn");
+      const isTrk = !!gameState.modules?.enableTrickster;
+      const isPrc = !!gameState.modules?.enablePrince;
+      btnTrickster.innerText = `🎭 詭術師：${isTrk ? '開' : '關'}`;
+      btnTrickster.className = `px-2.5 py-1 rounded text-xs font-bold border transition ${isTrk ? 'bg-purple-900 border-purple-400 text-purple-200' : 'bg-gray-800 text-gray-400 border-gray-700'}`;
+      btnPrince.innerText = `👑 定序王子：${isPrc ? '開' : '關'}`;
+      btnPrince.className = `px-2.5 py-1 rounded text-xs font-bold border transition ${isPrc ? 'bg-amber-900 border-amber-400 text-amber-200' : 'bg-gray-800 text-gray-400 border-gray-700'}`;
+
+      if (gameState.phase === "NIGHT" || gameState.phase === "SETUP") {
+        document.getElementById("nightPanel").classList.remove("hidden");
+        document.getElementById("dayPanel").classList.add("hidden");
+        renderNightPanel();
+      } else {
+        document.getElementById("nightPanel").classList.add("hidden");
+        document.getElementById("dayPanel").classList.remove("hidden");
+        renderDayWorkflow();
+      }
+
+      renderHistoryTabs();
+    }
+
+    function updateRoundBadge() {
+      const badge = document.getElementById("roundBadge");
+      if (gameState.phase === "SETUP") badge.innerText = "開局配置中";
+      else if (gameState.phase === "NIGHT") badge.innerText = `第 ${gameState.round} 夜`;
+      else if (gameState.phase === "POLICE_ELECTION") badge.innerText = `第 ${gameState.day} 天 警選`;
+      else if (gameState.phase === "POLICE_PK") badge.innerText = `第 ${gameState.day} 天 警長PK`;
+      else badge.innerText = `第 ${gameState.day} 天 放逐`;
+    }
+
+    function updatePoliceBadgeIndicator() {
+      const label = document.getElementById("policeBadgeIndicator");
+      if (gameState.isBadgeTorn) {
+        label.innerText = "警長：警徽已撕毀/吞掉";
+        label.className = "text-[10px] text-rose-400 font-bold font-mono";
+      } else if (gameState.policeSeat) {
+        label.innerText = `警長：${gameState.policeSeat} 號 (1.5票)`;
+        label.className = "text-[10px] text-amber-300 font-bold font-mono";
+      } else {
+        label.innerText = "警長：未指定";
+        label.className = "text-[10px] text-gray-400 font-mono";
+      }
+    }
+
+    // ==========================================
+    // 3. 開局與座位配置
+    // ==========================================
+    function initBoardSelector() {
       const select = document.getElementById("boardSelect");
       const boardKeys = Object.keys(BOARD_DATABASE);
-      select.innerHTML = boardKeys.map(key => `
-        <option value="${key}">
-          ${BOARD_DATABASE[key].name}
-        </option>
-      `).join('');
-
+      select.innerHTML = boardKeys.map(key => `<option value="${key}">${BOARD_DATABASE[key].name}</option>`).join('');
       currentBoardKey = boardKeys[0];
       onBoardSelectChange();
     }
 
     function onBoardSelectChange() {
       currentBoardKey = document.getElementById("boardSelect").value;
-      const config = BOARD_DATABASE[currentBoardKey];
-      document.getElementById("currentBoardLabel").innerText = config.name;
+      document.getElementById("currentBoardLabel").innerText = BOARD_DATABASE[currentBoardKey].name;
       initSeats();
-      renderNightPanel();
+    }
+
+    function initSeats() {
+      const config = BOARD_DATABASE[currentBoardKey];
+      const container = document.getElementById("seatAssignmentGrid");
+      container.innerHTML = "";
+      gameState.players = [];
+
+      for (let i = 1; i <= config.playerCount; i++) {
+        const assignedRole = config.defaultSlots[i - 1] || config.availableRoles[0];
+        const assignedName = MOCK_MEMBERS[i - 1] || "";
+        
+        gameState.players.push({
+          seat: i,
+          name: assignedName,
+          role: assignedRole,
+          seatType: ROLE_DEFINITIONS[assignedRole]?.seatType || "VILLAGER",
+          victoryFaction: ROLE_DEFINITIONS[assignedRole]?.faction || "villager",
+          isAlive: true,
+          deathReason: null,
+          isCandidate: false,
+          hasDropped: false
+        });
+
+        const card = document.createElement("div");
+        card.id = "seatCard-" + i;
+        card.className = "bg-gray-800/60 p-2 rounded-lg border border-gray-700 transition";
+
+        let optionsHtml = '<option value="">-- 清空此座位 --</option>';
+        MOCK_MEMBERS.forEach(m => {
+          optionsHtml += `<option value="${m}" ${m === assignedName ? 'selected' : ''}>${m}</option>`;
+        });
+
+        let rolesHtml = '';
+        config.availableRoles.forEach(r => {
+          rolesHtml += `<option value="${r}" ${r === assignedRole ? 'selected' : ''}>${r}</option>`;
+        });
+
+        card.innerHTML = `
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-bold text-amber-400">#${i < 10 ? '0' + i : i} 席位</span>
+            <div class="flex items-center gap-1">
+              <span id="seatDupTag-${i}" class="text-[9px] text-rose-300 bg-rose-950 px-1 py-0.5 rounded border border-rose-700 font-bold" style="display: none;">⚠️ 重複</span>
+              <span class="text-[10px] text-gray-400" id="roleTag-${i}">${assignedRole}</span>
+            </div>
+          </div>
+          <select id="userSelect-${i}" onchange="checkSeatDuplicates()" class="w-full text-[11px] rounded p-1 mb-1 border outline-none">
+            ${optionsHtml}
+          </select>
+          <select id="roleSelect-${i}" onchange="onRoleChange(${i})" class="w-full text-[11px] rounded p-1 border outline-none font-bold text-indigo-300">
+            ${rolesHtml}
+          </select>
+        `;
+        container.appendChild(card);
+      }
+      
+      checkSeatDuplicates();
+      updateCounts();
     }
 
     function checkSeatDuplicates() {
@@ -308,12 +628,6 @@
           if (dupTag) dupTag.style.display = "none";
         }
 
-        Array.from(sel.options).forEach(opt => {
-          if (!opt.value) return;
-          const isSeatedElsewhere = (counts[opt.value] > 0) && (opt.value !== currentVal);
-          opt.textContent = isSeatedElsewhere ? `${opt.value} (已入座)` : opt.value;
-        });
-
         const p = gameState.players.find(x => x.seat === parseInt(seat));
         if (p) p.name = currentVal;
       });
@@ -321,106 +635,14 @@
       return { hasDup, counts };
     }
 
-    function initSeats() {
-      const config = BOARD_DATABASE[currentBoardKey];
-      const container = document.getElementById("seatAssignmentGrid");
-      container.innerHTML = "";
-      gameState.players = [];
-
-      for (let i = 1; i <= config.playerCount; i++) {
-        const assignedRole = config.defaultSlots[i - 1] || config.availableRoles[0];
-        const assignedName = MOCK_MEMBERS[i - 1] || "";
-        
-        gameState.players.push({
-          seat: i,
-          name: assignedName,
-          role: assignedRole,
-          seatType: getSeatType(assignedRole),
-          victoryFaction: getVictoryFaction(assignedRole),
-          isAlive: true,
-          hasBadge: false,
-          hybridTarget: null
-        });
-
-        const card = document.createElement("div");
-        card.id = "seatCard-" + i;
-        card.className = "bg-gray-800/60 p-2 rounded-lg border border-gray-700 transition";
-
-        let optionsHtml = '<option value="">-- 清空此座位 --</option>';
-        MOCK_MEMBERS.forEach(m => {
-          const isSel = (m === assignedName) ? 'selected' : '';
-          optionsHtml += `<option value="${m}" ${isSel}>${m}</option>`;
-        });
-
-        let rolesHtml = '';
-        config.availableRoles.forEach(r => {
-          const isSelRole = (r === assignedRole) ? 'selected' : '';
-          rolesHtml += `<option value="${r}" ${isSelRole}>${r}</option>`;
-        });
-
-        card.innerHTML = `
-          <div class="flex justify-between items-center mb-1">
-            <span class="font-bold text-amber-400">#${i < 10 ? '0' + i : i} 席位</span>
-            <div class="flex items-center gap-1">
-              <span id="seatDupTag-${i}" class="text-[9px] text-rose-300 bg-rose-950 px-1 py-0.5 rounded border border-rose-700 font-bold" style="display: none;">⚠️ 重複</span>
-              <span class="text-[10px] text-gray-400" id="roleTag-${i}">${assignedRole}</span>
-            </div>
-          </div>
-          <select id="userSelect-${i}" onchange="checkSeatDuplicates()" class="w-full text-[11px] rounded p-1 mb-1 border outline-none">
-            ${optionsHtml}
-          </select>
-          <select id="roleSelect-${i}" onchange="onRoleChange(${i})" class="w-full text-[11px] rounded p-1 border outline-none font-bold text-indigo-300">
-            ${rolesHtml}
-          </select>
-        `;
-        container.appendChild(card);
-      }
-      
-      checkSeatDuplicates();
-      updateCounts();
-    }
-
-    function getSeatType(roleName) {
-      if (typeof ROLE_DEFINITIONS !== 'undefined' && ROLE_DEFINITIONS[roleName]) {
-        return ROLE_DEFINITIONS[roleName].seatType;
-      }
-      return "VILLAGER";
-    }
-
-    function getVictoryFaction(roleName) {
-      if (typeof ROLE_DEFINITIONS !== 'undefined' && ROLE_DEFINITIONS[roleName]) {
-        return ROLE_DEFINITIONS[roleName].faction;
-      }
-      return "villager";
-    }
-
     function onRoleChange(seat) {
       const selected = document.getElementById("roleSelect-" + seat).value;
       document.getElementById("roleTag-" + seat).innerText = selected;
       const p = gameState.players.find(x => x.seat === seat);
       p.role = selected;
-      p.seatType = getSeatType(selected);
-      p.victoryFaction = getVictoryFaction(selected);
+      p.seatType = ROLE_DEFINITIONS[selected]?.seatType || "VILLAGER";
+      p.victoryFaction = ROLE_DEFINITIONS[selected]?.faction || "villager";
       updateCounts();
-    }
-
-    function updateCounts() {
-      const alive = gameState.players.filter(p => p.isAlive);
-      const gods = alive.filter(p => p.seatType === "GOD").length;
-      const villagers = alive.filter(p => p.seatType === "VILLAGER").length;
-      const wolves = alive.filter(p => p.seatType === "WEREWOLF").length;
-
-      const totalGods = gameState.players.filter(p => p.seatType === "GOD").length;
-      const totalVillagers = gameState.players.filter(p => p.seatType === "VILLAGER").length;
-      const totalWolves = gameState.players.filter(p => p.seatType === "WEREWOLF").length;
-
-      document.getElementById("godCountDisplay").innerText = `${gods} / ${totalGods}`;
-      document.getElementById("villagerCountDisplay").innerText = `${villagers} / ${totalVillagers}`;
-      document.getElementById("wolfCountDisplay").innerText = `${wolves} / ${totalWolves}`;
-      
-      if (gameState.phase !== "SETUP") {
-        checkGameOver(gods, villagers, wolves);
-      }
     }
 
     function confirmSetup() {
@@ -439,27 +661,99 @@
       document.getElementById("setupPanel").removeAttribute("open");
       gameState.phase = "NIGHT";
       gameState.round = 1;
-      renderNightPanel();
-      alert(`✅ 板型【${BOARD_DATABASE[currentBoardKey].name}】12 席已鎖定，進入第 1 夜！`);
+      gameState.day = 1;
+
+      pushStateToFirebase("上帝確認座位配置，開局進入第 1 夜");
+      renderAllViews();
+      alert(`✅ 板型【${BOARD_DATABASE[currentBoardKey].name}】已鎖定，已同步公播看板並進入第 1 夜！`);
     }
 
-    // ========================================================
-    // 純粹由 inputSchema 驅動的夜間卡片渲染器
-    // ========================================================
+    // ==========================================
+    // 4. 即時坑位監控與勝負判定 (委託 RULES_ENGINE)
+    // ==========================================
+    function updateCounts() {
+      const alive = gameState.players.filter(p => p.isAlive);
+      const gods = alive.filter(p => p.seatType === "GOD").length;
+      const villagers = alive.filter(p => p.seatType === "VILLAGER").length;
+      const wolves = alive.filter(p => p.seatType === "WEREWOLF").length;
+
+      const totalGods = gameState.players.filter(p => p.seatType === "GOD").length;
+      const totalVillagers = gameState.players.filter(p => p.seatType === "VILLAGER").length;
+      const totalWolves = gameState.players.filter(p => p.seatType === "WEREWOLF").length;
+
+      document.getElementById("godCountDisplay").innerText = `${gods} / ${totalGods}`;
+      document.getElementById("villagerCountDisplay").innerText = `${villagers} / ${totalVillagers}`;
+      document.getElementById("wolfCountDisplay").innerText = `${wolves} / ${totalWolves}`;
+      document.getElementById("aliveRatioDisplay").innerText = `存活 ${alive.length} / 12 人`;
+      
+      if (gameState.phase !== "SETUP") {
+        const vResult = RULES_ENGINE.checkGameOver(gameState.players);
+        const statusDesk = document.getElementById("gameStatusTextDesk");
+        if (statusDesk) {
+          statusDesk.innerText = vResult.reason;
+          statusDesk.className = `text-sm ml-1 font-bold ${vResult.winner === 'villager' ? 'text-blue-400' : (vResult.winner === 'werewolf' ? 'text-rose-400' : 'text-emerald-400')}`;
+        }
+      }
+    }
+
+    function renderLiveSeatsOverview() {
+      const container = document.getElementById("liveSeatsOverviewGrid");
+      container.innerHTML = gameState.players.map(p => {
+        let borderStyle = "border-gray-700 bg-gray-800 text-gray-200";
+        let statusBadge = "";
+        let statusText = p.name ? p.name.slice(0, 3) : "存活";
+
+        if (!p.isAlive) {
+          borderStyle = "border-gray-800 bg-gray-900/60 text-gray-600 line-through opacity-50";
+          if (p.deathReason === "NIGHT") { statusBadge = "🌙"; statusText = "夜亡"; }
+          else if (p.deathReason === "EXILE") { statusBadge = "❌"; statusText = "放逐"; }
+          else if (p.deathReason === "SKILL") { statusBadge = "🎯"; statusText = "技能"; }
+          else if (p.deathReason === "EXPLODE") { statusBadge = "💥"; statusText = "自爆"; }
+        } else if (gameState.policeSeat === p.seat) {
+          borderStyle = "border-amber-500 bg-amber-950/40 text-amber-300 font-bold";
+          statusBadge = "👑";
+        }
+
+        return `
+          <div class="h-10 rounded border ${borderStyle} flex flex-col items-center justify-center text-xs relative font-mono">
+            ${statusBadge ? `<span class="absolute -top-1.5 -right-1 text-[10px]">\${statusBadge}</span>` : ''}
+            <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
+            <span class="text-[8px] truncate px-0.5">${statusText}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ==========================================
+    // 5. 夜間行動腳本引導
+    // ==========================================
     function renderNightPanel() {
       const config = BOARD_DATABASE[currentBoardKey];
       const container = document.getElementById("nightActionsContainer");
       if (!container || !config) return;
       container.innerHTML = "";
 
+      const isTricksterEnabled = !!gameState.modules?.enableTrickster;
+      const trkBox = document.getElementById("tricksterNightBox");
+      if (isTricksterEnabled) {
+        trkBox.classList.remove("hidden");
+        const selA = document.getElementById("tricksterA");
+        const selB = document.getElementById("tricksterB");
+        selA.innerHTML = gameState.players.map(p => `<option value="${p.seat}">${p.seat} 號</option>`).join('');
+        selB.innerHTML = gameState.players.map(p => `<option value="${p.seat}">${p.seat} 號</option>`).join('');
+        if (gameState.tricksterSwap) {
+          selA.value = gameState.tricksterSwap.seatA;
+          selB.value = gameState.tricksterSwap.seatB;
+          document.getElementById("tricksterStatusText").innerText = `已置換：${gameState.tricksterSwap.seatA} ⇄ ${gameState.tricksterSwap.seatB}`;
+        }
+      } else {
+        trkBox.classList.add("hidden");
+      }
+
       const script = (gameState.round === 1) ? config.firstNightOrder : config.repeatingNightOrder;
       if (!script) return;
 
       let alive = gameState.players.filter(p => p.isAlive);
-      if (alive.length === 0 && gameState.players.length > 0) {
-        alive = gameState.players;
-      }
-
       const aliveOptions = alive.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || '未指派'}</option>`).join('');
       const allPlayersOptions = gameState.players.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || '未指派'}</option>`).join('');
 
@@ -473,10 +767,9 @@
         else if (step.type === "INFO") card.classList.add("bg-indigo-950/40", "border-indigo-700/60");
         else card.classList.add("bg-gray-800/70", "border-gray-700");
 
-        const schema = step.schema || {};
         let bodyHtml = "";
 
-        if (schema.type === "CONFIRM_CARD") {
+        if (step.type === "CONFIRM") {
           let desc = "未指派";
           if (step.role === "狼兄狼弟") {
             const b = gameState.players.filter(x => x.role === "狼兄" || x.role === "狼弟");
@@ -493,7 +786,7 @@
               </button>
             </div>
           `;
-        } else if (schema.type === "GESTURE_BADGE") {
+        } else if (step.type === "GESTURE") {
           bodyHtml = `
             <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
               <span class="text-gray-300">給予手勢：</span>
@@ -502,7 +795,7 @@
               </span>
             </div>
           `;
-        } else if (schema.type === "INFO_CARD") {
+        } else if (step.type === "INFO") {
           const lastExile = gameState.lastExiledPlayer;
           let infoText = "昨日無放逐出局者";
           let badgeClass = "bg-gray-800 text-gray-400";
@@ -517,110 +810,61 @@
               <span class="${badgeClass} px-2 py-0.5 rounded font-bold">${infoText}</span>
             </div>
           `;
-        } else if (schema.type === "SINGLE_TARGET") {
-          const pool = (schema.targetScope === "ALL") ? gameState.players : alive;
-          const lastTarget = schema.preventConsecutive ? (gameState.nightMemory.guardLastTarget || gameState.nightMemory.nightmareLastTarget) : null;
-          
-          let isDisabled = false;
-          if (schema.conditionalRoleDead) {
-            const roleAlive = gameState.players.some(p => p.role === schema.conditionalRoleDead && p.isAlive);
-            isDisabled = roleAlive;
-          }
-
-          let optionsHtml = '';
-          if (isDisabled) {
-            optionsHtml = '<option value="">' + schema.conditionalRoleDead + '尚未出局 (不可單砍)</option>';
+        } else {
+          if (step.id === "wolf" || step.id === "wolf_team_confirm") {
+            bodyHtml = `
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400">落刀目標：</span>
+                <select id="target-wolf" onchange="onFormActionChange('wolf')" class="flex-1 rounded p-1 text-xs border">
+                  <option value="">選擇落刀目標 (空刀)</option>
+                  ${aliveOptions}
+                </select>
+              </div>
+            `;
+          } else if (step.id === "witch") {
+            const antUsed = gameState.nightMemory.witchAntidoteUsed;
+            const poiUsed = gameState.nightMemory.witchPoisonUsed;
+            bodyHtml = `
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-[10px] text-amber-400 font-mono font-bold" id="witchRawKillHint">原始刀口：等待落刀</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
+                  <span>解藥</span>
+                  <button id="antidoteBtn" onclick="toggleAntidote()" ${antUsed ? 'disabled' : ''} class="${antUsed ? 'bg-gray-800 text-gray-500' : 'bg-gray-700 text-gray-300'} text-[11px] px-2 py-0.5 rounded transition">
+                    ${antUsed ? '已消耗' : '未使用'}
+                  </button>
+                </div>
+                <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
+                  <span>毒藥</span>
+                  <select id="poisonTarget" class="text-[11px] rounded p-0.5 border">
+                    <option value="">${poiUsed ? '已消耗' : '不使用'}</option>
+                    ${poiUsed ? '' : aliveOptions}
+                  </select>
+                </div>
+              </div>
+            `;
+          } else if (step.id === "seer") {
+            bodyHtml = `
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400">查驗目標：</span>
+                <select id="seerTarget" class="flex-1 rounded p-1 text-xs border">
+                  <option value="">選擇查驗目標</option>
+                  ${allPlayersOptions}
+                </select>
+              </div>
+            `;
           } else {
-            optionsHtml = '<option value="">' + (schema.placeholder || '請選擇') + '</option>';
-            pool.forEach(p => {
-              const isLast = (p.seat === lastTarget);
-              const disabledAttr = isLast ? 'disabled' : '';
-              const lastNote = isLast ? ' (昨晚已選)' : '';
-              const pName = p.name ? (' - ' + p.name) : '';
-              optionsHtml += '<option value="' + p.seat + '" ' + disabledAttr + '>' + p.seat + '號' + pName + lastNote + '</option>';
-            });
+            bodyHtml = `
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400">選擇目標：</span>
+                <select id="target-${step.id}" class="flex-1 rounded p-1 text-xs border">
+                  <option value="">請選擇</option>
+                  ${aliveOptions}
+                </select>
+              </div>
+            `;
           }
-
-          bodyHtml = `
-            <div class="flex items-center gap-2">
-              <span class="text-gray-400">選擇目標：</span>
-              <select id="target-${step.id}" onchange="onFormActionChange('${step.id}')" ${isDisabled ? 'disabled' : ''} class="flex-1 rounded p-1 text-xs border">
-                ${optionsHtml}
-              </select>
-            </div>
-          `;
-        } else if (schema.type === "SWAP_TARGETS") {
-          bodyHtml = `
-            <div class="grid grid-cols-2 gap-2">
-              <div class="flex items-center gap-1">
-                <span class="text-gray-400">目標A:</span>
-                <select id="swapTargetA" onchange="onFormActionChange('swap')" class="w-full rounded p-1 text-xs border">
-                  <option value="">選擇號碼</option>
-                  ${allPlayersOptions}
-                </select>
-              </div>
-              <div class="flex items-center gap-1">
-                <span class="text-gray-400">目標B:</span>
-                <select id="swapTargetB" onchange="onFormActionChange('swap')" class="w-full rounded p-1 text-xs border">
-                  <option value="">選擇號碼</option>
-                  ${allPlayersOptions}
-                </select>
-              </div>
-            </div>
-          `;
-        } else if (schema.type === "WITCH_POTIONS") {
-          const antUsed = gameState.nightMemory.witchAntidoteUsed;
-          const poiUsed = gameState.nightMemory.witchPoisonUsed;
-          bodyHtml = `
-            <div class="flex justify-between items-center mb-1">
-              <span class="text-[10px] text-amber-400 font-mono font-bold" id="witchRawKillHint">原始刀口：等待落刀</span>
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
-                <span>解藥</span>
-                <button id="antidoteBtn" onclick="toggleAntidote()" ${antUsed ? 'disabled' : ''} class="${antUsed ? 'bg-gray-800 text-gray-500' : 'bg-gray-700 text-gray-300'} text-[11px] px-2 py-0.5 rounded transition">
-                  ${antUsed ? '已消耗' : '未使用'}
-                </button>
-              </div>
-              <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
-                <span>毒藥</span>
-                <select id="poisonTarget" onchange="onFormActionChange('poison')" ${poiUsed ? 'disabled' : ''} class="text-[11px] rounded p-0.5 border">
-                  <option value="">${poiUsed ? '已消耗' : '不使用'}</option>
-                  ${poiUsed ? '' : aliveOptions}
-                </select>
-              </div>
-            </div>
-          `;
-        } else if (schema.type === "SEER_CHECK") {
-          bodyHtml = `
-            <div class="flex items-center gap-2">
-              <span class="text-gray-400">查驗目標：</span>
-              <select id="seerTarget" onchange="onFormActionChange('seer')" class="flex-1 rounded p-1 text-xs border">
-                <option value="">選擇查驗目標</option>
-                ${allPlayersOptions}
-              </select>
-              <span id="seerResultBadge" class="bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold whitespace-nowrap">
-                待查驗
-              </span>
-            </div>
-          `;
-        } else if (schema.type === "THREE_GIFTS") {
-          bodyHtml = `
-            <div class="space-y-1.5 bg-gray-900/60 p-2 rounded">
-              <div class="flex items-center justify-between">
-                <span>🔮 查驗幸運兒：</span>
-                <select id="giftSeer" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${allPlayersOptions}</select>
-              </div>
-              <div class="flex items-center justify-between">
-                <span>🧪 毒藥幸運兒：</span>
-                <select id="giftPoison" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${allPlayersOptions}</select>
-              </div>
-              <div class="flex items-center justify-between">
-                <span>🔫 獵槍幸運兒：</span>
-                <select id="giftGun" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${allPlayersOptions}</select>
-              </div>
-            </div>
-          `;
         }
 
         card.innerHTML = `
@@ -635,11 +879,6 @@
       });
 
       antidoteUsedThisNight = false;
-      try {
-        refreshAllRuleDisplays();
-      } catch (e) {
-        console.warn("初始狀態跳過即時計算:", e);
-      }
     }
 
     function markStepDone(stepId) {
@@ -651,386 +890,612 @@
     }
 
     function onFormActionChange(triggerId) {
-      if (triggerId === 'target-wolf' || triggerId === 'target-wolf_team_confirm') {
-        const wolfEl = document.getElementById('target-wolf') || document.getElementById('target-wolf_team_confirm');
+      if (triggerId === 'wolf') {
+        const wolfEl = document.getElementById('target-wolf');
         const hint = document.getElementById('witchRawKillHint');
         if (wolfEl && hint) {
           const val = parseInt(wolfEl.value || 0);
-          if (val) {
-            const p = gameState.players.find(x => x.seat === val);
-            hint.innerText = `原始刀口：${val} 號 (${p ? p.name : ''})`;
-          } else {
-            hint.innerText = `原始刀口：空刀`;
-          }
+          hint.innerText = val ? `原始刀口：${val} 號` : `原始刀口：空刀`;
         }
       }
-      refreshAllRuleDisplays();
     }
 
     function toggleAntidote() {
       if (gameState.nightMemory.witchAntidoteUsed) return;
       antidoteUsedThisNight = !antidoteUsedThisNight;
       const btn = document.getElementById("antidoteBtn");
-      if (antidoteUsedThisNight) {
-        btn.innerText = "已使用 (救人)";
-        btn.className = "bg-emerald-600 text-white text-[11px] px-2 py-0.5 rounded font-bold transition";
-      } else {
-        btn.innerText = "未使用";
-        btn.className = "bg-gray-700 text-gray-300 text-[11px] px-2 py-0.5 rounded transition";
-      }
-      refreshAllRuleDisplays();
+      btn.innerText = antidoteUsedThisNight ? "已使用 (救人)" : "未使用";
+      btn.className = antidoteUsedThisNight ? "bg-emerald-600 text-white text-[11px] px-2 py-0.5 rounded font-bold transition" : "bg-gray-700 text-gray-300 text-[11px] px-2 py-0.5 rounded transition";
     }
 
-    // 將所有即時計算統一委託給 RULES_ENGINE
-    function refreshAllRuleDisplays() {
-      if (typeof RULES_ENGINE === 'undefined' || !gameState.players || gameState.players.length === 0) return;
-
-      const swapPair = [
-        parseInt(document.getElementById("swapTargetA")?.value || 0) || 0,
-        parseInt(document.getElementById("swapTargetB")?.value || 0) || 0
-      ];
-
-      // 1. 預言家查驗反饋
-      const seerSeat = parseInt(document.getElementById("seerTarget")?.value || 0) || 0;
-      const seerBadge = document.getElementById("seerResultBadge");
-      if (seerBadge) {
-        const checkRes = RULES_ENGINE.resolveCheck(seerSeat, swapPair, gameState.players);
-        seerBadge.innerText = checkRes.text;
-        seerBadge.className = checkRes.isWolf 
-          ? "bg-rose-950 text-rose-300 border border-rose-700 px-2 py-0.5 rounded font-bold whitespace-nowrap"
-          : (checkRes.isReady ? "bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold whitespace-nowrap" : "bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold whitespace-nowrap");
-      }
-
-      // 2. 評估所有手勢卡片
-      const context = {
-        rawPoisonTarget: parseInt(document.getElementById("poisonTarget")?.value || 0) || 0,
-        swapPair: swapPair,
-        dreamerTarget: parseInt(document.getElementById("target-dreamer")?.value || 0) || 0,
-        lastDreamerTarget: gameState.nightMemory.dreamerLastTarget,
-        players: gameState.players,
-        blackMarketTransformedWolf: gameState.nightMemory.blackMarketTransformedWolf
-      };
-
-      ["hunter_gesture", "wolf_king_gesture", "converter_gesture", "black_market_faction_gesture", "gun_lucky_gesture"].forEach(gId => {
-        const badge = document.getElementById(`gesture-badge-${gId}`);
-        if (badge) {
-          const res = RULES_ENGINE.evaluateGesture(gId, context);
-          badge.innerText = res.text;
-          badge.className = res.isPositive 
-            ? "bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold"
-            : "bg-rose-950 text-rose-300 border border-rose-600 px-2 py-0.5 rounded font-bold";
-        }
-      });
+    function saveTricksterSwap() {
+      const a = parseInt(document.getElementById("tricksterA").value);
+      const b = parseInt(document.getElementById("tricksterB").value);
+      if (a === b) { alert("⚠️ 置換兩名玩家號碼不可相同！"); return; }
+      gameState.tricksterSwap = { seatA: a, seatB: b };
+      document.getElementById("tricksterStatusText").innerText = `已置換：${a} ⇄ ${b}`;
+      pushStateToFirebase(`詭術師夜間置換：${a} ⇄ ${b}`);
+      alert(`🎭 詭術師置換已登記：${a} 號 ⇄ ${b} 號！`);
     }
 
-    // ========================================================
-    // 天亮死訊結算 (委託 RULES_ENGINE.resolveNight 裁決)
-    // ========================================================
+    function clearTricksterSwap() {
+      gameState.tricksterSwap = null;
+      document.getElementById("tricksterStatusText").innerText = "未置換";
+      pushStateToFirebase("清空詭術師置換");
+    }
+
+    // ==========================================
+    // 6. 天亮結算死訊 (委託 RULES_ENGINE.resolveNight)
+    // ==========================================
     function resolveNight() {
-      if (typeof RULES_ENGINE === 'undefined') return;
-
-      const wolfEl = document.getElementById('target-wolf') || document.getElementById('target-wolf_team_confirm');
-      
       const inputs = {
-        rawWolfTarget: parseInt(wolfEl?.value || 0) || 0,
+        rawWolfTarget: parseInt(document.getElementById('target-wolf')?.value || 0) || 0,
         rawPoisonTarget: parseInt(document.getElementById("poisonTarget")?.value || 0) || 0,
         guardTarget: parseInt(document.getElementById("target-guard")?.value || 0) || 0,
-        dreamerTarget: parseInt(document.getElementById("target-dreamer")?.value || 0) || 0,
-        youngWolfSolo: parseInt(document.getElementById("target-wolf_younger_solo")?.value || 0) || 0,
-        hybridTarget: parseInt(document.getElementById("target-hybrid")?.value || 0) || 0,
-        gargoyleTarget: parseInt(document.getElementById("target-gargoyle")?.value || 0) || 0,
-        swapPair: [
-          parseInt(document.getElementById("swapTargetA")?.value || 0) || 0,
-          parseInt(document.getElementById("swapTargetB")?.value || 0) || 0
-        ],
-        blackMarketGifts: {
-          seer: parseInt(document.getElementById("giftSeer")?.value || 0) || 0,
-          poison: parseInt(document.getElementById("giftPoison")?.value || 0) || 0,
-          gun: parseInt(document.getElementById("giftGun")?.value || 0) || 0
-        },
         antidoteUsed: antidoteUsedThisNight
       };
 
-      const result = RULES_ENGINE.resolveNight(inputs, gameState);
+      // 呼叫大腦結算[cite: 3]
+      const nResult = RULES_ENGINE.resolveNight(inputs, gameState.nightMemory);
 
-      result.deaths.forEach(seat => {
+      nResult.deaths.forEach(seat => {
         const p = gameState.players.find(x => x.seat === seat);
-        if (p) p.isAlive = false;
+        if (p) { p.isAlive = false; p.deathReason = "NIGHT"; }
       });
 
-      const deadHunter = gameState.players.find(p => p.role === "獵人" && result.deaths.includes(p.seat));
-      const deadWolfKing = gameState.players.find(p => p.role === "狼王" && result.deaths.includes(p.seat));
+      if (antidoteUsedThisNight) gameState.nightMemory.witchAntidoteUsed = true;
+      if (inputs.rawPoisonTarget) gameState.nightMemory.witchPoisonUsed = true;
 
-      if (deadHunter && result.hunterCanShoot) {
-        triggerGunAction("獵人", deadHunter.seat);
-      } else if (deadWolfKing && result.wolfKingCanShoot) {
-        triggerGunAction("狼王", deadWolfKing.seat);
+      if (gameState.day === 1 && !gameState.policeSeat && !gameState.isBadgeTorn) {
+        gameState.phase = "POLICE_ELECTION";
+      } else {
+        gameState.phase = "DAY_EXILE";
       }
 
-      updateCounts();
-
-      document.getElementById("nightPanel").classList.add("hidden");
-      document.getElementById("dayPanel").classList.remove("hidden");
-      document.getElementById("roundBadge").innerText = `第 ${gameState.round} 天 白天`;
-      document.getElementById("nightDeathSummary").innerText = result.summaryText;
-
-      setupDayVoting();
+      document.getElementById("nightDeathSummary").innerText = nResult.summaryText;
+      pushStateToFirebase(`天亮死訊結算：${nResult.summaryText}`);
+      renderAllViews();
     }
 
-    function triggerGunAction(roleName, shooterSeat) {
-      const box = document.getElementById("hunterActionBox");
-      const title = document.getElementById("gunTriggerTitle");
-      box.classList.remove("hidden");
-      title.innerText = `${shooterSeat}號【${roleName}】出局觸發開槍技能：`;
+    // ==========================================
+    // 7. 白天工作流 (委託 RULES_ENGINE)
+    // ==========================================
+    function renderDayWorkflow() {
+      const isPoliceStage = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
+      document.getElementById("dayPoliceModule").classList.toggle("hidden", !isPoliceStage);
+      document.getElementById("dayExileModule").classList.toggle("hidden", isPoliceStage);
+
+      document.getElementById("dayHeaderStageText").innerText = isPoliceStage 
+        ? (gameState.phase === "POLICE_PK" ? "白天環節 (警長 PK 決選)" : "白天環節 (警長競選)") 
+        : (gameState.isPrinceRevolving ? "白天環節 (定序王子重投中)" : "白天環節 (公投放逐)");
+
+      populateDayDropdowns();
+
+      if (isPoliceStage) renderPoliceStageControls();
+      else renderExileStageControls();
+    }
+
+    function populateDayDropdowns() {
       const alive = gameState.players.filter(p => p.isAlive);
-      document.getElementById("hunterTarget").innerHTML = `<option value="">請選擇帶走對象</option>` +
-        alive.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || ''}</option>`).join('');
+      const opts = alive.map(p => `<option value="${p.seat}">${p.seat} 號 ${p.name || ''}</option>`).join('');
+      
+      const wolfExplode = document.getElementById("dayWolfExplodeSelect");
+      const skillKill = document.getElementById("daySkillKillSelect");
+      const policeWolf = document.getElementById("policeWolfExplodeSelect");
+
+      if (wolfExplode) wolfExplode.innerHTML = opts;
+      if (skillKill) skillKill.innerHTML = opts;
+      if (policeWolf) policeWolf.innerHTML = opts;
     }
 
-    function applyHunterShot() {
-      const targetSeat = parseInt(document.getElementById("hunterTarget").value);
-      if (!targetSeat) return;
-      const target = gameState.players.find(p => p.seat === targetSeat);
-      if (target) target.isAlive = false;
-      alert(`💥 開槍技能發動，帶走了 ${targetSeat} 號 (${target ? target.name : ''})！`);
-      document.getElementById("hunterActionBox").classList.add("hidden");
-      updateCounts();
-      setupDayVoting();
-    }
+    // --- 警長競選 ---
+    function renderPoliceStageControls() {
+      const isPk = (gameState.phase === "POLICE_PK");
+      const pkCandidates = gameState.pkCandidates || [];
 
-    function setupDayVoting() {
-      const alive = gameState.players.filter(p => p.isAlive);
-      votesMap = {};
-      currentVoteTarget = alive[0] ? alive[0].seat : null;
+      document.getElementById("step1PoliceLabel").innerText = isPk ? "警上退水確認 (點擊切換退水)：" : "點選登記上警名單：";
+      document.getElementById("confirmPoliceBtn").innerText = isPk ? "確認 PK 開票 (二次平票則警徽流失)" : "確認首輪開票 (若平票則進入 PK)";
 
-      const targetsContainer = document.getElementById("voteTargetsContainer");
-      targetsContainer.innerHTML = alive.map(p => `
-        <button onclick="setVoteTarget(${p.seat})" id="targetBtn-${p.seat}" class="py-1 px-2.5 rounded text-xs font-bold border border-gray-700 bg-gray-800 text-gray-300 transition">
+      const expCnt = gameState.consecutiveExplodeCount || 0;
+      document.getElementById("policeExplodeCountLabel").innerText = `自爆計數：${expCnt} / 2 (${expCnt === 0 ? '正常' : '已爆1次，再爆吞警徽'})`;
+
+      const grid = document.getElementById("policeCandidateToggleGrid");
+      grid.innerHTML = gameState.players.map(p => {
+        let btnClass = "bg-gray-800 border-gray-700 text-gray-300";
+        let label = `${p.seat}號`;
+
+        if (p.isCandidate) {
+          if (p.hasDropped) {
+            btnClass = "bg-blue-950 border-blue-600 text-blue-300";
+            label = `${p.seat}號(退水)`;
+          } else if (isPk && pkCandidates.includes(p.seat)) {
+            btnClass = "bg-amber-500 border-amber-300 text-black font-extrabold";
+            label = `${p.seat}號(PK)`;
+          } else {
+            btnClass = "bg-amber-600 border-amber-400 text-white font-bold";
+          }
+        }
+
+        return `
+          <button onclick="toggleCandidateOrDrop(${p.seat})" class="h-8 rounded text-[11px] border transition ${btnClass}">
+            ${label}
+          </button>
+        `;
+      }).join('');
+
+      let activeCandidates = !isPk 
+        ? gameState.players.filter(p => p.isCandidate && !p.hasDropped && p.isAlive)
+        : gameState.players.filter(p => pkCandidates.includes(p.seat) && p.isAlive);
+
+      const targetBox = document.getElementById("policeTargetCandidateContainer");
+      targetBox.innerHTML = activeCandidates.map(p => `
+        <button onclick="selectTargetForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === p.seat ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
           投 ${p.seat}號
         </button>
       `).join('') + `
-        <button onclick="setVoteTarget(0)" id="targetBtn-0" class="py-1 px-2.5 rounded text-xs font-bold border border-gray-700 bg-gray-800 text-gray-400 transition">
+        <button onclick="selectTargetForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
           棄票
         </button>
       `;
 
-      const votersContainer = document.getElementById("votersBadgeContainer");
-      votersContainer.innerHTML = alive.map(p => `
-        <button onclick="assignVote(${p.seat})" id="voterBadge-${p.seat}" class="w-11 h-9 rounded bg-gray-800 border border-gray-700 text-gray-300 text-xs font-mono font-bold flex flex-col items-center justify-center transition">
-          ${p.seat}號 <span class="text-[8px] text-gray-500 font-normal">未投</span>
-        </button>
-      `).join('');
+      const votersGrid = document.getElementById("policeVoterGrid");
+      votersGrid.innerHTML = gameState.players.map(p => {
+        let isEligible = false;
+        let reason = "";
 
-      if (currentVoteTarget !== null) setVoteTarget(currentVoteTarget);
-    }
-
-    function setVoteTarget(targetSeat) {
-      currentVoteTarget = targetSeat;
-      document.querySelectorAll("[id^='targetBtn-']").forEach(btn => {
-        btn.className = "py-1 px-2.5 rounded text-xs font-bold border border-gray-700 bg-gray-800 text-gray-300 transition";
-      });
-      const activeBtn = document.getElementById(`targetBtn-${targetSeat}`);
-      if (activeBtn) {
-        activeBtn.className = "py-1 px-2.5 rounded text-xs font-bold border border-blue-500 bg-blue-950 text-blue-200 transition";
-      }
-    }
-
-    function assignVote(voterSeat) {
-      if (currentVoteTarget === null) return;
-      if (votesMap[voterSeat] === currentVoteTarget) {
-        delete votesMap[voterSeat];
-      } else {
-        votesMap[voterSeat] = currentVoteTarget;
-      }
-      renderVotes();
-    }
-
-    function renderVotes() {
-      const alive = gameState.players.filter(p => p.isAlive);
-      alive.forEach(p => {
-        const badge = document.getElementById(`voterBadge-${p.seat}`);
-        const assigned = votesMap[p.seat];
-        if (assigned === undefined) {
-          badge.className = "w-11 h-9 rounded bg-gray-800 border border-gray-700 text-gray-300 text-xs font-mono font-bold flex flex-col items-center justify-center transition";
-          badge.innerHTML = `${p.seat}號 <span class="text-[8px] text-gray-500 font-normal">未投</span>`;
-        } else if (assigned === 0) {
-          badge.className = "w-11 h-9 rounded bg-gray-700 border border-gray-500 text-gray-200 text-xs font-mono font-bold flex flex-col items-center justify-center transition";
-          badge.innerHTML = `${p.seat}號 <span class="text-[8px] text-gray-400 font-normal">棄票</span>`;
+        if (!p.isAlive) { isEligible = false; reason = "出局"; }
+        else if (!isPk) {
+          if (!p.isCandidate) isEligible = true;
+          else { isEligible = false; reason = p.hasDropped ? "退水" : "警上"; }
         } else {
-          badge.className = "w-11 h-9 rounded bg-indigo-950 border border-indigo-500 text-indigo-100 text-xs font-mono font-bold flex flex-col items-center justify-center transition";
-          badge.innerHTML = `${p.seat}號 <span class="text-[8px] text-amber-300 font-normal">投 ${assigned}</span>`;
+          if (pkCandidates.includes(p.seat)) { isEligible = false; reason = "PK候選"; }
+          else if (p.isCandidate && !p.hasDropped) { isEligible = false; reason = "未退水"; }
+          else isEligible = true;
         }
-      });
 
-      let tallies = {};
-      Object.entries(votesMap).forEach(([voter, target]) => {
-        if (!tallies[target]) tallies[target] = [];
-        tallies[target].push(voter);
-      });
+        let voted = null;
+        Object.entries(gameState.tempVotes || {}).forEach(([cand, list]) => {
+          if (list.includes(p.seat)) voted = cand;
+        });
 
-      let summaryHtml = "";
-      Object.keys(tallies).forEach(t => {
-        const label = t == 0 ? "棄票" : `${t} 號 (${tallies[t].length} 票)`;
-        summaryHtml += `<div><strong>${label}</strong>: ${tallies[t].map(s => s + '號').join(', ')}</div>`;
-      });
-      document.getElementById("voteSummaryBox").innerHTML = summaryHtml || "尚無投票記錄";
+        if (!isEligible) {
+          return `
+            <div class="h-9 rounded text-xs border border-gray-800 bg-gray-900/60 text-gray-600 font-mono flex flex-col items-center justify-center opacity-40">
+              <span>${p.seat}號</span>
+              <span class="text-[7px]">${reason}</span>
+            </div>
+          `;
+        }
+
+        return `
+          <button onclick="assignVote(${p.seat})" class="h-9 rounded text-xs border font-mono flex flex-col items-center justify-center transition ${voted !== null ? 'bg-indigo-950 border-indigo-400 text-indigo-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
+            <span>${p.seat}號</span>
+            <span class="text-[8px] text-amber-300">${voted !== null ? (voted == 0 ? '棄' : '➔' + voted) : '未投'}</span>
+          </button>
+        `;
+      }).join('');
     }
 
-    function confirmExile() {
-      let tallies = {};
-      Object.entries(votesMap).forEach(([voter, target]) => {
-        if (target != 0) tallies[target] = (tallies[target] || 0) + 1;
-      });
+    function toggleCandidateOrDrop(seat) {
+      const p = gameState.players.find(x => x.seat === seat);
+      if (gameState.phase === "POLICE_PK") {
+        if ((gameState.pkCandidates || []).includes(seat)) { alert("⚠️ PK 候選人不可退水！"); return; }
+        if (p.isCandidate) p.hasDropped = !p.hasDropped;
+      } else {
+        if (!p.isCandidate) { p.isCandidate = true; p.hasDropped = false; }
+        else if (!p.hasDropped) { p.hasDropped = true; }
+        else { p.isCandidate = false; p.hasDropped = false; }
+      }
+      pushStateToFirebase(`上警狀態更新：${seat}號`);
+      renderDayWorkflow();
+    }
 
-      let maxVotes = 0;
-      let exiledSeat = null;
-      Object.entries(tallies).forEach(([seat, count]) => {
-        if (count > maxVotes) {
-          maxVotes = count;
-          exiledSeat = parseInt(seat);
-        }
-      });
+    // 委託 RULES_ENGINE.resolvePoliceElection 開票[cite: 3]
+    function confirmPoliceElection() {
+      const isPk = (gameState.phase === "POLICE_PK");
+      const pResult = RULES_ENGINE.resolvePoliceElection(gameState.tempVotes, isPk, gameState.pkCandidates);
 
-      if (!exiledSeat) {
-        alert("平票或全體棄票，無人被放逐！");
+      if (pResult.status === "ALL_ABSTAIN") {
+        alert("⚠️ 所有人皆棄票或尚未輸入任何有效投票！");
         return;
       }
 
-      const exiledPlayer = gameState.players.find(p => p.seat === exiledSeat);
-      gameState.lastExiledPlayer = exiledPlayer;
+      if (pResult.status === "TIE_ENTER_PK") {
+        if (!confirm(`⚖️ 檢測到平票！【${pResult.topCandidates.join(' 號、')} 號】同獲 ${pResult.maxVotes} 票！\n確定進入【警長競選 PK 輪次】嗎？`)) return;
 
-      if (exiledPlayer && exiledPlayer.role === "白痴") {
-        alert(`🔔 ${exiledSeat} 號為白痴，觸發翻牌免死技能！保留發言權，拔除投票權。`);
-      } else if (exiledPlayer) {
-        exiledPlayer.isAlive = false;
-        alert(`❌ ${exiledSeat} 號玩家 (${exiledPlayer.name || ''}) 被公投放逐出局！`);
-        
-        if (exiledPlayer.role === "獵人") {
-          triggerGunAction("獵人", exiledPlayer.seat);
-        } else if (exiledPlayer.role === "狼王") {
-          triggerGunAction("狼王", exiledPlayer.seat);
+        gameState.history.push({
+          title: `D${gameState.day} 警選首輪(平票)`,
+          badgeText: `⚖️ ${pResult.topCandidates.join('、')}號平票 (${pResult.maxVotes}票)`,
+          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+          badgeHolder: null
+        });
+
+        gameState.phase = "POLICE_PK";
+        gameState.pkCandidates = pResult.topCandidates;
+        gameState.tempVotes = {};
+        gameState.selectedTarget = null;
+
+        pushStateToFirebase("警長競選平票，進入 PK 決選");
+        renderAllViews();
+        return;
+      }
+
+      if (pResult.status === "PK_TIE_BADGE_LOSS") {
+        alert(`🔥 PK 輪次再次平票！觸發【警徽流失】！本局不再有警長，所有人回歸 1 票。`);
+        gameState.history.push({
+          title: `D${gameState.day} 警選PK(二次平票)`,
+          badgeText: `🔥 二次平票 (警徽流失)`,
+          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+          badgeHolder: null
+        });
+
+        gameState.policeSeat = null;
+        gameState.isBadgeTorn = true;
+        gameState.phase = "DAY_EXILE";
+        gameState.pkCandidates = [];
+        gameState.tempVotes = {};
+        gameState.selectedTarget = null;
+
+        pushStateToFirebase("警長 PK 二次平票，警徽流失");
+        renderAllViews();
+        return;
+      }
+
+      if (pResult.status === "WINNER") {
+        const winner = pResult.winner;
+        gameState.policeSeat = winner;
+        gameState.isBadgeTorn = false;
+        gameState.consecutiveExplodeCount = 0;
+        gameState.pkCandidates = [];
+
+        gameState.history.push({
+          title: isPk ? `D${gameState.day} 警選PK決選` : `D${gameState.day} 警長競選`,
+          badgeText: `👑 ${winner}號當選警長 (${pResult.maxVotes}票)`,
+          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+          badgeHolder: null
+        });
+
+        gameState.phase = "DAY_EXILE";
+        gameState.tempVotes = {};
+        gameState.selectedTarget = null;
+
+        pushStateToFirebase(`👑 警長誕生：${winner} 號當選警長`);
+        renderAllViews();
+        alert(`🎉 恭喜！${winner} 號當選警長！已同步至公播看板，進入白天放逐對局。`);
+      }
+    }
+
+    // --- 放逐投票 ---
+    function renderExileStageControls() {
+      const isPrinceEnabled = !!gameState.modules?.enablePrince;
+      const isRevolving = !!gameState.isPrinceRevolving;
+
+      document.getElementById("princeStatusTag").classList.toggle("hidden", !isRevolving);
+      document.getElementById("princeTriggerBtn").classList.toggle("hidden", !(isPrinceEnabled && !gameState.princeUsed && !isRevolving));
+
+      const alive = gameState.players.filter(p => p.isAlive);
+
+      const targetContainer = document.getElementById("exileTargetContainer");
+      targetContainer.innerHTML = alive.map(p => `
+        <button onclick="selectTargetForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === p.seat ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
+          投 ${p.seat}號
+        </button>
+      `).join('') + `
+        <button onclick="selectTargetForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
+          棄票
+        </button>
+      `;
+
+      const votersGrid = document.getElementById("exileVotersGrid");
+      votersGrid.innerHTML = alive.map(p => {
+        let voted = null;
+        Object.entries(gameState.tempVotes || {}).forEach(([target, list]) => {
+          if (list.includes(p.seat)) voted = target;
+        });
+
+        const isPolice = (!gameState.isBadgeTorn && p.seat === gameState.policeSeat);
+        return `
+          <button onclick="assignVote(${p.seat})" class="h-9 rounded text-xs border font-mono flex flex-col items-center justify-center transition ${voted !== null ? 'bg-indigo-950 border-indigo-400 text-indigo-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
+            <span>${p.seat}號${isPolice ? '👑' : ''}</span>
+            <span class="text-[8px] text-amber-300">${voted !== null ? (voted == 0 ? '棄' : '➔' + voted) : '未投'}</span>
+          </button>
+        `;
+      }).join('');
+
+      renderLottoPreview();
+    }
+
+    function selectTargetForVote(targetSeat) {
+      gameState.selectedTarget = targetSeat;
+      renderDayWorkflow();
+    }
+
+    function assignVote(voterSeat) {
+      if (gameState.selectedTarget === null) { alert("請先點選受票目標或棄票！"); return; }
+      const target = gameState.selectedTarget;
+
+      if (!gameState.tempVotes) gameState.tempVotes = {};
+      Object.keys(gameState.tempVotes).forEach(k => {
+        gameState.tempVotes[k] = gameState.tempVotes[k].filter(s => s !== voterSeat);
+      });
+
+      if (!gameState.tempVotes[target]) gameState.tempVotes[target] = [];
+      gameState.tempVotes[target].push(voterSeat);
+
+      pushStateToFirebase();
+      renderDayWorkflow();
+    }
+
+    // 委託 RULES_ENGINE.calculateLottoTallies 渲染彩球預覽[cite: 3]
+    function renderLottoPreview() {
+      const container = document.getElementById("lottoPreviewContainer");
+      const police = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
+      const groups = RULES_ENGINE.calculateLottoTallies(gameState.tempVotes, police, false);
+
+      if (groups.length === 0) {
+        container.innerHTML = `<div class="text-[11px] text-gray-500 text-center">尚未輸入選民投票...</div>`;
+        return;
+      }
+
+      container.innerHTML = groups.map(g => {
+        const balls = g.voters.map(v => `
+          <div class="lotto-ball ${v.isPolice ? 'ball-police-voter' : 'ball-voter'}">
+            ${v.isPolice ? '<span class="absolute -top-1.5 -right-1 text-[9px]">👑</span>' : ''}${v.label}
+          </div>
+        `).join('');
+
+        return `
+          <div class="flex items-center justify-between bg-gray-900/80 p-1.5 rounded border border-gray-800">
+            <div class="flex items-center gap-2">
+              <div class="lotto-ball lotto-ball-lg ${g.isAbstain ? 'ball-abstain' : 'ball-target'}">${g.label}</div>
+              <div class="text-[11px] font-bold ${g.isAbstain ? 'text-gray-400' : 'text-amber-300'}">
+                ${g.title} (${g.totalPoints}票)
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-1 items-center justify-end">${balls}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 委託 RULES_ENGINE.resolveExileVote 放逐結算[cite: 3]
+    function confirmExileVote() {
+      const eResult = RULES_ENGINE.resolveExileVote(
+        gameState.tempVotes,
+        gameState.policeSeat,
+        gameState.isBadgeTorn,
+        gameState.modules,
+        gameState.tricksterSwap,
+        gameState.players
+      );
+
+      if (eResult.status === "ALL_ABSTAIN") { alert("⚠️ 平票或全體棄票，無人被放逐！"); return; }
+
+      let badgeText = "";
+      if (eResult.status === "TIE_NO_EXILE") {
+        badgeText = `⚖️ 平票無人出局 (${eResult.topSeats.join('、')}號同得${eResult.maxPoints}票)`;
+      } else if (eResult.status === "EXILED") {
+        const exiledPlayer = gameState.players.find(x => x.seat === eResult.exiledSeat);
+        if (exiledPlayer) {
+          exiledPlayer.isAlive = false;
+          exiledPlayer.deathReason = "EXILE";
+          gameState.lastExiledPlayer = exiledPlayer;
+        }
+
+        if (eResult.isTricksterSubstituted) {
+          badgeText = `❌ ${eResult.exiledSeat}號替罪出局 (🎭詭術置換原投${eResult.originalVotedSeat}號)`;
+        } else {
+          badgeText = `❌ ${eResult.exiledSeat}號放逐出局 (${eResult.maxPoints}票)`;
         }
       }
 
-      updateCounts();
+      const title = gameState.isPrinceRevolving ? `D${gameState.day} 放逐重投` : `D${gameState.day} 白天放逐`;
+
+      gameState.history.push({
+        title: title,
+        badgeText: badgeText,
+        votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+        badgeHolder: (!gameState.isBadgeTorn) ? gameState.policeSeat : null
+      });
+
+      gameState.isPrinceRevolving = false;
+      gameState.tricksterSwap = null;
+      gameState.tempVotes = {};
+      gameState.selectedTarget = null;
+
+      pushStateToFirebase(`放逐結算：${badgeText}`);
+      renderAllViews();
+      alert(`✅ 第 ${gameState.day} 天放逐票型已同步封存至公播！\n${badgeText}`);
     }
 
+    function handlePrinceReversal() {
+      if (!confirm("👑 確定現場有【定序王子】翻牌發動【逆轉時空】嗎？\n本次票型將封存供復盤，現場本次無人出局並重新進行第二次投票！")) return;
+
+      gameState.history.push({
+        title: `D${gameState.day} 放逐(定序逆轉)`,
+        badgeText: `⏳ 定序王子時光倒流 (本次無人出局)`,
+        votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+        badgeHolder: (!gameState.isBadgeTorn) ? gameState.policeSeat : null
+      });
+
+      gameState.princeUsed = true;
+      gameState.isPrinceRevolving = true;
+      gameState.tempVotes = {};
+      gameState.selectedTarget = null;
+
+      pushStateToFirebase("定序王子翻牌發動逆轉時空，票型封存並重新計票");
+      renderAllViews();
+      alert(`⏳ 定序王子技能已觸發！請定序王子單獨發言一次後，進行重投。`);
+    }
+
+    // --- 自爆與技能處理 (委託 RULES_ENGINE.resolvePoliceExplode) ---
+    function handlePoliceWolfExplode() {
+      const seat = parseInt(document.getElementById("policeWolfExplodeSelect").value);
+      if (!seat) return;
+
+      const expRes = RULES_ENGINE.resolvePoliceExplode(gameState.consecutiveExplodeCount || 0);
+      if (!confirm(`⚠️ 確定要由【${seat} 號】競選自爆嗎？\n${expRes.alertText}`)) return;
+
+      const p = gameState.players.find(x => x.seat === seat);
+      if (p) { p.isAlive = false; p.deathReason = "EXPLODE"; p.isCandidate = false; }
+
+      gameState.consecutiveExplodeCount = expRes.nextCount;
+      gameState.isBadgeTorn = expRes.isBadgeLoss;
+      if (expRes.isBadgeLoss) gameState.policeSeat = null;
+
+      gameState.history.push({
+        title: `D${gameState.day} 警選自爆`,
+        badgeText: `💥 ${seat}號自爆 (${expRes.isBadgeLoss ? '警徽流失' : '保留名單補選'})`,
+        votes: {},
+        badgeHolder: null
+      });
+
+      gameState.day += 1;
+      gameState.phase = expRes.nextPhase;
+      gameState.tempVotes = {};
+
+      pushStateToFirebase(`💥 競選階段自爆：${seat} 號`);
+      renderAllViews();
+    }
+
+    function handleDayWolfExplode() {
+      const seat = parseInt(document.getElementById("dayWolfExplodeSelect").value);
+      if (!seat || !confirm(`⚠️ 確定要確認 ${seat} 號玩家【白天自爆】嗎？白天將直接中斷並進入天黑！`)) return;
+
+      const p = gameState.players.find(x => x.seat === seat);
+      if (p) { p.isAlive = false; p.deathReason = "EXPLODE"; }
+
+      gameState.history.push({
+        title: `D${gameState.day} 白天自爆`,
+        badgeText: `💥 ${seat} 號狼人自爆`,
+        votes: {},
+        badgeHolder: (!gameState.isBadgeTorn) ? gameState.policeSeat : null
+      });
+
+      pushStateToFirebase(`💥 ${seat} 號狼人白天自爆出局`);
+      renderAllViews();
+
+      if (confirm(`💥 ${seat} 號已自爆出局！是否直接切入第 ${gameState.round + 1} 夜？`)) enterNextNight();
+    }
+
+    function handleDaySkillKill() {
+      const seat = parseInt(document.getElementById("daySkillKillSelect").value);
+      if (!seat) return;
+      const reason = prompt("請輸入技能帶走原因（例如：獵人開槍、狼王開槍、狼美人魅惑）：", "技能開槍");
+      if (reason === null) return;
+
+      const p = gameState.players.find(x => x.seat === seat);
+      if (p) { p.isAlive = false; p.deathReason = "SKILL"; }
+
+      gameState.history.push({
+        title: `D${gameState.day} 技能帶走`,
+        badgeText: `🎯 ${seat} 號出局 (${reason})`,
+        votes: {},
+        badgeHolder: (!gameState.isBadgeTorn) ? gameState.policeSeat : null
+      });
+
+      pushStateToFirebase(`🎯 ${seat} 號因【${reason}】連帶出局`);
+      renderAllViews();
+      alert(`🎯 已標記 ${seat} 號因【${reason}】連帶出局！`);
+    }
+
+    // --- 警徽處置 ---
+    function checkPoliceBadgeStatus() {
+      const box = document.getElementById("policeBadgeTransferBox");
+      if (!gameState.policeSeat || gameState.isBadgeTorn) { box.classList.add("hidden"); return; }
+      const pol = gameState.players.find(p => p.seat === gameState.policeSeat);
+      if (pol && !pol.isAlive) {
+        box.classList.remove("hidden");
+        const alive = gameState.players.filter(p => p.isAlive);
+        document.getElementById("transferBadgeTargetSelect").innerHTML = alive.map(p => `
+          <option value="${p.seat}">${p.seat} 號玩家 (${p.name || ''})</option>
+        `).join('');
+      } else {
+        box.classList.add("hidden");
+      }
+    }
+
+    function applyTransferBadge() {
+      const target = parseInt(document.getElementById("transferBadgeTargetSelect").value);
+      if (!target) return;
+      const old = gameState.policeSeat;
+      gameState.policeSeat = target;
+      document.getElementById("policeBadgeTransferBox").classList.add("hidden");
+      pushStateToFirebase(`👑 警徽移交：${old} 號 ➔ ${target} 號`);
+      renderAllViews();
+      alert(`👑 警徽已移交給 ${target} 號！`);
+    }
+
+    function applyTearBadge() {
+      if (!confirm("⚠️ 確定要撕毀警徽嗎？撕毀後本局不再有警長，所有人回歸 1 票權！")) return;
+      const old = gameState.policeSeat;
+      gameState.policeSeat = null;
+      gameState.isBadgeTorn = true;
+      document.getElementById("policeBadgeTransferBox").classList.add("hidden");
+      pushStateToFirebase(`🔥 警長 ${old} 號撕毀警徽`);
+      renderAllViews();
+      alert(`🔥 警徽已撕毀！本局後續投票皆為 1 票制。`);
+    }
+
+    // ==========================================
+    // 8. 歷史紀錄標籤列渲染
+    // ==========================================
+    function renderHistoryTabs() {
+      const container = document.getElementById("judgeHistoryTabContainer");
+      if (!gameState.history || gameState.history.length === 0) {
+        container.innerHTML = `<span class="text-gray-500 text-[10px]">尚無公播歷史票型</span>`;
+        return;
+      }
+      container.innerHTML = gameState.history.map((h, idx) => `
+        <button onclick="alert('【${h.title}】開票結果：\\n${h.badgeText}')" class="px-2 py-0.5 rounded font-bold whitespace-nowrap bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 text-[10px]">
+          ${h.title}
+        </button>
+      `).join('');
+    }
+
+    // ==========================================
+    // 9. 推進下個夜晚 / 流局 / 重置
+    // ==========================================
     function enterNextNight() {
       gameState.round += 1;
-      document.getElementById("dayPanel").classList.add("hidden");
-      document.getElementById("nightPanel").classList.remove("hidden");
-      document.getElementById("roundBadge").innerText = `第 ${gameState.round} 夜`;
-      renderNightPanel();
+      gameState.day += 1;
+      gameState.phase = "NIGHT";
+      gameState.tempVotes = {};
+      gameState.selectedTarget = null;
+      antidoteUsedThisNight = false;
+
+      pushStateToFirebase(`進入第 ${gameState.round} 夜`);
+      renderAllViews();
     }
 
     function backToNight() {
-      document.getElementById("dayPanel").classList.add("hidden");
-      document.getElementById("nightPanel").classList.remove("hidden");
-      document.getElementById("roundBadge").innerText = `第 ${gameState.round} 夜`;
-      renderNightPanel();
-    }
-
-    function checkGameOver(gods, villagers, wolves) {
-      const statusText = document.getElementById("gameStatusText");
-      const statusTextDesk = document.getElementById("gameStatusTextDesk");
-
-      let text = "進行中";
-      let className = "text-emerald-400 font-bold";
-
-      if (wolves === 0) {
-        gameState.winner = "villager";
-        text = "好人陣營獲勝！(狼人全滅)";
-        className = "text-blue-400 font-bold";
-        alert("🎉 遊戲結束：狼人全員出局，好人陣營獲勝！");
-      } else if (gods === 0) {
-        gameState.winner = "werewolf";
-        text = "狼人屠神獲勝！";
-        className = "text-rose-400 font-bold";
-        alert("🐺 遊戲結束：神職全員出局，狼人陣營屠神獲勝！");
-      } else if (villagers === 0) {
-        gameState.winner = "werewolf";
-        text = "狼人屠民獲勝！";
-        className = "text-rose-400 font-bold";
-        alert("🐺 遊戲結束：民坑全員出局，狼人陣營屠民獲勝！");
-      }
-
-      if (statusText) {
-        statusText.innerText = text;
-        statusText.className = className;
-      }
-      if (statusTextDesk) {
-        statusTextDesk.innerText = text;
-        statusTextDesk.className = `text-sm ml-1 ${className}`;
-      }
-    }
-
-    function commitMatchResults() {
-      if (!gameState.winner) {
-        if (!confirm("遊戲尚未判定勝負，確定要提前強制結算存檔嗎？")) return;
-      }
-      alert("✅ 對局結算完成！已同步寫入資料庫！");
+      gameState.phase = "NIGHT";
+      pushStateToFirebase(`返回第 ${gameState.round} 夜重新操作`);
+      renderAllViews();
     }
 
     function abandonMatch() {
-      const step1 = confirm("🚨 確定要將本局判定為【流局（抄掉）】嗎？\n\n注意：此操作將直接作廢對局，且「絕不會」將任何勝負或天梯積分寫入資料庫！");
-      if (!step1) return;
-      const step2 = confirm("⚠️ 再次確認：真的要強制作廢並重置目前對局嗎？\n（點擊確定後對局立即清空歸零）");
-      if (!step2) return;
-
-      resetGameStateData();
+      if (!confirm("🚨 確定要將本局判定為【流局（抄掉）】嗎？")) return;
+      gameState = RULES_ENGINE.createInitialGameState();
       initSeats();
-      alert("🛑 本局已判定作廢（流局），所有狀態已重置為初始配置，未產生任何數據紀錄。");
+      pushStateToFirebase("本局已判定流局作廢");
+      renderAllViews();
+      alert("🛑 本局已判定作廢，所有狀態已清空。");
     }
 
     function resetMatch() {
-      if (confirm("確定要重置目前對局嗎？所有資料將清空。")) {
-        resetGameStateData();
-        initSeats();
-      }
+      if (!confirm("確定要重置目前對局嗎？")) return;
+      gameState = RULES_ENGINE.createInitialGameState();
+      initSeats();
+      pushStateToFirebase("對局已手動重置");
+      renderAllViews();
     }
 
-    function resetGameStateData() {
-      gameState.round = 1;
-      gameState.phase = "SETUP";
-      gameState.winner = null;
-      gameState.policeSeat = null;
-      gameState.lastExiledPlayer = null;
-      gameState.nightMemory = {
-        guardLastTarget: null,
-        dreamerLastTarget: null,
-        nightmareLastTarget: null,
-        magicianSwappedSeats: new Set(),
-        witchAntidoteUsed: false,
-        witchPoisonUsed: false,
-        gargoyleConvertedTarget: null,
-        blackMarketGifts: { seer: null, poison: null, gun: null },
-        blackMarketTransformedWolf: false,
-        youngWolfSoloKillUsed: false
-      };
-      votesMap = {};
-      currentVoteTarget = null;
-      antidoteUsedThisNight = false;
-
-      document.getElementById("setupPanel").setAttribute("open", "true");
-      document.getElementById("dayPanel").classList.add("hidden");
-      document.getElementById("nightPanel").classList.remove("hidden");
-      document.getElementById("roundBadge").innerText = "第 1 夜";
-      
-      const statusText = document.getElementById("gameStatusText");
-      const statusTextDesk = document.getElementById("gameStatusTextDesk");
-      if (statusText) {
-        statusText.innerText = "進行中";
-        statusText.className = "text-emerald-400 font-bold";
-      }
-      if (statusTextDesk) {
-        statusTextDesk.innerText = "進行中";
-        statusTextDesk.className = "text-sm ml-1 text-emerald-400 font-bold";
-      }
+    function commitMatchResults() {
+      if (!gameState.winner && !confirm("遊戲尚未判定勝負，確定要提前強制結算存檔嗎？")) return;
+      pushStateToFirebase("對局正式結算並封存");
+      alert("✅ 對局結算完成！已同步寫入資料庫！");
     }
-
-    window.onload = () => {
-      initBoardSelector();
-    };
   </script>
 </body>
 </html>
