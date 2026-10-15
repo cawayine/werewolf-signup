@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   
-  <!-- 核心：引入外部規則與板型獨立設定檔 -->
+  <!-- 核心：引入外部規則大腦與獨立設定檔 -->
   <script src="rules_config.js"></script>
 
   <style>
@@ -17,7 +17,6 @@
     .gold-glow { text-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
     select, input { background-color: #161b22; border-color: #30363d; color: #f0f6fc; }
     
-    /* 重複玩家警示樣式（最高優先權） */
     .seat-duplicate-box {
       border: 2px solid #ef4444 !important;
       background-color: rgba(127, 29, 29, 0.3) !important;
@@ -128,7 +127,7 @@
     <!-- 右側欄位（佔 5 欄）：現場法官流程執行台 -->
     <div class="lg:col-span-5 space-y-3">
       
-      <!-- 區塊：夜間行動流程引導 (卡片式，依板型動態生成) -->
+      <!-- 區塊：夜間行動流程引導 (卡片式，依板型與 inputSchema 動態生成) -->
       <section id="nightPanel" class="bg-gray-900 rounded-xl neon-border p-3 active-card shadow">
         <div class="flex justify-between items-center mb-2.5 pb-2 border-b border-gray-800">
           <h2 class="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
@@ -139,7 +138,6 @@
 
         <!-- 動態夜間卡片容器 -->
         <div class="space-y-2 text-xs" id="nightActionsContainer">
-          <!-- 由 renderNightPanel() 動態注入 -->
         </div>
 
         <div class="mt-3 pt-2.5 border-t border-gray-800 flex justify-end">
@@ -160,7 +158,7 @@
           </span>
         </div>
 
-        <!-- 獵人/狼王開槍提示區 -->
+        <!-- 獵人/狼王出局開槍提示區 -->
         <div id="hunterActionBox" class="hidden mb-2.5 p-2.5 bg-amber-950/40 border border-amber-600/80 rounded-lg text-xs">
           <div class="font-bold text-amber-300 mb-1 flex items-center gap-1">
             <i class="fa-solid fa-crosshairs"></i> <span id="gunTriggerTitle">觸發出局開槍技能：</span>
@@ -233,13 +231,12 @@
 
     let currentBoardKey = "";
 
-    // 核心對局狀態與夜間記憶庫
     let gameState = {
       round: 1,
       phase: "SETUP",
       winner: null,
       policeSeat: null,
-      lastExiledPlayer: null, // 記錄昨日被放逐的玩家物件（供守墓人查看）
+      lastExiledPlayer: null,
       players: [],
       nightMemory: {
         guardLastTarget: null,
@@ -281,6 +278,7 @@
       const config = BOARD_DATABASE[currentBoardKey];
       document.getElementById("currentBoardLabel").innerText = config.name;
       initSeats();
+      renderNightPanel();
     }
 
     function checkSeatDuplicates() {
@@ -446,54 +444,51 @@
     }
 
     // ========================================================
-    // 動態夜間卡片引擎 (Night Action Script Engine)
+    // 純粹由 inputSchema 驅動的夜間卡片渲染器 (Zero Role-Hardcoding)
     // ========================================================
     function renderNightPanel() {
       const config = BOARD_DATABASE[currentBoardKey];
       const container = document.getElementById("nightActionsContainer");
+      if (!container || !config) return;
       container.innerHTML = "";
 
       const script = (gameState.round === 1) ? config.firstNightOrder : config.repeatingNightOrder;
       if (!script) return;
 
-      const alive = gameState.players.filter(p => p.isAlive);
-      const aliveOptions = alive.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name}</option>`).join('');
-      const allPlayersOptions = gameState.players.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name}</option>`).join('');
+      let alive = gameState.players.filter(p => p.isAlive);
+      if (alive.length === 0 && gameState.players.length > 0) {
+        alive = gameState.players;
+      }
+
+      const aliveOptions = alive.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || '未指派'}</option>`).join('');
+      const allPlayersOptions = gameState.players.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || '未指派'}</option>`).join('');
 
       script.forEach(step => {
         const card = document.createElement("div");
         card.id = `action-card-${step.id}`;
         card.className = "p-2.5 rounded-lg border text-xs shadow-sm space-y-1.5 transition";
 
-        // 依卡片類型套用配色
-        if (step.type === "GESTURE") {
-          card.classList.add("bg-amber-950/30", "border-amber-700/60");
-        } else if (step.type === "CONFIRM") {
-          card.classList.add("bg-gray-800/80", "border-gray-700");
-        } else if (step.type === "INFO") {
-          card.classList.add("bg-indigo-950/40", "border-indigo-700/60");
-        } else {
-          card.classList.add("bg-gray-800/70", "border-gray-700");
-        }
+        if (step.type === "GESTURE") card.classList.add("bg-amber-950/30", "border-amber-700/60");
+        else if (step.type === "CONFIRM") card.classList.add("bg-gray-800/80", "border-gray-700");
+        else if (step.type === "INFO") card.classList.add("bg-indigo-950/40", "border-indigo-700/60");
+        else card.classList.add("bg-gray-800/70", "border-gray-700");
 
-        // 1. 純確認身分卡片 (CONFIRM)
-        if (step.type === "CONFIRM") {
-          let targetPlayerDesc = "確認目標";
-          if (step.role === "白痴" || step.role === "騎士" || step.role === "守墓人") {
-            const p = gameState.players.find(x => x.role === step.role);
-            targetPlayerDesc = p ? `${p.seat}號 ${p.name}` : "無指派";
-          } else if (step.id === "wolf_brothers_confirm") {
+        const schema = step.schema || {};
+        let bodyHtml = "";
+
+        // Schema 1: CONFIRM_CARD (純確認身分)
+        if (schema.type === "CONFIRM_CARD") {
+          let desc = "未指派";
+          if (step.role === "狼兄狼弟") {
             const b = gameState.players.filter(x => x.role === "狼兄" || x.role === "狼弟");
-            targetPlayerDesc = b.map(x => `${x.seat}號(${x.role})`).join('、');
+            desc = b.length > 0 ? b.map(x => `${x.seat}號(${x.role})`).join('、') : "未配置";
+          } else {
+            const p = gameState.players.find(x => x.role === step.role);
+            desc = p ? `${p.seat}號 ${p.name || ''}` : "未配置";
           }
-
-          card.innerHTML = `
-            <div class="flex justify-between items-center">
-              <span class="font-bold text-gray-200">${step.title}</span>
-              <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
-            </div>
+          bodyHtml = `
             <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
-              <span class="text-gray-300 font-mono">確認目標：<strong class="text-amber-400">${targetPlayerDesc}</strong></span>
+              <span class="text-gray-300 font-mono">確認目標：<strong class="text-amber-400">${desc}</strong></span>
               <button onclick="markStepDone('${step.id}')" id="btn-done-${step.id}" class="bg-gray-700 text-gray-300 px-2 py-0.5 rounded text-[11px] transition">
                 點擊確認
               </button>
@@ -501,66 +496,29 @@
           `;
         }
 
-        // 2. 上帝手勢卡片 (GESTURE)
-        else if (step.type === "GESTURE") {
-          let gestureHtml = "";
-          
-          if (step.id === "hunter_gesture" || step.id === "wolf_king_gesture" || step.id === "gun_lucky_gesture") {
-            gestureHtml = `
-              <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
-                <span class="text-gray-300">給予開槍手勢：</span>
-                <span id="gesture-badge-${step.id}" class="bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold">
-                  👍 狀態良好 (可開槍)
-                </span>
-              </div>
-            `;
-          } else if (step.id === "converter_gesture") {
-            const normalWolvesAlive = gameState.players.filter(p => p.isAlive && p.seatType === "WEREWOLF" && p.role !== "覺醒石像鬼").length;
-            const canTakeBlade = (normalWolvesAlive === 0);
-            gestureHtml = `
-              <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
-                <span class="text-gray-300">給予帶刀手勢：</span>
-                <span class="${canTakeBlade ? 'bg-emerald-950 text-emerald-300 border border-emerald-600' : 'bg-rose-950 text-rose-300 border border-rose-600'} px-2 py-0.5 rounded font-bold">
-                  ${canTakeBlade ? '👍 3狼全滅 (可帶刀)' : '👎 仍有狼在場 (不可帶刀)'}
-                </span>
-              </div>
-            `;
-          } else if (step.id === "black_market_faction_gesture") {
-            const isWolf = gameState.nightMemory.blackMarketTransformedWolf;
-            gestureHtml = `
-              <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
-                <span class="text-gray-300">黑商陣營變更手勢：</span>
-                <span class="${isWolf ? 'bg-rose-950 text-rose-300 border-rose-600' : 'bg-blue-950 text-blue-300 border-blue-600'} border px-2 py-0.5 rounded font-bold">
-                  ${isWolf ? '🐺 變身為狼人 (比狼手勢)' : '🧑 維持好人陣營 (比好人)'}
-                </span>
-              </div>
-            `;
-          }
-
-          card.innerHTML = `
-            <div class="flex justify-between items-center">
-              <span class="font-bold text-amber-300">${step.title}</span>
-              <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
+        // Schema 2: GESTURE_BADGE (動態手勢卡)
+        else if (schema.type === "GESTURE_BADGE") {
+          bodyHtml = `
+            <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
+              <span class="text-gray-300">給予手勢：</span>
+              <span id="gesture-badge-${step.id}" class="bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold">
+                👍 狀態良好
+              </span>
             </div>
-            ${gestureHtml}
           `;
         }
 
-        // 3. 資訊展示卡片 (INFO - 守墓人)
-        else if (step.type === "INFO") {
+        // Schema 3: INFO_CARD (守墓人資訊卡)
+        else if (schema.type === "INFO_CARD") {
           const lastExile = gameState.lastExiledPlayer;
           let infoText = "昨日無放逐出局者";
           let badgeClass = "bg-gray-800 text-gray-400";
           if (lastExile) {
             const isWolf = (lastExile.seatType === "WEREWOLF");
-            infoText = `昨日放逐 ${lastExile.seat}號(${lastExile.name})：【${isWolf ? '狼人陣營' : '好人陣營'}】`;
+            infoText = `昨日放逐 ${lastExile.seat}號(${lastExile.name || ''})：【${isWolf ? '狼人陣營' : '好人陣營'}】`;
             badgeClass = isWolf ? "bg-rose-950 text-rose-300 border border-rose-600" : "bg-blue-950 text-blue-300 border border-blue-600";
           }
-          card.innerHTML = `
-            <div class="flex justify-between items-center">
-              <span class="font-bold text-indigo-300">${step.title}</span>
-              <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
-            </div>
+          bodyHtml = `
             <div class="bg-gray-900/60 p-2 rounded flex justify-between items-center">
               <span class="text-gray-300">放逐陣營資訊：</span>
               <span class="${badgeClass} px-2 py-0.5 rounded font-bold">${infoText}</span>
@@ -568,249 +526,128 @@
           `;
         }
 
-        // 4. 主動技能卡片 (SKILL)
-        else {
-          let skillHtml = "";
-
-          // 守衛
-          if (step.id === "guard") {
-            const lastTarget = gameState.nightMemory.guardLastTarget;
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">守護目標：</span>
-                <select id="guardTarget" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">空守 (不守護任何人)</option>
-                  ${alive.map(p => {
-                    const isLast = (p.seat === lastTarget);
-                    return `<option value="\${p.seat}" ${isLast ? 'disabled' : ''}>${p.seat}號 - ${p.name}${isLast ? '(昨晚已守)' : ''}</option>`;
-                  }).join('')}
-                </select>
-              </div>
-            `;
+        // Schema 4: SINGLE_TARGET (單選目標)
+        else if (schema.type === "SINGLE_TARGET") {
+          const pool = (schema.targetScope === "ALL") ? gameState.players : alive;
+          const lastTarget = schema.preventConsecutive ? (gameState.nightMemory.guardLastTarget || gameState.nightMemory.nightmareLastTarget) : null;
+          
+          let isDisabled = false;
+          if (schema.conditionalRoleDead) {
+            const roleAlive = gameState.players.some(p => p.role === schema.conditionalRoleDead && p.isAlive);
+            isDisabled = roleAlive; // 條件角色存活時禁用
           }
 
-          // 夢魘
-          else if (step.id === "nightmare") {
-            const nightmarePlayer = gameState.players.find(p => p.role === "夢魘");
-            const lastTarget = gameState.nightMemory.nightmareLastTarget;
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">恐懼目標：</span>
-                <select id="nightmareTarget" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">不恐懼</option>
-                  ${alive.filter(p => !nightmarePlayer || p.seat !== nightmarePlayer.seat).map(p => {
-                    const isLast = (p.seat === lastTarget);
-                    return `<option value="\${p.seat}" ${isLast ? 'disabled' : ''}>${p.seat}號 - ${p.name}${isLast ? '(昨晚已恐)' : ''}</option>`;
-                  }).join('')}
-                </select>
-              </div>
-            `;
-          }
-
-          // 攝夢人
-          else if (step.id === "dreamer") {
-            const dreamerPlayer = gameState.players.find(p => p.role === "攝夢人");
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">夢遊目標：</span>
-                <select id="dreamerTarget" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">選擇夢遊玩家</option>
-                  ${alive.filter(p => !dreamerPlayer || p.seat !== dreamerPlayer.seat).map(p => {
-                    const isLast = (p.seat === gameState.nightMemory.dreamerLastTarget);
-                    return `<option value="${p.seat}">${p.seat}號 - ${p.name}${isLast ? '(連夢死亡⚠️)' : ''}</option>`;
-                  }).join('')}
-                </select>
-              </div>
-            `;
-          }
-
-          // 魔術師
-          else if (step.id === "magician") {
-            skillHtml = `
-              <div class="grid grid-cols-2 gap-2">
-                <div class="flex items-center gap-1">
-                  <span class="text-gray-400">目標A:</span>
-                  <select id="magicianTargetA" class="w-full rounded p-1 text-xs border">
-                    <option value="">選擇號碼</option>
-                    ${allPlayersOptions}
-                  </select>
-                </div>
-                <div class="flex items-center gap-1">
-                  <span class="text-gray-400">目標B:</span>
-                  <select id="magicianTargetB" class="w-full rounded p-1 text-xs border">
-                    <option value="">選擇號碼</option>
-                    ${allPlayersOptions}
-                  </select>
-                </div>
-              </div>
-            `;
-          }
-
-          // 混血兒
-          else if (step.id === "hybrid") {
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">選擇榜樣：</span>
-                <select id="hybridTarget" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">選擇榜樣號碼</option>
-                  ${allPlayersOptions}
-                </select>
-              </div>
-            `;
-          }
-
-          // 覺醒石像鬼
-          else if (step.id === "gargoyle") {
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">轉化目標：</span>
-                <select id="gargoyleTarget" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">選擇轉化相鄰玩家</option>
-                  ${allPlayersOptions}
-                </select>
-              </div>
-            `;
-          }
-
-          // 黑市商人
-          else if (step.id === "black_market") {
-            skillHtml = `
-              <div class="space-y-1.5 bg-gray-900/60 p-2 rounded">
-                <div class="flex items-center justify-between">
-                  <span>🔮 查驗幸運兒：</span>
-                  <select id="blackMarketSeer" class="w-36 rounded p-0.5 text-xs border">
-                    <option value="">選擇玩家</option>${allPlayersOptions}
-                  </select>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span>🧪 毒藥幸運兒：</span>
-                  <select id="blackMarketPoison" class="w-36 rounded p-0.5 text-xs border">
-                    <option value="">選擇玩家</option>${allPlayersOptions}
-                  </select>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span>🔫 獵槍幸運兒：</span>
-                  <select id="blackMarketGun" class="w-36 rounded p-0.5 text-xs border">
-                    <option value="">選擇玩家</option>${allPlayersOptions}
-                  </select>
-                </div>
-              </div>
-            `;
-          }
-
-          // 狼弟獨立單砍 (超級黑商板)
-          else if (step.id === "wolf_younger_solo") {
-            const brotherDead = !gameState.players.some(p => p.role === "狼兄" && p.isAlive);
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">狼弟單獨落刀：</span>
-                <select id="youngWolfTarget" class="flex-1 rounded p-1 text-xs border" ${brotherDead ? '' : 'disabled'}>
-                  <option value="">${brotherDead ? '選擇單獨擊殺目標' : '狼兄尚未出局 (不可單砍)'}</option>
-                  ${brotherDead ? aliveOptions : ''}
-                </select>
-              </div>
-            `;
-          }
-
-          // 狼人 (團隊落刀)
-          else if (step.id === "wolf" || step.id === "wolf_team_confirm") {
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">團隊刀口：</span>
-                <select id="wolfTarget" onchange="onWolfTargetChange()" class="flex-1 rounded p-1 text-xs border text-rose-300 font-bold">
-                  <option value="">空刀 (不擊殺)</option>
-                  ${aliveOptions}
-                </select>
-              </div>
-            `;
-          }
-
-          // 狼美人魅惑
-          else if (step.id === "wolf_beauty") {
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">魅惑目標：</span>
-                <select id="wolfBeautyTarget" class="flex-1 rounded p-1 text-xs border text-pink-300 font-bold">
-                  <option value="">選擇魅惑玩家</option>
-                  ${aliveOptions}
-                </select>
-              </div>
-            `;
-          }
-
-          // 女巫
-          else if (step.id === "witch") {
-            const antidoteUsed = gameState.nightMemory.witchAntidoteUsed;
-            const poisonUsed = gameState.nightMemory.witchPoisonUsed;
-            skillHtml = `
-              <div class="flex justify-between items-center mb-1">
-                <span class="text-[10px] text-amber-400 font-mono font-bold" id="witchRawKillHint">原始倒牌：等待落刀</span>
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
-                  <span>解藥</span>
-                  <button id="antidoteBtn" onclick="toggleAntidote()" ${antidoteUsed ? 'disabled' : ''} class="${antidoteUsed ? 'bg-gray-800 text-gray-500' : 'bg-gray-700 text-gray-300'} text-[11px] px-2 py-0.5 rounded transition">
-                    ${antidoteUsed ? '已消耗' : '未使用'}
-                  </button>
-                </div>
-                <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
-                  <span>毒藥</span>
-                  <select id="poisonTarget" onchange="onNightActionChange()" ${poisonUsed ? 'disabled' : ''} class="text-[11px] rounded p-0.5 border">
-                    <option value="">${poisonUsed ? '已消耗' : '不使用'}</option>
-                    ${poisonUsed ? '' : aliveOptions}
-                  </select>
-                </div>
-              </div>
-            `;
-          }
-
-          // 預言家
-          else if (step.id === "seer") {
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">查驗目標：</span>
-                <select id="seerTarget" onchange="resolveSeerCheck()" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">選擇查驗目標</option>
-                  ${allPlayersOptions}
-                </select>
-                <span id="seerResultBadge" class="bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold whitespace-nowrap">
-                  待查驗
-                </span>
-              </div>
-            `;
-          }
-
-          // 幸運兒主動技能 (超級黑商第 2 夜起)
-          else if (step.id === "lucky_skill_action") {
-            skillHtml = `
-              <div class="bg-gray-900/60 p-2 rounded space-y-1">
-                <div class="flex justify-between items-center">
-                  <span>查驗幸運兒：</span>
-                  <button class="bg-blue-900 text-blue-200 px-2 py-0.5 rounded">詢問查驗</button>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span>毒藥幸運兒：</span>
-                  <button class="bg-emerald-900 text-emerald-200 px-2 py-0.5 rounded">詢問用毒</button>
-                </div>
-              </div>
-            `;
-          }
-
-          card.innerHTML = `
-            <div class="flex justify-between items-center">
-              <span class="font-bold text-gray-200">${step.title}</span>
-              <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
+          bodyHtml = `
+            <div class="flex items-center gap-2">
+              <span class="text-gray-400">選擇目標：</span>
+              <select id="target-${step.id}" onchange="onFormActionChange('${step.id}')" ${isDisabled ? 'disabled' : ''} class="flex-1 rounded p-1 text-xs border">
+                <option value="">${isDisabled ? (schema.conditionalRoleDead + '尚未出局 (不可單砍)') : (schema.placeholder || '請選擇')}</option>
+                ${!isDisabled ? pool.map(p => {
+                  const isLast = (p.seat === lastTarget);
+                  return `<option value="\${p.seat}" ${isLast ? 'disabled' : ''}>${p.seat}號 - ${p.name \vert{}\vert{} ''}${isLast ? ' (昨晚已選)' : ''}</option>`;
+                }).join('') : ''}
+              </select>
             </div>
-            ${skillHtml}
           `;
         }
+
+        // Schema 5: SWAP_TARGETS (雙選換位：魔術師)
+        else if (schema.type === "SWAP_TARGETS") {
+          bodyHtml = `
+            <div class="grid grid-cols-2 gap-2">
+              <div class="flex items-center gap-1">
+                <span class="text-gray-400">目標A:</span>
+                <select id="swapTargetA" onchange="onFormActionChange('swap')" class="w-full rounded p-1 text-xs border">
+                  <option value="">選擇號碼</option>
+                  ${allPlayersOptions}
+                </select>
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="text-gray-400">目標B:</span>
+                <select id="swapTargetB" onchange="onFormActionChange('swap')" class="w-full rounded p-1 text-xs border">
+                  <option value="">選擇號碼</option>
+                  ${allPlayersOptions}
+                </select>
+              </div>
+            </div>
+          `;
+        }
+
+        // Schema 6: WITCH_POTIONS (女巫雙藥)
+        else if (schema.type === "WITCH_POTIONS") {
+          const antUsed = gameState.nightMemory.witchAntidoteUsed;
+          const poiUsed = gameState.nightMemory.witchPoisonUsed;
+          bodyHtml = `
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-[10px] text-amber-400 font-mono font-bold" id="witchRawKillHint">原始刀口：等待落刀</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
+                <span>解藥</span>
+                <button id="antidoteBtn" onclick="toggleAntidote()" ${antUsed ? 'disabled' : ''} class="${antUsed ? 'bg-gray-800 text-gray-500' : 'bg-gray-700 text-gray-300'} text-[11px] px-2 py-0.5 rounded transition">
+                  ${antUsed ? '已消耗' : '未使用'}
+                </button>
+              </div>
+              <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
+                <span>毒藥</span>
+                <select id="poisonTarget" onchange="onFormActionChange('poison')" ${poiUsed ? 'disabled' : ''} class="text-[11px] rounded p-0.5 border">
+                  <option value="">${poiUsed ? '已消耗' : '不使用'}</option>
+                  ${poiUsed ? '' : aliveOptions}
+                </select>
+              </div>
+            </div>
+          `;
+        }
+
+        // Schema 7: SEER_CHECK (查驗)
+        else if (schema.type === "SEER_CHECK") {
+          bodyHtml = `
+            <div class="flex items-center gap-2">
+              <span class="text-gray-400">查驗目標：</span>
+              <select id="seerTarget" onchange="onFormActionChange('seer')" class="flex-1 rounded p-1 text-xs border">
+                <option value="">選擇查驗目標</option>
+                ${allPlayersOptions}
+              </select>
+              <span id="seerResultBadge" class="bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold whitespace-nowrap">
+                待查驗
+              </span>
+            </div>
+          `;
+        }
+
+        // Schema 8: THREE_GIFTS (黑商三禮物)
+        else if (schema.type === "THREE_GIFTS") {
+          bodyHtml = `
+            <div class="space-y-1.5 bg-gray-900/60 p-2 rounded">
+              <div class="flex items-center justify-between">
+                <span>🔮 查驗幸運兒：</span>
+                <select id="giftSeer" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${allPlayersOptions}</select>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>🧪 毒藥幸運兒：</span>
+                <select id="giftPoison" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${allPlayersOptions}</select>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>🔫 獵槍幸運兒：</span>
+                <select id="giftGun" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${allPlayersOptions}</select>
+              </div>
+            </div>
+          `;
+        }
+
+        card.innerHTML = `
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-gray-200">${step.title}</span>
+            <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
+          </div>
+          ${bodyHtml}
+        `;
 
         container.appendChild(card);
       });
 
       antidoteUsedThisNight = false;
-      onWolfTargetChange();
-      updateDynamicGestureBadges();
+      refreshAllRuleDisplays();
     }
 
     function markStepDone(stepId) {
@@ -821,24 +658,21 @@
       }
     }
 
-    // 女巫看到原始刀口，不經魔術師換算
-    function onWolfTargetChange() {
-      const elWolf = document.getElementById("wolfTarget");
-      const elHint = document.getElementById("witchRawKillHint");
-      if (!elWolf || !elHint) return;
-
-      const target = parseInt(elWolf.value);
-      if (target) {
-        const p = gameState.players.find(x => x.seat === target);
-        elHint.innerText = `原始刀口：${target} 號 (${p ? p.name : ''})`;
-      } else {
-        elHint.innerText = `原始刀口：空刀`;
+    function onFormActionChange(triggerId) {
+      if (triggerId === 'target-wolf' || triggerId === 'target-wolf_team_confirm') {
+        const wolfEl = document.getElementById('target-wolf') || document.getElementById('target-wolf_team_confirm');
+        const hint = document.getElementById('witchRawKillHint');
+        if (wolfEl && hint) {
+          const val = parseInt(wolfEl.value || 0);
+          if (val) {
+            const p = gameState.players.find(x => x.seat === val);
+            hint.innerText = `原始刀口：${val} 號 (${p ? p.name : ''})`;
+          } else {
+            hint.innerText = `原始刀口：空刀`;
+          }
+        }
       }
-      updateDynamicGestureBadges();
-    }
-
-    function onNightActionChange() {
-      updateDynamicGestureBadges();
+      refreshAllRuleDisplays();
     }
 
     function toggleAntidote() {
@@ -852,203 +686,104 @@
         btn.innerText = "未使用";
         btn.className = "bg-gray-700 text-gray-300 text-[11px] px-2 py-0.5 rounded transition";
       }
-      updateDynamicGestureBadges();
+      refreshAllRuleDisplays();
     }
 
-    // 即時動態計算手勢（獵人/狼王手勢）
-    function updateDynamicGestureBadges() {
-      const poisonTarget = parseInt(document.getElementById("poisonTarget")?.value || 0);
-      const dreamerTarget = parseInt(document.getElementById("dreamerTarget")?.value || 0);
+    // 將所有即時計算統一委託給 RULES_ENGINE
+    function refreshAllRuleDisplays() {
+      if (typeof RULES_ENGINE === 'undefined') return;
 
-      // 1. 獵人開槍手勢
-      const hunter = gameState.players.find(p => p.role === "獵人");
-      const hunterBadge = document.getElementById("gesture-badge-hunter_gesture");
-      if (hunter && hunterBadge) {
-        const isPoisoned = (poisonTarget === hunter.seat);
-        const isDreamKilled = (dreamerTarget === hunter.seat && gameState.nightMemory.dreamerLastTarget === hunter.seat);
-        if (isPoisoned || isDreamKilled) {
-          hunterBadge.innerText = "👎 技能受阻 (不可開槍)";
-          hunterBadge.className = "bg-rose-950 text-rose-300 border border-rose-600 px-2 py-0.5 rounded font-bold";
-        } else {
-          hunterBadge.innerText = "👍 狀態良好 (可開槍)";
-          hunterBadge.className = "bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold";
-        }
+      const swapPair = [
+        parseInt(document.getElementById("swapTargetA")?.value || 0),
+        parseInt(document.getElementById("swapTargetB")?.value || 0)
+      ];
+
+      // 1. 預言家查驗反饋
+      const seerSeat = parseInt(document.getElementById("seerTarget")?.value || 0);
+      const seerBadge = document.getElementById("seerResultBadge");
+      if (seerBadge) {
+        const checkRes = RULES_ENGINE.resolveCheck(seerSeat, swapPair, gameState.players);
+        seerBadge.innerText = checkRes.text;
+        seerBadge.className = checkRes.isWolf 
+          ? "bg-rose-950 text-rose-300 border border-rose-700 px-2 py-0.5 rounded font-bold whitespace-nowrap"
+          : (checkRes.isReady ? "bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold whitespace-nowrap" : "bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold whitespace-nowrap");
       }
 
-      // 2. 狼王魔術師板的狼王手勢
-      const wolfKing = gameState.players.find(p => p.role === "狼王");
-      const wolfKingBadge = document.getElementById("gesture-badge-wolf_king_gesture");
-      if (wolfKing && wolfKingBadge) {
-        // 魔術師換位換算
-        let actualPoisonTarget = poisonTarget;
-        const magA = parseInt(document.getElementById("magicianTargetA")?.value || 0);
-        const magB = parseInt(document.getElementById("magicianTargetB")?.value || 0);
-        if (magA && magB) {
-          if (poisonTarget === magA) actualPoisonTarget = magB;
-          else if (poisonTarget === magB) actualPoisonTarget = magA;
-        }
-
-        if (actualPoisonTarget === wolfKing.seat) {
-          wolfKingBadge.innerText = "👎 已吃毒 (不可開槍)";
-          wolfKingBadge.className = "bg-rose-950 text-rose-300 border border-rose-600 px-2 py-0.5 rounded font-bold";
-        } else {
-          wolfKingBadge.innerText = "👍 狀態良好 (可開槍)";
-          wolfKingBadge.className = "bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold";
-        }
-      }
-    }
-
-    function resolveSeerCheck() {
-      const targetSeat = parseInt(document.getElementById("seerTarget").value);
-      const badge = document.getElementById("seerResultBadge");
-      if (!targetSeat) {
-        badge.innerText = "待查驗";
-        badge.className = "bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold whitespace-nowrap";
-        return;
-      }
-      const target = gameState.players.find(p => p.seat === targetSeat);
-      const isWolf = ["狼人", "狼王", "白狼王", "狼兄", "狼弟", "夢魘", "狼美人", "覺醒石像鬼"].includes(target.role);
-      badge.innerText = isWolf ? "查殺 (狼人)" : "金水 (好人)";
-      badge.className = isWolf ? "bg-rose-950 text-rose-300 border border-rose-700 px-2 py-0.5 rounded font-bold whitespace-nowrap" : "bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold whitespace-nowrap";
-    }
-
-    // ========================================================
-    // 夜間天亮死訊結算引擎 (Resolve Night)
-    // ========================================================
-    function resolveNight() {
-      let rawWolfTarget = parseInt(document.getElementById("wolfTarget")?.value || 0);
-      let rawPoisonTarget = parseInt(document.getElementById("poisonTarget")?.value || 0);
-      let guardTarget = parseInt(document.getElementById("guardTarget")?.value || 0);
-      let dreamerTarget = parseInt(document.getElementById("dreamerTarget")?.value || 0);
-      let youngWolfSolo = parseInt(document.getElementById("youngWolfTarget")?.value || 0);
-      let hybridTarget = parseInt(document.getElementById("hybridTarget")?.value || 0);
-      let gargoyleTarget = parseInt(document.getElementById("gargoyleTarget")?.value || 0);
-
-      // 1. 首夜特殊身分紀錄
-      if (gameState.round === 1) {
-        if (hybridTarget) {
-          const hybrid = gameState.players.find(p => p.role === "混血兒");
-          if (hybrid) {
-            hybrid.hybridTarget = hybridTarget;
-            const target = gameState.players.find(p => p.seat === hybridTarget);
-            hybrid.victoryFaction = (target.seatType === "WEREWOLF") ? "werewolf" : "villager";
-          }
-        }
-        if (gargoyleTarget) {
-          gameState.nightMemory.gargoyleConvertedTarget = gargoyleTarget;
-        }
-
-        // 超級黑商發禮物
-        const bmSeer = parseInt(document.getElementById("blackMarketSeer")?.value || 0);
-        const bmPoison = parseInt(document.getElementById("blackMarketPoison")?.value || 0);
-        const bmGun = parseInt(document.getElementById("blackMarketGun")?.value || 0);
-        if (bmSeer && bmPoison && bmGun) {
-          gameState.nightMemory.blackMarketGifts = { seer: bmSeer, poison: bmPoison, gun: bmGun };
-          // 判定是否3禮物全送給好人
-          const s1 = gameState.players.find(p => p.seat === bmSeer);
-          const s2 = gameState.players.find(p => p.seat === bmPoison);
-          const s3 = gameState.players.find(p => p.seat === bmGun);
-          if (s1.seatType !== "WEREWOLF" && s2.seatType !== "WEREWOLF" && s3.seatType !== "WEREWOLF") {
-            gameState.nightMemory.blackMarketTransformedWolf = true;
-          }
-        }
-      }
-
-      // 2. 魔術師交換映射計算
-      const magA = parseInt(document.getElementById("magicianTargetA")?.value || 0);
-      const magB = parseInt(document.getElementById("magicianTargetB")?.value || 0);
-      const swapMap = (seat) => {
-        if (!magA || !magB || !seat) return seat;
-        if (seat === magA) return magB;
-        if (seat === magB) return magA;
-        return seat;
+      // 2. 評估所有手勢卡片
+      const context = {
+        rawPoisonTarget: parseInt(document.getElementById("poisonTarget")?.value || 0),
+        swapPair: swapPair,
+        dreamerTarget: parseInt(document.getElementById("target-dreamer")?.value || 0),
+        lastDreamerTarget: gameState.nightMemory.dreamerLastTarget,
+        players: gameState.players,
+        blackMarketTransformedWolf: gameState.nightMemory.blackMarketTransformedWolf
       };
 
-      // 實際受技能影響之目標 (魔術師結算在後)
-      let finalWolfTarget = swapMap(rawWolfTarget);
-      let finalPoisonTarget = swapMap(rawPoisonTarget);
-      let finalGuardTarget = swapMap(guardTarget);
-      let finalDreamerTarget = swapMap(dreamerTarget);
-      let finalYoungWolfTarget = swapMap(youngWolfSolo);
-
-      let deaths = [];
-      let hunterCanShoot = true;
-      let wolfKingCanShoot = true;
-
-      // 3. 狼刀與守衛/女巫同守同救奶穿判定
-      if (finalWolfTarget) {
-        const isGuarded = (finalGuardTarget === finalWolfTarget);
-        const isSaved = antidoteUsedThisNight;
-
-        if (isGuarded && isSaved) {
-          // 同守同救奶穿死亡 (milk_through)
-          deaths.push(finalWolfTarget);
-        } else if (isGuarded && !isSaved) {
-          // 守衛守中，平安夜
-        } else if (!isGuarded && isSaved) {
-          // 女巫救活，平安夜
-        } else {
-          // 實死
-          deaths.push(finalWolfTarget);
+      ["hunter_gesture", "wolf_king_gesture", "converter_gesture", "black_market_faction_gesture", "gun_lucky_gesture"].forEach(gId => {
+        const badge = document.getElementById(`gesture-badge-${gId}`);
+        if (badge) {
+          const res = RULES_ENGINE.evaluateGesture(gId, context);
+          badge.innerText = res.text;
+          badge.className = res.isPositive 
+            ? "bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold"
+            : "bg-rose-950 text-rose-300 border border-rose-600 px-2 py-0.5 rounded font-bold";
         }
-      }
+      });
+    }
 
-      // 4. 狼弟獨立單砍 (若有)
-      if (finalYoungWolfTarget && !deaths.includes(finalYoungWolfTarget)) {
-        deaths.push(finalYoungWolfTarget);
-      }
+    // ========================================================
+    // 天亮死訊結算 (委託 RULES_ENGINE.resolveNight 裁決)
+    // ========================================================
+    function resolveNight() {
+      if (typeof RULES_ENGINE === 'undefined') return;
 
-      // 5. 毒藥判定
-      if (finalPoisonTarget) {
-        if (!deaths.includes(finalPoisonTarget)) deaths.push(finalPoisonTarget);
-        // 若毒到獵人或狼王，悶槍
-        const poisonedPlayer = gameState.players.find(p => p.seat === finalPoisonTarget);
-        if (poisonedPlayer) {
-          if (poisonedPlayer.role === "獵人") hunterCanShoot = false;
-          if (poisonedPlayer.role === "狼王") wolfKingCanShoot = false;
-        }
-      }
+      const wolfEl = document.getElementById('target-wolf') || document.getElementById('target-wolf_team_confirm');
+      
+      const inputs = {
+        rawWolfTarget: parseInt(wolfEl?.value || 0),
+        rawPoisonTarget: parseInt(document.getElementById("poisonTarget")?.value || 0),
+        guardTarget: parseInt(document.getElementById("target-guard")?.value || 0),
+        dreamerTarget: parseInt(document.getElementById("target-dreamer")?.value || 0),
+        youngWolfSolo: parseInt(document.getElementById("target-wolf_younger_solo")?.value || 0),
+        hybridTarget: parseInt(document.getElementById("target-hybrid")?.value || 0),
+        gargoyleTarget: parseInt(document.getElementById("target-gargoyle")?.value || 0),
+        swapPair: [
+          parseInt(document.getElementById("swapTargetA")?.value || 0),
+          parseInt(document.getElementById("swapTargetB")?.value || 0)
+        ],
+        blackMarketGifts: {
+          seer: parseInt(document.getElementById("giftSeer")?.value || 0),
+          poison: parseInt(document.getElementById("giftPoison")?.value || 0),
+          gun: parseInt(document.getElementById("giftGun")?.value || 0)
+        },
+        antidoteUsed: antidoteUsedThisNight
+      };
 
-      // 6. 攝夢人連夢判定
-      if (finalDreamerTarget) {
-        if (gameState.nightMemory.dreamerLastTarget === finalDreamerTarget) {
-          if (!deaths.includes(finalDreamerTarget)) deaths.push(finalDreamerTarget);
-          const dreamtPlayer = gameState.players.find(p => p.seat === finalDreamerTarget);
-          if (dreamtPlayer && dreamtPlayer.role === "獵人") hunterCanShoot = false;
-        }
-      }
+      // 呼叫規則引擎取得裁決結果
+      const result = RULES_ENGINE.resolveNight(inputs, gameState);
 
-      // 7. 更新記憶庫狀態
-      gameState.nightMemory.guardLastTarget = guardTarget || null;
-      gameState.nightMemory.dreamerLastTarget = dreamerTarget || null;
-      if (antidoteUsedThisNight) gameState.nightMemory.witchAntidoteUsed = true;
-      if (rawPoisonTarget) gameState.nightMemory.witchPoisonUsed = true;
-
-      // 8. 執行死訊標記
-      deaths.forEach(seat => {
+      // UI 執行死訊標記
+      result.deaths.forEach(seat => {
         const p = gameState.players.find(x => x.seat === seat);
         if (p) p.isAlive = false;
       });
 
-      // 9. 檢查開槍觸發 (獵人 / 狼王)
-      const deadHunter = gameState.players.find(p => p.role === "獵人" && deaths.includes(p.seat));
-      const deadWolfKing = gameState.players.find(p => p.role === "狼王" && deaths.includes(p.seat));
+      // 出局開槍觸發提示
+      const deadHunter = gameState.players.find(p => p.role === "獵人" && result.deaths.includes(p.seat));
+      const deadWolfKing = gameState.players.find(p => p.role === "狼王" && result.deaths.includes(p.seat));
 
-      if (deadHunter && hunterCanShoot) {
+      if (deadHunter && result.hunterCanShoot) {
         triggerGunAction("獵人", deadHunter.seat);
-      } else if (deadWolfKing && wolfKingCanShoot) {
+      } else if (deadWolfKing && result.wolfKingCanShoot) {
         triggerGunAction("狼王", deadWolfKing.seat);
       }
 
       updateCounts();
 
-      // 切換為白天介面
       document.getElementById("nightPanel").classList.add("hidden");
       document.getElementById("dayPanel").classList.remove("hidden");
       document.getElementById("roundBadge").innerText = `第 ${gameState.round} 天 白天`;
-      
-      const summaryText = deaths.length === 0 ? "昨夜平安夜" : `昨夜死訊：${deaths.map(s => s + '號').join(', ')} 出局`;
-      document.getElementById("nightDeathSummary").innerText = summaryText;
+      document.getElementById("nightDeathSummary").innerText = result.summaryText;
 
       setupDayVoting();
     }
@@ -1060,15 +795,15 @@
       title.innerText = `${shooterSeat}號【${roleName}】出局觸發開槍技能：`;
       const alive = gameState.players.filter(p => p.isAlive);
       document.getElementById("hunterTarget").innerHTML = `<option value="">請選擇帶走對象</option>` +
-        alive.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name}</option>`).join('');
+        alive.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || ''}</option>`).join('');
     }
 
     function applyHunterShot() {
       const targetSeat = parseInt(document.getElementById("hunterTarget").value);
       if (!targetSeat) return;
       const target = gameState.players.find(p => p.seat === targetSeat);
-      target.isAlive = false;
-      alert(`💥 開槍技能發動，帶走了 ${targetSeat} 號 (${target.name})！`);
+      if (target) target.isAlive = false;
+      alert(`💥 開槍技能發動，帶走了 ${targetSeat} 號 (${target ? target.name : ''})！`);
       document.getElementById("hunterActionBox").classList.add("hidden");
       updateCounts();
       setupDayVoting();
@@ -1175,13 +910,12 @@
       const exiledPlayer = gameState.players.find(p => p.seat === exiledSeat);
       gameState.lastExiledPlayer = exiledPlayer;
 
-      if (exiledPlayer.role === "白痴") {
+      if (exiledPlayer && exiledPlayer.role === "白痴") {
         alert(`🔔 ${exiledSeat} 號為白痴，觸發翻牌免死技能！保留發言權，拔除投票權。`);
-      } else {
+      } else if (exiledPlayer) {
         exiledPlayer.isAlive = false;
-        alert(`❌ ${exiledSeat} 號玩家 (${exiledPlayer.name}) 被公投放逐出局！`);
+        alert(`❌ ${exiledSeat} 號玩家 (${exiledPlayer.name || ''}) 被公投放逐出局！`);
         
-        // 放逐開槍判定 (獵人 / 狼王)
         if (exiledPlayer.role === "獵人") {
           triggerGunAction("獵人", exiledPlayer.seat);
         } else if (exiledPlayer.role === "狼王") {
