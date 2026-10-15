@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>基地狼人殺 - 上帝專屬記分主控台 (瘦身整合版)</title>
+  <title>基地狼人殺 - 上帝專屬記分主控台 (全規則大腦驅動版)</title>
   
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
@@ -16,7 +16,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-  <!-- 引入升級版規則大腦與獨立設定檔 -->
+  <!-- 引入規則大腦與獨立設定檔 -->
   <script src="rules_config.js"></script>
 
   <style>
@@ -37,7 +37,7 @@
       font-weight: bold !important;
     }
 
-    /* 樂透彩球專屬立體視覺 (與公播端對齊) */
+    /* 樂透彩球專屬立體視覺 */
     .lotto-ball {
       display: inline-flex;
       align-items: center;
@@ -134,7 +134,7 @@
         </div>
       </section>
 
-      <!-- 警徽處置提示卡片 (警長出局時自動彈出) -->
+      <!-- 警徽處置提示卡片 -->
       <div id="policeBadgeTransferBox" class="p-2.5 bg-amber-950/40 border border-amber-500/80 rounded-xl hidden">
         <div class="flex justify-between items-center mb-1.5">
           <span class="text-xs font-bold text-amber-300 flex items-center gap-1">
@@ -169,11 +169,23 @@
               <select id="boardSelect" onchange="onBoardSelectChange()" class="w-full text-xs rounded p-1.5 border border-amber-500/50 bg-gray-800 text-amber-200 font-bold outline-none">
               </select>
             </div>
+            
+            <!-- ⚡ 報名系統即時簽到名單來源 -->
             <div class="flex-1">
-              <label class="text-[10px] text-gray-400 block mb-0.5">匯入簽到名單來源</label>
-              <select id="sessionSelect" class="w-full text-xs rounded p-1.5 border outline-none">
-                <option>當日簽到名單 (現場已簽到)</option>
-              </select>
+              <div class="flex justify-between items-center mb-0.5">
+                <label class="text-[10px] text-gray-400 block">匯入簽到名單來源</label>
+                <button type="button" onclick="autoAssignRosterToSeats()" class="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold underline">
+                  ⚡ 依序填入 1~12 席
+                </button>
+              </div>
+              <div class="flex gap-1">
+                <select id="sessionSelect" onchange="onSessionRosterChange()" class="flex-1 text-xs rounded p-1.5 border outline-none">
+                  <option value="">⏳ 載入名單中...</option>
+                </select>
+                <button type="button" onclick="loadRosterFromGviz(true)" title="重新整理名單" class="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded text-xs transition">
+                  <i class="fa-solid fa-rotate"></i>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -186,7 +198,7 @@
         </div>
       </details>
 
-      <!-- 12 席座位存活總覽點陣 (同步公播樣式) -->
+      <!-- 12 席座位存活總覽點陣 -->
       <section class="bg-gray-900 rounded-xl neon-border p-3 shadow">
         <div class="flex justify-between items-center mb-2">
           <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
@@ -213,7 +225,7 @@
     <!-- 右側欄位（佔 5 欄）：夜間主持台 + 白天競選/放逐工作台 -->
     <div class="lg:col-span-5 space-y-3">
       
-      <!-- 區塊 1：夜間行動流程引導 (卡片式) -->
+      <!-- 區塊 1：夜間行動流程引導 (卡片式，完全由腳本驅動) -->
       <section id="nightPanel" class="bg-gray-900 rounded-xl neon-border p-3 active-card shadow">
         <div class="flex justify-between items-center mb-2.5 pb-2 border-b border-gray-800">
           <h2 class="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
@@ -222,26 +234,7 @@
           <span class="text-[10px] text-amber-400 font-mono" id="nightPhaseHint">請照順序喚醒確認</span>
         </div>
 
-        <!-- 詭術師夜間號碼置換卡片 (若模組開啟顯示) -->
-        <div id="tricksterNightBox" class="hidden mb-2.5 p-2 bg-purple-950/40 border border-purple-800/80 rounded-lg text-xs">
-          <div class="flex justify-between items-center mb-1">
-            <span class="font-bold text-purple-300">🎭 詭術師夜間置換 (私密登記)：</span>
-            <span id="tricksterStatusText" class="text-[10px] text-gray-400">未置換</span>
-          </div>
-          <div class="flex items-center gap-1">
-            <select id="tricksterA" class="flex-1 rounded p-1 text-xs border bg-gray-800"></select>
-            <span class="text-purple-400 font-bold">⇄</span>
-            <select id="tricksterB" class="flex-1 rounded p-1 text-xs border bg-gray-800"></select>
-            <button onclick="saveTricksterSwap()" class="bg-purple-700 hover:bg-purple-600 text-white font-bold px-2 py-1 rounded text-xs transition">
-              儲存
-            </button>
-            <button onclick="clearTricksterSwap()" class="text-gray-400 hover:text-rose-400 text-xs px-1">
-              清空
-            </button>
-          </div>
-        </div>
-
-        <!-- 動態夜間卡片容器 -->
+        <!-- 動態夜間卡片容器 (依板型動態生成) -->
         <div class="space-y-2 text-xs" id="nightActionsContainer"></div>
 
         <div class="mt-3 pt-2.5 border-t border-gray-800 flex justify-end">
@@ -262,6 +255,22 @@
           <span id="nightDeathSummary" class="text-xs bg-rose-950 text-rose-300 px-2 py-0.5 rounded border border-rose-800 font-bold">
             昨夜死訊計算中
           </span>
+        </div>
+
+        <!-- 獵人/狼王出局開槍提示區 (出局自動觸發) -->
+        <div id="hunterActionBox" class="hidden p-2.5 bg-amber-950/40 border border-amber-600/80 rounded-lg text-xs">
+          <div class="font-bold text-amber-300 mb-1 flex items-center gap-1">
+            <i class="fa-solid fa-crosshairs"></i> <span id="gunTriggerTitle">觸發出局開槍技能：</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span>帶走目標：</span>
+            <select id="hunterTarget" class="flex-1 rounded p-1 text-xs border bg-gray-800">
+              <option value="">選擇開槍帶走對象</option>
+            </select>
+            <button onclick="applyHunterShot()" class="bg-amber-600 hover:bg-amber-500 text-white px-2.5 py-1 rounded font-bold transition">
+              確定開槍
+            </button>
+          </div>
         </div>
 
         <!-- 白天突發中斷功能列：自爆與技能連帶 -->
@@ -300,7 +309,7 @@
             <span id="policeExplodeCountLabel" class="text-[10px] text-amber-300 font-bold">自爆計數：0 / 2</span>
           </div>
 
-          <!-- 競選中自爆專屬操作 -->
+          <!-- 競選中自爆操作 -->
           <div class="flex items-center gap-1.5 p-1.5 bg-rose-950/40 rounded border border-rose-800/60 text-xs">
             <span class="text-[10px] text-rose-300 font-bold">競選自爆：</span>
             <select id="policeWolfExplodeSelect" class="flex-1 rounded p-1 text-[11px] bg-gray-800 border"></select>
@@ -349,7 +358,7 @@
           <div class="text-[11px] text-emerald-300">存活選民歸票：</div>
           <div class="grid grid-cols-6 gap-1" id="exileVotersGrid"></div>
 
-          <!-- 實時彩球票型預覽 (委託 RULES_ENGINE 排序) -->
+          <!-- 實時彩球票型預覽 -->
           <div class="bg-gray-950 p-2.5 rounded-lg border border-gray-800 space-y-1.5" id="lottoPreviewContainer">
             <div class="text-[11px] text-gray-500 text-center">點擊上方選民輸入票型...</div>
           </div>
@@ -367,7 +376,7 @@
           </div>
         </div>
 
-        <!-- 歷史票型紀錄標籤列 (與公播一致) -->
+        <!-- 歷史票型紀錄標籤列 -->
         <div class="p-2 bg-gray-900 rounded-lg border border-gray-800">
           <div class="text-[10px] text-gray-400 mb-1 flex items-center justify-between">
             <span>📜 本局開票歷史紀錄：</span>
@@ -396,7 +405,12 @@
       "hokai", "霏霏", "慶", "崇朗", "皓晴", "貓貓"
     ];
 
-    // Firebase 配置 (與公播端共用相同 Database)[cite: 2]
+    const SHEET_ID = "1PABHGXq9LJr7Y-Qg7kRqAYbfrSezW8pR12fQcOyWzNQ";
+    const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=本週名單`;
+
+    let remoteRosterData = [];
+    let currentRosterMembers = [];
+
     const firebaseConfig = {
       apiKey: "AIzaSyD-IcZrJUj4pXYxe9ZXNxU5o5A1koSwxbc",
       authDomain: "werewolf-base.firebaseapp.com",
@@ -415,15 +429,15 @@
     let isRemoteUpdate = false;
     let lastHandledActionId = null;
 
-    // 直接使用 RULES_ENGINE 工廠函式初始化狀態[cite: 3]
     let gameState = RULES_ENGINE.createInitialGameState();
     let antidoteUsedThisNight = false;
 
     // ==========================================
-    // 1. 初始化與 Firebase 雙向實時監聽
+    // 1. 初始化與 Firebase 實時監聽
     // ==========================================
     window.onload = () => {
       initBoardSelector();
+      loadRosterFromGviz(false);
 
       matchRef.on('value', (snapshot) => {
         const data = snapshot.val();
@@ -490,11 +504,10 @@
       btnPrince.innerText = `👑 定序王子：${isPrc ? '開' : '關'}`;
       btnPrince.className = `px-2.5 py-1 rounded text-xs font-bold border transition ${isPrc ? 'bg-amber-900 border-amber-400 text-amber-200' : 'bg-gray-800 text-gray-400 border-gray-700'}`;
 
-     if (gameState.phase === "NIGHT" || gameState.phase === "SETUP") {
+      if (gameState.phase === "NIGHT" || gameState.phase === "SETUP") {
         document.getElementById("nightPanel").classList.remove("hidden");
         document.getElementById("dayPanel").classList.add("hidden");
         
-        // 若為 SETUP 狀態，確保開局面板展開
         if (gameState.phase === "SETUP") {
           document.getElementById("setupPanel")?.setAttribute("open", "true");
         }
@@ -533,7 +546,119 @@
     }
 
     // ==========================================
-    // 3. 開局與座位配置
+    // 3. 報名系統試算表 (GVIZ)
+    // ==========================================
+    async function loadRosterFromGviz(isManual = false) {
+      const sessionSelect = document.getElementById("sessionSelect");
+      if (isManual) sessionSelect.innerHTML = '<option value="">⏳ 重新整理中...</option>';
+
+      try {
+        const res = await fetch(`${GVIZ_URL}&_=${Date.now()}`);
+        const text = await res.text();
+        const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);/);
+        
+        if (jsonMatch && jsonMatch[1]) {
+          const rawObj = JSON.parse(jsonMatch[1]);
+          const rows = rawObj.table.rows || [];
+
+          remoteRosterData = rows.map(r => {
+            const getVal = (idx) => {
+              if (!r.c || !r.c[idx]) return '';
+              return r.c[idx].f || (r.c[idx].v !== null ? String(r.c[idx].v) : '');
+            };
+            return {
+              session:   getVal(0).trim(),
+              lineName:  getVal(1).trim(),
+              uid:       getVal(2).trim(),
+              nick:      getVal(3).trim(),
+              gender:    getVal(4).trim(),
+              checkin:   getVal(7).trim()
+            };
+          }).filter(p => p.session && (p.lineName || p.uid));
+
+          const sessions = [...new Set(remoteRosterData.map(p => p.session))];
+          
+          if (sessions.length > 0) {
+            sessionSelect.innerHTML = sessions.map((s, idx) => `
+              <option value="${s}" ${idx === 0 ? 'selected' : ''}>${s}</option>
+            `).join('');
+            onSessionRosterChange();
+          } else {
+            sessionSelect.innerHTML = '<option value="">無活動場次</option>';
+            currentRosterMembers = [...MOCK_MEMBERS];
+            updateAllSeatDropdownOptions();
+          }
+
+          if (isManual) alert("✅ 名單已同步至最新！");
+        }
+      } catch (err) {
+        sessionSelect.innerHTML = '<option value="">⚠️ 載入失敗 (使用預設)</option>';
+        currentRosterMembers = [...MOCK_MEMBERS];
+        updateAllSeatDropdownOptions();
+      }
+    }
+
+    function onSessionRosterChange() {
+      const selectedSession = document.getElementById("sessionSelect").value;
+      if (!selectedSession) return;
+
+      const sessionRecords = remoteRosterData.filter(p => p.session === selectedSession);
+
+      const actualPlayers = sessionRecords.filter(p => {
+        const lName = (p.lineName || '').toLowerCase();
+        const cNick = (p.nick || '').toLowerCase();
+        return lName !== 'ean' && cNick !== 'ean';
+      });
+
+      let qualified = actualPlayers.filter(p => p.checkin === '已簽到');
+      if (qualified.length === 0) qualified = actualPlayers;
+
+      currentRosterMembers = qualified.map(p => (p.nick || p.lineName));
+      if (currentRosterMembers.length === 0) currentRosterMembers = [...MOCK_MEMBERS];
+
+      updateAllSeatDropdownOptions();
+    }
+
+    function updateAllSeatDropdownOptions() {
+      for (let i = 1; i <= 12; i++) {
+        const select = document.getElementById(`userSelect-${i}`);
+        if (!select) continue;
+
+        const currentVal = select.value;
+        let optionsHtml = '<option value="">-- 清空此座位 --</option>';
+
+        currentRosterMembers.forEach(m => {
+          optionsHtml += `<option value="${m}" ${m === currentVal ? 'selected' : ''}>${m}</option>`;
+        });
+
+        select.innerHTML = optionsHtml;
+      }
+      checkSeatDuplicates();
+    }
+
+    function autoAssignRosterToSeats() {
+      if (!currentRosterMembers || currentRosterMembers.length === 0) {
+        alert("⚠️ 目前尚無可填入的簽到名單！");
+        return;
+      }
+
+      for (let i = 1; i <= 12; i++) {
+        const select = document.getElementById(`userSelect-${i}`);
+        if (!select) continue;
+
+        const assignedName = currentRosterMembers[i - 1] || "";
+        select.value = assignedName;
+
+        const p = gameState.players.find(x => x.seat === i);
+        if (p) p.name = assignedName;
+      }
+
+      checkSeatDuplicates();
+      alert(`⚡ 已自動將【${Math.min(currentRosterMembers.length, 12)} 位名單】填入座位！`);
+    }
+
+    // ==========================================
+    // 4. 開局與座位配置
     // ==========================================
     function initBoardSelector() {
       const select = document.getElementById("boardSelect");
@@ -555,9 +680,11 @@
       container.innerHTML = "";
       gameState.players = [];
 
+      const activeList = currentRosterMembers.length > 0 ? currentRosterMembers : MOCK_MEMBERS;
+
       for (let i = 1; i <= config.playerCount; i++) {
         const assignedRole = config.defaultSlots[i - 1] || config.availableRoles[0];
-        const assignedName = MOCK_MEMBERS[i - 1] || "";
+        const assignedName = activeList[i - 1] || "";
         
         gameState.players.push({
           seat: i,
@@ -576,7 +703,7 @@
         card.className = "bg-gray-800/60 p-2 rounded-lg border border-gray-700 transition";
 
         let optionsHtml = '<option value="">-- 清空此座位 --</option>';
-        MOCK_MEMBERS.forEach(m => {
+        activeList.forEach(m => {
           optionsHtml += `<option value="${m}" ${m === assignedName ? 'selected' : ''}>${m}</option>`;
         });
 
@@ -675,7 +802,7 @@
     }
 
     // ==========================================
-    // 4. 即時坑位監控與勝負判定 (委託 RULES_ENGINE)
+    // 5. 坑位監控與勝負判定
     // ==========================================
     function updateCounts() {
       const alive = gameState.players.filter(p => p.isAlive);
@@ -731,7 +858,7 @@
     }
 
     // ==========================================
-    // 5. 夜間行動腳本引導
+    // 6. 完整 Schema 驅動的夜間卡片渲染器
     // ==========================================
     function renderNightPanel() {
       const config = BOARD_DATABASE[currentBoardKey];
@@ -739,27 +866,12 @@
       if (!container || !config) return;
       container.innerHTML = "";
 
-      const isTricksterEnabled = !!gameState.modules?.enableTrickster;
-      const trkBox = document.getElementById("tricksterNightBox");
-      if (isTricksterEnabled) {
-        trkBox.classList.remove("hidden");
-        const selA = document.getElementById("tricksterA");
-        const selB = document.getElementById("tricksterB");
-        selA.innerHTML = gameState.players.map(p => `<option value="${p.seat}">${p.seat} 號</option>`).join('');
-        selB.innerHTML = gameState.players.map(p => `<option value="${p.seat}">${p.seat} 號</option>`).join('');
-        if (gameState.tricksterSwap) {
-          selA.value = gameState.tricksterSwap.seatA;
-          selB.value = gameState.tricksterSwap.seatB;
-          document.getElementById("tricksterStatusText").innerText = `已置換：${gameState.tricksterSwap.seatA} ⇄ ${gameState.tricksterSwap.seatB}`;
-        }
-      } else {
-        trkBox.classList.add("hidden");
-      }
-
       const script = (gameState.round === 1) ? config.firstNightOrder : config.repeatingNightOrder;
       if (!script) return;
 
       let alive = gameState.players.filter(p => p.isAlive);
+      if (alive.length === 0 && gameState.players.length > 0) alive = gameState.players;
+
       const aliveOptions = alive.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || '未指派'}</option>`).join('');
       const allPlayersOptions = gameState.players.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || '未指派'}</option>`).join('');
 
@@ -816,61 +928,89 @@
               <span class="${badgeClass} px-2 py-0.5 rounded font-bold">${infoText}</span>
             </div>
           `;
-        } else {
-          if (step.id === "wolf" || step.id === "wolf_team_confirm") {
-            bodyHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">落刀目標：</span>
-                <select id="target-wolf" onchange="onFormActionChange('wolf')" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">選擇落刀目標 (空刀)</option>
-                  ${aliveOptions}
-                </select>
-              </div>
-            `;
-          } else if (step.id === "witch") {
-            const antUsed = gameState.nightMemory.witchAntidoteUsed;
-            const poiUsed = gameState.nightMemory.witchPoisonUsed;
-            bodyHtml = `
-              <div class="flex justify-between items-center mb-1">
-                <span class="text-[10px] text-amber-400 font-mono font-bold" id="witchRawKillHint">原始刀口：等待落刀</span>
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
-                  <span>解藥</span>
-                  <button id="antidoteBtn" onclick="toggleAntidote()" ${antUsed ? 'disabled' : ''} class="${antUsed ? 'bg-gray-800 text-gray-500' : 'bg-gray-700 text-gray-300'} text-[11px] px-2 py-0.5 rounded transition">
-                    ${antUsed ? '已消耗' : '未使用'}
-                  </button>
-                </div>
-                <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
-                  <span>毒藥</span>
-                  <select id="poisonTarget" class="text-[11px] rounded p-0.5 border">
-                    <option value="">${poiUsed ? '已消耗' : '不使用'}</option>
-                    ${poiUsed ? '' : aliveOptions}
-                  </select>
-                </div>
-              </div>
-            `;
-          } else if (step.id === "seer") {
-            bodyHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">查驗目標：</span>
-                <select id="seerTarget" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">選擇查驗目標</option>
+        } else if (step.id === "magician") {
+          bodyHtml = `
+            <div class="grid grid-cols-2 gap-2">
+              <div class="flex items-center gap-1">
+                <span class="text-gray-400">目標A:</span>
+                <select id="swapTargetA" onchange="onFormActionChange('swap')" class="w-full rounded p-1 text-xs border">
+                  <option value="">選擇號碼</option>
                   ${allPlayersOptions}
                 </select>
               </div>
-            `;
-          } else {
-            bodyHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">選擇目標：</span>
-                <select id="target-${step.id}" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">請選擇</option>
-                  ${aliveOptions}
+              <div class="flex items-center gap-1">
+                <span class="text-gray-400">目標B:</span>
+                <select id="swapTargetB" onchange="onFormActionChange('swap')" class="w-full rounded p-1 text-xs border">
+                  <option value="">選擇號碼</option>
+                  ${allPlayersOptions}
                 </select>
               </div>
-            `;
-          }
+            </div>
+          `;
+        } else if (step.id === "witch") {
+          const antUsed = gameState.nightMemory.witchAntidoteUsed;
+          const poiUsed = gameState.nightMemory.witchPoisonUsed;
+          bodyHtml = `
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-[10px] text-amber-400 font-mono font-bold" id="witchRawKillHint">原始刀口：等待落刀</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
+                <span>解藥</span>
+                <button id="antidoteBtn" onclick="toggleAntidote()" ${antUsed ? 'disabled' : ''} class="${antUsed ? 'bg-gray-800 text-gray-500' : 'bg-gray-700 text-gray-300'} text-[11px] px-2 py-0.5 rounded transition">
+                  ${antUsed ? '已消耗' : '未使用'}
+                </button>
+              </div>
+              <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
+                <span>毒藥</span>
+                <select id="poisonTarget" onchange="onFormActionChange('poison')" ${poiUsed ? 'disabled' : ''} class="text-[11px] rounded p-0.5 border">
+                  <option value="">${poiUsed ? '已消耗' : '不使用'}</option>
+                  ${poiUsed ? '' : aliveOptions}
+                </select>
+              </div>
+            </div>
+          `;
+        } else if (step.id === "seer") {
+          bodyHtml = `
+            <div class="flex items-center gap-2">
+              <span class="text-gray-400">查驗目標：</span>
+              <select id="seerTarget" onchange="onFormActionChange('seer')" class="flex-1 rounded p-1 text-xs border">
+                <option value="">選擇查驗目標</option>
+                ${allPlayersOptions}
+              </select>
+              <span id="seerResultBadge" class="bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold whitespace-nowrap">
+                待查驗
+              </span>
+            </div>
+          `;
+        } else if (step.id === "black_market") {
+          bodyHtml = `
+            <div class="space-y-1.5 bg-gray-900/60 p-2 rounded">
+              <div class="flex items-center justify-between">
+                <span>🔮 查驗幸運兒：</span>
+                <select id="giftSeer" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${allPlayersOptions}</select>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>🧪 毒藥幸運兒：</span>
+                <select id="giftPoison" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${allPlayersOptions}</select>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>🔫 獵槍幸運兒：</span>
+                <select id="giftGun" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${allPlayersOptions}</select>
+              </div>
+            </div>
+          `;
+        } else {
+          // 一般目標選擇卡片
+          bodyHtml = `
+            <div class="flex items-center gap-2">
+              <span class="text-gray-400">選擇目標：</span>
+              <select id="target-${step.id}" onchange="onFormActionChange('${step.id}')" class="flex-1 rounded p-1 text-xs border">
+                <option value="">請選擇</option>
+                ${aliveOptions}
+              </select>
+            </div>
+          `;
         }
 
         card.innerHTML = `
@@ -885,6 +1025,7 @@
       });
 
       antidoteUsedThisNight = false;
+      refreshAllRuleDisplays();
     }
 
     function markStepDone(stepId) {
@@ -896,14 +1037,15 @@
     }
 
     function onFormActionChange(triggerId) {
-      if (triggerId === 'wolf') {
-        const wolfEl = document.getElementById('target-wolf');
+      if (triggerId === 'target-wolf' || triggerId === 'target-wolf_team_confirm' || triggerId === 'wolf') {
+        const wolfEl = document.getElementById('target-wolf') || document.getElementById('target-wolf_team_confirm');
         const hint = document.getElementById('witchRawKillHint');
         if (wolfEl && hint) {
           const val = parseInt(wolfEl.value || 0);
           hint.innerText = val ? `原始刀口：${val} 號` : `原始刀口：空刀`;
         }
       }
+      refreshAllRuleDisplays();
     }
 
     function toggleAntidote() {
@@ -912,36 +1054,61 @@
       const btn = document.getElementById("antidoteBtn");
       btn.innerText = antidoteUsedThisNight ? "已使用 (救人)" : "未使用";
       btn.className = antidoteUsedThisNight ? "bg-emerald-600 text-white text-[11px] px-2 py-0.5 rounded font-bold transition" : "bg-gray-700 text-gray-300 text-[11px] px-2 py-0.5 rounded transition";
+      refreshAllRuleDisplays();
     }
 
-    function saveTricksterSwap() {
-      const a = parseInt(document.getElementById("tricksterA").value);
-      const b = parseInt(document.getElementById("tricksterB").value);
-      if (a === b) { alert("⚠️ 置換兩名玩家號碼不可相同！"); return; }
-      gameState.tricksterSwap = { seatA: a, seatB: b };
-      document.getElementById("tricksterStatusText").innerText = `已置換：${a} ⇄ ${b}`;
-      pushStateToFirebase(`詭術師夜間置換：${a} ⇄ ${b}`);
-      alert(`🎭 詭術師置換已登記：${a} 號 ⇄ ${b} 號！`);
-    }
+    // 將所有查驗與手勢即時計算委託給 RULES_ENGINE
+    function refreshAllRuleDisplays() {
+      if (typeof RULES_ENGINE === 'undefined' || !gameState.players || gameState.players.length === 0) return;
 
-    function clearTricksterSwap() {
-      gameState.tricksterSwap = null;
-      document.getElementById("tricksterStatusText").innerText = "未置換";
-      pushStateToFirebase("清空詭術師置換");
+      const swapPair = [
+        parseInt(document.getElementById("swapTargetA")?.value || 0) || 0,
+        parseInt(document.getElementById("swapTargetB")?.value || 0) || 0
+      ];
+
+      // 1. 預言家查驗反饋
+      const seerSeat = parseInt(document.getElementById("seerTarget")?.value || 0) || 0;
+      const seerBadge = document.getElementById("seerResultBadge");
+      if (seerBadge) {
+        const checkRes = RULES_ENGINE.resolveCheck(seerSeat, swapPair, gameState.players);
+        seerBadge.innerText = checkRes.text;
+        seerBadge.className = checkRes.isWolf 
+          ? "bg-rose-950 text-rose-300 border border-rose-700 px-2 py-0.5 rounded font-bold whitespace-nowrap"
+          : (checkRes.isReady ? "bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold whitespace-nowrap" : "bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold whitespace-nowrap");
+      }
+
+      // 2. 手勢反饋
+      const context = {
+        rawPoisonTarget: parseInt(document.getElementById("poisonTarget")?.value || 0) || 0,
+        swapPair: swapPair,
+        players: gameState.players,
+        blackMarketTransformedWolf: gameState.nightMemory.blackMarketTransformedWolf
+      };
+
+      ["hunter_gesture", "wolf_king_gesture", "converter_gesture", "black_market_faction_gesture"].forEach(gId => {
+        const badge = document.getElementById(`gesture-badge-${gId}`);
+        if (badge) {
+          const res = RULES_ENGINE.evaluateGesture(gId, context);
+          badge.innerText = res.text;
+          badge.className = res.isPositive 
+            ? "bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold"
+            : "bg-rose-950 text-rose-300 border border-rose-600 px-2 py-0.5 rounded font-bold";
+        }
+      });
     }
 
     // ==========================================
-    // 6. 天亮結算死訊 (委託 RULES_ENGINE.resolveNight)
+    // 7. 天亮死訊結算 (委託 RULES_ENGINE.resolveNight)
     // ==========================================
     function resolveNight() {
+      const wolfEl = document.getElementById('target-wolf') || document.getElementById('target-wolf_team_confirm');
       const inputs = {
-        rawWolfTarget: parseInt(document.getElementById('target-wolf')?.value || 0) || 0,
+        rawWolfTarget: parseInt(wolfEl?.value || 0) || 0,
         rawPoisonTarget: parseInt(document.getElementById("poisonTarget")?.value || 0) || 0,
         guardTarget: parseInt(document.getElementById("target-guard")?.value || 0) || 0,
         antidoteUsed: antidoteUsedThisNight
       };
 
-      // 呼叫大腦結算[cite: 3]
       const nResult = RULES_ENGINE.resolveNight(inputs, gameState.nightMemory);
 
       nResult.deaths.forEach(seat => {
@@ -951,6 +1118,16 @@
 
       if (antidoteUsedThisNight) gameState.nightMemory.witchAntidoteUsed = true;
       if (inputs.rawPoisonTarget) gameState.nightMemory.witchPoisonUsed = true;
+
+      // 檢查獵人/狼王出局開槍
+      const deadHunter = gameState.players.find(p => p.role === "獵人" && nResult.deaths.includes(p.seat));
+      const deadWolfKing = gameState.players.find(p => p.role === "狼王" && nResult.deaths.includes(p.seat));
+
+      if (deadHunter && nResult.hunterCanShoot) {
+        triggerGunAction("獵人", deadHunter.seat);
+      } else if (deadWolfKing && nResult.wolfKingCanShoot) {
+        triggerGunAction("狼王", deadWolfKing.seat);
+      }
 
       if (gameState.day === 1 && !gameState.policeSeat && !gameState.isBadgeTorn) {
         gameState.phase = "POLICE_ELECTION";
@@ -963,8 +1140,29 @@
       renderAllViews();
     }
 
+    function triggerGunAction(roleName, shooterSeat) {
+      const box = document.getElementById("hunterActionBox");
+      const title = document.getElementById("gunTriggerTitle");
+      box.classList.remove("hidden");
+      title.innerText = `${shooterSeat}號【${roleName}】出局觸發開槍技能：`;
+      const alive = gameState.players.filter(p => p.isAlive);
+      document.getElementById("hunterTarget").innerHTML = `<option value="">請選擇帶走對象</option>` +
+        alive.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || ''}</option>`).join('');
+    }
+
+    function applyHunterShot() {
+      const targetSeat = parseInt(document.getElementById("hunterTarget").value);
+      if (!targetSeat) return;
+      const target = gameState.players.find(p => p.seat === targetSeat);
+      if (target) { target.isAlive = false; target.deathReason = "SKILL"; }
+      alert(`💥 開槍技能發動，帶走了 ${targetSeat} 號 (${target ? target.name : ''})！`);
+      document.getElementById("hunterActionBox").classList.add("hidden");
+      pushStateToFirebase(`🎯 出局開槍帶走：${targetSeat} 號`);
+      renderAllViews();
+    }
+
     // ==========================================
-    // 7. 白天工作流 (委託 RULES_ENGINE)
+    // 8. 白天工作流 (委託 RULES_ENGINE)
     // ==========================================
     function renderDayWorkflow() {
       const isPoliceStage = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
@@ -994,7 +1192,6 @@
       if (policeWolf) policeWolf.innerHTML = opts;
     }
 
-    // --- 警長競選 ---
     function renderPoliceStageControls() {
       const isPk = (gameState.phase === "POLICE_PK");
       const pkCandidates = gameState.pkCandidates || [];
@@ -1096,7 +1293,6 @@
       renderDayWorkflow();
     }
 
-    // 委託 RULES_ENGINE.resolvePoliceElection 開票[cite: 3]
     function confirmPoliceElection() {
       const isPk = (gameState.phase === "POLICE_PK");
       const pResult = RULES_ENGINE.resolvePoliceElection(gameState.tempVotes, isPk, gameState.pkCandidates);
@@ -1171,7 +1367,6 @@
       }
     }
 
-    // --- 放逐投票 ---
     function renderExileStageControls() {
       const isPrinceEnabled = !!gameState.modules?.enablePrince;
       const isRevolving = !!gameState.isPrinceRevolving;
@@ -1232,7 +1427,6 @@
       renderDayWorkflow();
     }
 
-    // 委託 RULES_ENGINE.calculateLottoTallies 渲染彩球預覽[cite: 3]
     function renderLottoPreview() {
       const container = document.getElementById("lottoPreviewContainer");
       const police = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
@@ -1261,10 +1455,9 @@
             <div class="flex flex-wrap gap-1 items-center justify-end">${balls}</div>
           </div>
         `;
-      }).join('');
+      });
     }
 
-    // 委託 RULES_ENGINE.resolveExileVote 放逐結算[cite: 3]
     function confirmExileVote() {
       const eResult = RULES_ENGINE.resolveExileVote(
         gameState.tempVotes,
@@ -1283,9 +1476,17 @@
       } else if (eResult.status === "EXILED") {
         const exiledPlayer = gameState.players.find(x => x.seat === eResult.exiledSeat);
         if (exiledPlayer) {
-          exiledPlayer.isAlive = false;
-          exiledPlayer.deathReason = "EXILE";
-          gameState.lastExiledPlayer = exiledPlayer;
+          if (exiledPlayer.role === "白痴") {
+            alert(`🔔 ${exiledPlayer.seat} 號為白痴，觸發翻牌免死技能！保留發言權，拔除投票權。`);
+          } else {
+            exiledPlayer.isAlive = false;
+            exiledPlayer.deathReason = "EXILE";
+            gameState.lastExiledPlayer = exiledPlayer;
+
+            // 觸發獵人/狼王出局開槍
+            if (exiledPlayer.role === "獵人") triggerGunAction("獵人", exiledPlayer.seat);
+            else if (exiledPlayer.role === "狼王") triggerGunAction("狼王", exiledPlayer.seat);
+          }
         }
 
         if (eResult.isTricksterSubstituted) {
@@ -1334,7 +1535,7 @@
       alert(`⏳ 定序王子技能已觸發！請定序王子單獨發言一次後，進行重投。`);
     }
 
-    // --- 自爆與技能處理 (委託 RULES_ENGINE.resolvePoliceExplode) ---
+    // --- 自爆與技能處理 ---
     function handlePoliceWolfExplode() {
       const seat = parseInt(document.getElementById("policeWolfExplodeSelect").value);
       if (!seat) return;
@@ -1444,7 +1645,7 @@
     }
 
     // ==========================================
-    // 8. 歷史紀錄標籤列渲染
+    // 9. 歷史紀錄標籤列渲染
     // ==========================================
     function renderHistoryTabs() {
       const container = document.getElementById("judgeHistoryTabContainer");
@@ -1460,7 +1661,7 @@
     }
 
     // ==========================================
-    // 9. 推進下個夜晚 / 流局 / 重置
+    // 10. 推進下個夜晚 / 流局 / 重置
     // ==========================================
     function enterNextNight() {
       gameState.round += 1;
@@ -1492,12 +1693,9 @@
       alert("✅ 對局已重置回到開局配置狀態！");
     }
 
-    // 統一封裝完整的重置流程
     function executeResetWorkflow(summaryText) {
-      // 1. 回歸初始資料狀態
       gameState = RULES_ENGINE.createInitialGameState();
       
-      // 2. 重新展開開局設定面板，並切回夜間/設定容器
       const setupPanel = document.getElementById("setupPanel");
       if (setupPanel) {
         setupPanel.setAttribute("open", "true");
@@ -1506,13 +1704,9 @@
       document.getElementById("nightPanel").classList.remove("hidden");
       document.getElementById("dayPanel").classList.add("hidden");
       
-      // 3. 重新初始化座位與坑位
       initSeats();
-
-      // 4. 重設用藥與暫存標記
       antidoteUsedThisNight = false;
 
-      // 5. 同步至 Firebase 並全面重繪介面
       pushStateToFirebase(summaryText);
       renderAllViews();
     }
