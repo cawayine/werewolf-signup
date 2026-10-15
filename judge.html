@@ -17,7 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <!-- 引入規則大腦與獨立設定檔 (加入時間戳參數破除瀏覽器快取) -->
-  <script src="rules_config.js?v=20261016_patch_v4"></script>
+  <script src="rules_config.js?v=20261016_patch_v5"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -674,12 +674,19 @@
       onBoardSelectChange();
     }
 
+    // 即時連動：切換板型立即渲染卡片
     function onBoardSelectChange() {
       currentBoardKey = document.getElementById("boardSelect").value;
       document.getElementById("currentBoardLabel").innerText = BOARD_DATABASE[currentBoardKey].name;
-      if (gameState.phase === "SETUP") {
-        initSeats();
+      
+      initSeats();
+
+      if (gameState.phase === "SETUP" || gameState.phase === "NIGHT") {
+        gameState.round = 1;
+        gameState.day = 1;
+        renderNightPanel();
       }
+      updateCounts();
     }
 
     function initSeats() {
@@ -776,6 +783,7 @@
       return { hasDup, counts };
     }
 
+    // 即時連動：手動變更角色時，自動重新計算石像鬼相鄰/預言家查驗等夜間卡片
     function onRoleChange(seat) {
       const selected = document.getElementById("roleSelect-" + seat).value;
       document.getElementById("roleTag-" + seat).innerText = selected;
@@ -786,6 +794,10 @@
         p.victoryFaction = ROLE_DEFINITIONS[selected]?.faction || "villager";
       }
       updateCounts();
+
+      if (gameState.phase === "SETUP" || gameState.phase === "NIGHT") {
+        renderNightPanel();
+      }
     }
 
     function confirmSetup() {
