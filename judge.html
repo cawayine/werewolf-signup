@@ -7,8 +7,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   
-  <!-- 核心：引入外部規則與板型獨立設定檔 -->
-  <script src="rules_config.js"></script>
+  <!-- 引入外部規則設定檔 (附帶版本參數防快取) -->
+  <script src="rules_config.js?v=20261015"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -17,7 +17,7 @@
     .gold-glow { text-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
     select, input { background-color: #161b22; border-color: #30363d; color: #f0f6fc; }
     
-    /* 重複玩家警示樣式（最高優先權） */
+    /* 重複玩家警示樣式 */
     .seat-duplicate-box {
       border: 2px solid #ef4444 !important;
       background-color: rgba(127, 29, 29, 0.3) !important;
@@ -59,13 +59,13 @@
     </div>
   </header>
 
-  <!-- 電腦橫式佈局容器 -->
+  <!-- 主佈局容器 -->
   <div class="lg:grid lg:grid-cols-12 lg:gap-4 lg:items-start">
     
-    <!-- 左側欄位（佔 7 欄）：坑位存活監控 + 12 席座位配置管理 -->
+    <!-- 左側欄位（佔 7 欄）：坑位監控與座位配置 -->
     <div class="lg:col-span-7 space-y-3 mb-3 lg:mb-0">
       
-      <!-- 區塊：存活坑位即時監控面板 -->
+      <!-- 坑位即時監控面板 -->
       <section class="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
         <div class="bg-gray-900 p-2.5 rounded-xl border border-blue-900/60 shadow">
           <div class="text-blue-400 font-bold">神職存活 (GOD)</div>
@@ -81,7 +81,7 @@
         </div>
       </section>
 
-      <!-- 區塊：開局座位與名單配置 -->
+      <!-- 開局座位與板型配置 -->
       <details open id="setupPanel" class="bg-gray-900 rounded-xl neon-border overflow-hidden shadow">
         <summary class="px-3 py-2.5 font-bold text-xs bg-gray-800/80 cursor-pointer flex justify-between items-center text-gray-200">
           <span><i class="fa-solid fa-users-gear mr-1.5 text-blue-400"></i> 開局配置：選擇板型與指派 12 席座位</span>
@@ -112,7 +112,7 @@
         </div>
       </details>
 
-      <!-- 電腦端專屬：左側常駐對局狀態與存檔欄 -->
+      <!-- 電腦端專屬常駐結算欄 -->
       <div class="hidden lg:flex bg-gray-900 rounded-xl neon-border p-3 justify-between items-center shadow">
         <div>
           <span class="text-xs text-gray-400">目前勝負判定：</span>
@@ -128,7 +128,7 @@
     <!-- 右側欄位（佔 5 欄）：現場法官流程執行台 -->
     <div class="lg:col-span-5 space-y-3">
       
-      <!-- 區塊：夜間行動流程引導 (卡片式，依板型動態生成) -->
+      <!-- 夜間行動流程引導 (卡片式動態生成) -->
       <section id="nightPanel" class="bg-gray-900 rounded-xl neon-border p-3 active-card shadow">
         <div class="flex justify-between items-center mb-2.5 pb-2 border-b border-gray-800">
           <h2 class="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
@@ -139,7 +139,6 @@
 
         <!-- 動態夜間卡片容器 -->
         <div class="space-y-2 text-xs" id="nightActionsContainer">
-          <!-- 由 renderNightPanel() 動態注入 -->
         </div>
 
         <div class="mt-3 pt-2.5 border-t border-gray-800 flex justify-end">
@@ -149,7 +148,7 @@
         </div>
       </section>
 
-      <!-- 區塊：天亮死訊與白天票決 -->
+      <!-- 白天環節與公投 -->
       <section id="dayPanel" class="bg-gray-900 rounded-xl neon-border p-3 hidden shadow">
         <div class="flex justify-between items-center mb-2 pb-2 border-b border-gray-800">
           <h2 class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
@@ -160,7 +159,7 @@
           </span>
         </div>
 
-        <!-- 獵人/狼王開槍提示區 -->
+        <!-- 獵人/狼王出局開槍面板 -->
         <div id="hunterActionBox" class="hidden mb-2.5 p-2.5 bg-amber-950/40 border border-amber-600/80 rounded-lg text-xs">
           <div class="font-bold text-amber-300 mb-1 flex items-center gap-1">
             <i class="fa-solid fa-crosshairs"></i> <span id="gunTriggerTitle">觸發出局開槍技能：</span>
@@ -226,6 +225,30 @@
   </footer>
 
   <script>
+    // 預設備份板型庫 (防止外部 rules_config.js 讀取延遲時造成腳本崩潰)
+    const DEFAULT_FALLBACK_BOARDS = {
+      "預女獵白混": {
+        name: "預女獵白混 (12人)",
+        playerCount: 12,
+        availableRoles: ["預言家", "女巫", "獵人", "白痴", "混血兒", "平民", "狼人"],
+        defaultSlots: ["預言家", "女巫", "獵人", "白痴", "混血兒", "平民", "平民", "平民", "狼人", "狼人", "狼人", "狼人"],
+        firstNightOrder: [
+          { id: "hybrid", role: "混血兒", type: "SKILL", title: "混血兒請睜眼", prompt: "首夜選擇榜樣" },
+          { id: "wolf", role: "狼人", type: "SKILL", title: "狼人請睜眼", prompt: "團隊確認身分並落刀" },
+          { id: "witch", role: "女巫", type: "SKILL", title: "女巫請睜眼", prompt: "昨夜倒牌與用藥" },
+          { id: "seer", role: "預言家", type: "SKILL", title: "預言家請睜眼", prompt: "查驗陣營" },
+          { id: "hunter_gesture", role: "獵人", type: "GESTURE", title: "獵人請睜眼", prompt: "上帝給予開槍手勢" },
+          { id: "idiot_confirm", role: "白痴", type: "CONFIRM", title: "白痴請睜眼", prompt: "確認身分後請閉眼" }
+        ],
+        repeatingNightOrder: [
+          { id: "wolf", role: "狼人", type: "SKILL", title: "狼人請睜眼", prompt: "夜間落刀" },
+          { id: "witch", role: "女巫", type: "SKILL", title: "女巫請睜眼", prompt: "昨夜倒牌與用藥" },
+          { id: "seer", role: "預言家", type: "SKILL", title: "預言家請睜眼", prompt: "查驗陣營" },
+          { id: "hunter_gesture", role: "獵人", type: "GESTURE", title: "獵人請睜眼", prompt: "上帝給予開槍手勢" }
+        ]
+      }
+    };
+
     const MOCK_MEMBERS = [
       "小前 (Chien)", "郭郭", "King", "底迪", "Lucas", "提摩", 
       "hokai", "霏霏", "慶", "崇朗", "皓晴", "貓貓"
@@ -259,29 +282,47 @@
     let votesMap = {};
     let antidoteUsedThisNight = false;
 
-    function initBoardSelector() {
-      if (typeof BOARD_DATABASE === 'undefined') {
-        alert("找不到 rules_config.js 設定檔，請確認該檔案已上傳至同層目錄！");
-        return;
+    // 安全取得板型資料庫
+    function getBoardDatabase() {
+      if (typeof BOARD_DATABASE !== 'undefined' && Object.keys(BOARD_DATABASE).length > 0) {
+        return BOARD_DATABASE;
       }
+      return DEFAULT_FALLBACK_BOARDS;
+    }
+
+    // 初始化板型選單
+    function initBoardSelector() {
+      const db = getBoardDatabase();
       const select = document.getElementById("boardSelect");
-      const boardKeys = Object.keys(BOARD_DATABASE);
+      if (!select) return;
+
+      const boardKeys = Object.keys(db);
       select.innerHTML = boardKeys.map(key => `
         <option value="${key}">
-          ${BOARD_DATABASE[key].name}
+          ${db[key].name || key}
         </option>
       `).join('');
 
       currentBoardKey = boardKeys[0];
+      select.value = currentBoardKey;
+
       onBoardSelectChange();
     }
 
     function onBoardSelectChange() {
-      currentBoardKey = document.getElementById("boardSelect").value;
-      const config = BOARD_DATABASE[currentBoardKey];
-      document.getElementById("currentBoardLabel").innerText = config.name;
+      const select = document.getElementById("boardSelect");
+      if (!select || !select.value) return;
+
+      currentBoardKey = select.value;
+      const db = getBoardDatabase();
+      const config = db[currentBoardKey];
+      if (!config) return;
+
+      const label = document.getElementById("currentBoardLabel");
+      if (label) label.innerText = config.name || currentBoardKey;
+
       initSeats();
-      renderNightPanel(); // 切換板型時立即同步渲染夜間腳本卡片
+      renderNightPanel();
     }
 
     function checkSeatDuplicates() {
@@ -325,13 +366,20 @@
     }
 
     function initSeats() {
-      const config = BOARD_DATABASE[currentBoardKey];
+      const db = getBoardDatabase();
+      const config = db[currentBoardKey] || DEFAULT_FALLBACK_BOARDS["預女獵白混"];
       const container = document.getElementById("seatAssignmentGrid");
+      if (!container) return;
+
       container.innerHTML = "";
       gameState.players = [];
 
-      for (let i = 1; i <= config.playerCount; i++) {
-        const assignedRole = config.defaultSlots[i - 1] || config.availableRoles[0];
+      const pCount = config.playerCount || 12;
+
+      for (let i = 1; i <= pCount; i++) {
+        const assignedRole = (config.defaultSlots && config.defaultSlots[i - 1]) 
+          ? config.defaultSlots[i - 1] 
+          : (config.availableRoles ? config.availableRoles[0] : "平民");
         const assignedName = MOCK_MEMBERS[i - 1] || "";
         
         gameState.players.push({
@@ -356,10 +404,12 @@
         });
 
         let rolesHtml = '';
-        config.availableRoles.forEach(r => {
-          const isSelRole = (r === assignedRole) ? 'selected' : '';
-          rolesHtml += `<option value="${r}" ${isSelRole}>${r}</option>`;
-        });
+        if (config.availableRoles) {
+          config.availableRoles.forEach(r => {
+            const isSelRole = (r === assignedRole) ? 'selected' : '';
+            rolesHtml += `<option value="${r}" ${isSelRole}>${r}</option>`;
+          });
+        }
 
         card.innerHTML = `
           <div class="flex justify-between items-center mb-1">
@@ -387,6 +437,8 @@
       if (typeof ROLE_DEFINITIONS !== 'undefined' && ROLE_DEFINITIONS[roleName]) {
         return ROLE_DEFINITIONS[roleName].seatType;
       }
+      if (["預言家", "女巫", "獵人", "白痴", "守衛", "攝夢人", "魔術師", "騎士", "守墓人", "黑市商人"].includes(roleName)) return "GOD";
+      if (["狼人", "狼王", "白狼王", "狼美人", "夢魘", "覺醒石像鬼", "狼兄", "狼弟"].includes(roleName)) return "WEREWOLF";
       return "VILLAGER";
     }
 
@@ -394,6 +446,7 @@
       if (typeof ROLE_DEFINITIONS !== 'undefined' && ROLE_DEFINITIONS[roleName]) {
         return ROLE_DEFINITIONS[roleName].faction;
       }
+      if (["狼人", "狼王", "白狼王", "狼美人", "夢魘", "覺醒石像鬼", "狼兄", "狼弟"].includes(roleName)) return "werewolf";
       return "villager";
     }
 
@@ -401,9 +454,11 @@
       const selected = document.getElementById("roleSelect-" + seat).value;
       document.getElementById("roleTag-" + seat).innerText = selected;
       const p = gameState.players.find(x => x.seat === seat);
-      p.role = selected;
-      p.seatType = getSeatType(selected);
-      p.victoryFaction = getVictoryFaction(selected);
+      if (p) {
+        p.role = selected;
+        p.seatType = getSeatType(selected);
+        p.victoryFaction = getVictoryFaction(selected);
+      }
       updateCounts();
     }
 
@@ -417,9 +472,13 @@
       const totalVillagers = gameState.players.filter(p => p.seatType === "VILLAGER").length;
       const totalWolves = gameState.players.filter(p => p.seatType === "WEREWOLF").length;
 
-      document.getElementById("godCountDisplay").innerText = `${gods} / ${totalGods}`;
-      document.getElementById("villagerCountDisplay").innerText = `${villagers} / ${totalVillagers}`;
-      document.getElementById("wolfCountDisplay").innerText = `${wolves} / ${totalWolves}`;
+      const gEl = document.getElementById("godCountDisplay");
+      const vEl = document.getElementById("villagerCountDisplay");
+      const wEl = document.getElementById("wolfCountDisplay");
+
+      if (gEl) gEl.innerText = `${gods} / ${totalGods}`;
+      if (vEl) vEl.innerText = `${villagers} / ${totalVillagers}`;
+      if (wEl) wEl.innerText = `${wolves} / ${totalWolves}`;
       
       if (gameState.phase !== "SETUP") {
         checkGameOver(gods, villagers, wolves);
@@ -443,19 +502,19 @@
       gameState.phase = "NIGHT";
       gameState.round = 1;
       renderNightPanel();
-      alert(`✅ 板型【${BOARD_DATABASE[currentBoardKey].name}】12 席已鎖定，進入第 1 夜！`);
+      alert(`✅ 12 席已鎖定，進入第 1 夜！`);
     }
 
     // ========================================================
-    // 動態夜間卡片引擎 (Night Action Script Engine)
+    // 動態夜間卡片引擎
     // ========================================================
     function renderNightPanel() {
-      const config = BOARD_DATABASE[currentBoardKey];
+      const db = getBoardDatabase();
+      const config = db[currentBoardKey] || DEFAULT_FALLBACK_BOARDS["預女獵白混"];
       const container = document.getElementById("nightActionsContainer");
-      if (!container || !config) return;
+      if (!container) return;
       container.innerHTML = "";
 
-      // 支援新版 (firstNightOrder/repeatingNightOrder) 與舊版 (nightOrder) 雙向相容相依
       let script = [];
       if (gameState.round === 1) {
         script = config.firstNightOrder || config.nightOrder || [];
@@ -463,7 +522,7 @@
         script = config.repeatingNightOrder || config.nightOrder || [];
       }
 
-      // 舊版字串陣列自動轉成通用物件
+      // 舊格式轉新格式安全保護
       script = script.map(item => {
         if (typeof item === 'string') {
           return { id: item, role: item, type: "SKILL", title: `${item}請睜眼`, prompt: "請依流程行動" };
@@ -478,7 +537,7 @@
 
       let alive = gameState.players.filter(p => p.isAlive);
       if (alive.length === 0 && gameState.players.length > 0) {
-        alive = gameState.players; // 未正式開局前，預設 12 席全員可選
+        alive = gameState.players;
       }
 
       const formatPlayerOpt = (p) => `<option value="${p.seat}">${p.seat}號 ${p.name ? '- ' + p.name : ''} (${p.role})</option>`;
@@ -500,7 +559,7 @@
           card.classList.add("bg-gray-800/70", "border-gray-700");
         }
 
-        // 1. 純身分確認卡片 (CONFIRM)
+        // CONFIRM
         if (step.type === "CONFIRM") {
           let targetPlayerDesc = "確認目標";
           if (step.role === "白痴" || step.role === "騎士" || step.role === "守墓人") {
@@ -524,8 +583,7 @@
             </div>
           `;
         }
-
-        // 2. 上帝手勢卡片 (GESTURE)
+        // GESTURE
         else if (step.type === "GESTURE") {
           let gestureHtml = "";
           if (step.id === "hunter_gesture" || step.id === "wolf_king_gesture" || step.id === "gun_lucky_gesture") {
@@ -568,8 +626,7 @@
             ${gestureHtml}
           `;
         }
-
-        // 3. 資訊展示卡片 (INFO - 守墓人)
+        // INFO
         else if (step.type === "INFO") {
           const lastExile = gameState.lastExiledPlayer;
           let infoText = "昨日無放逐出局者";
@@ -590,11 +647,9 @@
             </div>
           `;
         }
-
-        // 4. 主動技能卡片 (SKILL)
+        // SKILL
         else {
           let skillHtml = "";
-
           if (step.id === "guard") {
             const lastTarget = gameState.nightMemory.guardLastTarget;
             skillHtml = `
@@ -844,7 +899,6 @@
       const poisonTarget = parseInt(document.getElementById("poisonTarget")?.value || 0);
       const dreamerTarget = parseInt(document.getElementById("dreamerTarget")?.value || 0);
 
-      // 1. 獵人開槍手勢
       const hunter = gameState.players.find(p => p.role === "獵人");
       const hunterBadge = document.getElementById("gesture-badge-hunter_gesture");
       if (hunter && hunterBadge) {
@@ -859,7 +913,6 @@
         }
       }
 
-      // 2. 狼王魔術師板的狼王手勢
       const wolfKing = gameState.players.find(p => p.role === "狼王");
       const wolfKingBadge = document.getElementById("gesture-badge-wolf_king_gesture");
       if (wolfKing && wolfKingBadge) {
@@ -895,9 +948,6 @@
       badge.className = isWolf ? "bg-rose-950 text-rose-300 border border-rose-700 px-2 py-0.5 rounded font-bold whitespace-nowrap" : "bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold whitespace-nowrap";
     }
 
-    // ========================================================
-    // 夜間天亮死訊結算引擎 (Resolve Night)
-    // ========================================================
     function resolveNight() {
       let rawWolfTarget = parseInt(document.getElementById("wolfTarget")?.value || 0);
       let rawPoisonTarget = parseInt(document.getElementById("poisonTarget")?.value || 0);
@@ -907,7 +957,6 @@
       let hybridTarget = parseInt(document.getElementById("hybridTarget")?.value || 0);
       let gargoyleTarget = parseInt(document.getElementById("gargoyleTarget")?.value || 0);
 
-      // 1. 首夜特殊身分紀錄
       if (gameState.round === 1) {
         if (hybridTarget) {
           const hybrid = gameState.players.find(p => p.role === "混血兒");
@@ -935,7 +984,6 @@
         }
       }
 
-      // 2. 魔術師交換映射計算
       const magA = parseInt(document.getElementById("magicianTargetA")?.value || 0);
       const magB = parseInt(document.getElementById("magicianTargetB")?.value || 0);
       const swapMap = (seat) => {
@@ -955,7 +1003,6 @@
       let hunterCanShoot = true;
       let wolfKingCanShoot = true;
 
-      // 3. 狼刀與守衛/女巫同守同救奶穿判定
       if (finalWolfTarget) {
         const isGuarded = (finalGuardTarget === finalWolfTarget);
         const isSaved = antidoteUsedThisNight;
@@ -963,20 +1010,16 @@
         if (isGuarded && isSaved) {
           deaths.push(finalWolfTarget);
         } else if (isGuarded && !isSaved) {
-          // 守中
         } else if (!isGuarded && isSaved) {
-          // 救活
         } else {
           deaths.push(finalWolfTarget);
         }
       }
 
-      // 4. 狼弟獨立單砍
       if (finalYoungWolfTarget && !deaths.includes(finalYoungWolfTarget)) {
         deaths.push(finalYoungWolfTarget);
       }
 
-      // 5. 毒藥判定
       if (finalPoisonTarget) {
         if (!deaths.includes(finalPoisonTarget)) deaths.push(finalPoisonTarget);
         const poisonedPlayer = gameState.players.find(p => p.seat === finalPoisonTarget);
@@ -986,7 +1029,6 @@
         }
       }
 
-      // 6. 攝夢人連夢判定
       if (finalDreamerTarget) {
         if (gameState.nightMemory.dreamerLastTarget === finalDreamerTarget) {
           if (!deaths.includes(finalDreamerTarget)) deaths.push(finalDreamerTarget);
@@ -995,19 +1037,16 @@
         }
       }
 
-      // 7. 更新記憶庫狀態
       gameState.nightMemory.guardLastTarget = guardTarget || null;
       gameState.nightMemory.dreamerLastTarget = dreamerTarget || null;
       if (antidoteUsedThisNight) gameState.nightMemory.witchAntidoteUsed = true;
       if (rawPoisonTarget) gameState.nightMemory.witchPoisonUsed = true;
 
-      // 8. 執行死訊標記
       deaths.forEach(seat => {
         const p = gameState.players.find(x => x.seat === seat);
         if (p) p.isAlive = false;
       });
 
-      // 9. 檢查開槍觸發 (獵人 / 狼王)
       const deadHunter = gameState.players.find(p => p.role === "獵人" && deaths.includes(p.seat));
       const deadWolfKing = gameState.players.find(p => p.role === "狼王" && deaths.includes(p.seat));
 
@@ -1280,9 +1319,10 @@
       }
     }
 
-    window.onload = () => {
+    // 啟動入口：DOMContentLoaded 確保 DOM 與外部腳本皆就緒
+    document.addEventListener("DOMContentLoaded", () => {
       initBoardSelector();
-    };
+    });
   </script>
 </body>
 </html>
