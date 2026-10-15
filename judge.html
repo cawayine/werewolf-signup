@@ -7,8 +7,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   
-  <!-- 引入外部規則設定檔 (附帶版本參數防快取) -->
-  <script src="rules_config.js?v=20261015"></script>
+  <!-- 引入外部規則設定檔 -->
+  <script src="rules_config.js"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -17,7 +17,6 @@
     .gold-glow { text-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
     select, input { background-color: #161b22; border-color: #30363d; color: #f0f6fc; }
     
-    /* 重複玩家警示樣式 */
     .seat-duplicate-box {
       border: 2px solid #ef4444 !important;
       background-color: rgba(127, 29, 29, 0.3) !important;
@@ -43,7 +42,7 @@
         <h1 class="text-sm lg:text-base font-black text-gray-100 flex items-center gap-1.5">
           基地狼人殺 - 上帝記分主控台
         </h1>
-        <span class="text-[11px] text-amber-300 font-bold" id="currentBoardLabel">讀取中...</span>
+        <span class="text-[11px] text-amber-300 font-bold" id="currentBoardLabel">載入中...</span>
       </div>
     </div>
     <div class="flex items-center gap-2">
@@ -225,8 +224,8 @@
   </footer>
 
   <script>
-    // 預設備份板型庫 (防止外部 rules_config.js 讀取延遲時造成腳本崩潰)
-    const DEFAULT_FALLBACK_BOARDS = {
+    // 預設備份板型庫 (保證在外部腳本載入異常時絕不白屏)
+    const BUILTIN_BOARDS = {
       "預女獵白混": {
         name: "預女獵白混 (12人)",
         playerCount: 12,
@@ -254,9 +253,8 @@
       "hokai", "霏霏", "慶", "崇朗", "皓晴", "貓貓"
     ];
 
-    let currentBoardKey = "";
+    let currentBoardKey = "預女獵白混";
 
-    // 核心對局狀態與夜間記憶庫
     let gameState = {
       round: 1,
       phase: "SETUP",
@@ -282,155 +280,159 @@
     let votesMap = {};
     let antidoteUsedThisNight = false;
 
-    // 安全取得板型資料庫
-    function getBoardDatabase() {
-      if (typeof BOARD_DATABASE !== 'undefined' && Object.keys(BOARD_DATABASE).length > 0) {
+    function getDB() {
+      if (typeof BOARD_DATABASE !== 'undefined' && BOARD_DATABASE && Object.keys(BOARD_DATABASE).length > 0) {
         return BOARD_DATABASE;
       }
-      return DEFAULT_FALLBACK_BOARDS;
+      return BUILTIN_BOARDS;
     }
 
-    // 初始化板型選單
     function initBoardSelector() {
-      const db = getBoardDatabase();
-      const select = document.getElementById("boardSelect");
-      if (!select) return;
+      try {
+        const db = getDB();
+        const select = document.getElementById("boardSelect");
+        if (!select) return;
 
-      const boardKeys = Object.keys(db);
-      select.innerHTML = boardKeys.map(key => `
-        <option value="${key}">
-          ${db[key].name || key}
-        </option>
-      `).join('');
+        const keys = Object.keys(db);
+        select.innerHTML = keys.map(k => `<option value="${k}">${db[k].name || k}</option>`).join('');
 
-      currentBoardKey = boardKeys[0];
-      select.value = currentBoardKey;
+        currentBoardKey = keys[0];
+        select.value = currentBoardKey;
 
-      onBoardSelectChange();
+        const label = document.getElementById("currentBoardLabel");
+        if (label) label.innerText = db[currentBoardKey].name || currentBoardKey;
+
+        initSeats();
+        renderNightPanel();
+      } catch (e) {
+        console.error("initBoardSelector error:", e);
+      }
     }
 
     function onBoardSelectChange() {
-      const select = document.getElementById("boardSelect");
-      if (!select || !select.value) return;
+      try {
+        const select = document.getElementById("boardSelect");
+        if (!select) return;
+        currentBoardKey = select.value;
+        const db = getDB();
+        const config = db[currentBoardKey];
+        if (!config) return;
 
-      currentBoardKey = select.value;
-      const db = getBoardDatabase();
-      const config = db[currentBoardKey];
-      if (!config) return;
+        const label = document.getElementById("currentBoardLabel");
+        if (label) label.innerText = config.name || currentBoardKey;
 
-      const label = document.getElementById("currentBoardLabel");
-      if (label) label.innerText = config.name || currentBoardKey;
-
-      initSeats();
-      renderNightPanel();
-    }
-
-    function checkSeatDuplicates() {
-      const selects = document.querySelectorAll("select[id^='userSelect-']");
-      const counts = {};
-
-      selects.forEach(sel => {
-        const val = sel.value.trim();
-        if (val !== "") counts[val] = (counts[val] || 0) + 1;
-      });
-
-      let hasDup = false;
-      selects.forEach(sel => {
-        const seat = sel.id.replace("userSelect-", "");
-        const card = document.getElementById("seatCard-" + seat);
-        const dupTag = document.getElementById("seatDupTag-" + seat);
-        const currentVal = sel.value.trim();
-
-        if (currentVal !== "" && counts[currentVal] > 1) {
-          hasDup = true;
-          if (card) card.classList.add("seat-duplicate-box");
-          sel.classList.add("seat-duplicate-select");
-          if (dupTag) dupTag.style.display = "inline-block";
-        } else {
-          if (card) card.classList.remove("seat-duplicate-box");
-          sel.classList.remove("seat-duplicate-select");
-          if (dupTag) dupTag.style.display = "none";
-        }
-
-        Array.from(sel.options).forEach(opt => {
-          if (!opt.value) return;
-          const isSeatedElsewhere = (counts[opt.value] > 0) && (opt.value !== currentVal);
-          opt.textContent = isSeatedElsewhere ? `${opt.value} (已入座)` : opt.value;
-        });
-
-        const p = gameState.players.find(x => x.seat === parseInt(seat));
-        if (p) p.name = currentVal;
-      });
-
-      return { hasDup, counts };
+        initSeats();
+        renderNightPanel();
+      } catch (e) {
+        console.error("onBoardSelectChange error:", e);
+      }
     }
 
     function initSeats() {
-      const db = getBoardDatabase();
-      const config = db[currentBoardKey] || DEFAULT_FALLBACK_BOARDS["預女獵白混"];
-      const container = document.getElementById("seatAssignmentGrid");
-      if (!container) return;
+      try {
+        const db = getDB();
+        const config = db[currentBoardKey] || BUILTIN_BOARDS["預女獵白混"];
+        const container = document.getElementById("seatAssignmentGrid");
+        if (!container) return;
 
-      container.innerHTML = "";
-      gameState.players = [];
+        container.innerHTML = "";
+        gameState.players = [];
 
-      const pCount = config.playerCount || 12;
+        const count = config.playerCount || 12;
 
-      for (let i = 1; i <= pCount; i++) {
-        const assignedRole = (config.defaultSlots && config.defaultSlots[i - 1]) 
-          ? config.defaultSlots[i - 1] 
-          : (config.availableRoles ? config.availableRoles[0] : "平民");
-        const assignedName = MOCK_MEMBERS[i - 1] || "";
-        
-        gameState.players.push({
-          seat: i,
-          name: assignedName,
-          role: assignedRole,
-          seatType: getSeatType(assignedRole),
-          victoryFaction: getVictoryFaction(assignedRole),
-          isAlive: true,
-          hasBadge: false,
-          hybridTarget: null
-        });
+        for (let i = 1; i <= count; i++) {
+          const roleName = (config.defaultSlots && config.defaultSlots[i - 1]) 
+            ? config.defaultSlots[i - 1] 
+            : (config.availableRoles ? config.availableRoles[0] : "平民");
+          const memberName = MOCK_MEMBERS[i - 1] || "";
 
-        const card = document.createElement("div");
-        card.id = "seatCard-" + i;
-        card.className = "bg-gray-800/60 p-2 rounded-lg border border-gray-700 transition";
-
-        let optionsHtml = '<option value="">-- 清空此座位 --</option>';
-        MOCK_MEMBERS.forEach(m => {
-          const isSel = (m === assignedName) ? 'selected' : '';
-          optionsHtml += `<option value="${m}" ${isSel}>${m}</option>`;
-        });
-
-        let rolesHtml = '';
-        if (config.availableRoles) {
-          config.availableRoles.forEach(r => {
-            const isSelRole = (r === assignedRole) ? 'selected' : '';
-            rolesHtml += `<option value="${r}" ${isSelRole}>${r}</option>`;
+          gameState.players.push({
+            seat: i,
+            name: memberName,
+            role: roleName,
+            seatType: getSeatType(roleName),
+            victoryFaction: getVictoryFaction(roleName),
+            isAlive: true,
+            hasBadge: false,
+            hybridTarget: null
           });
+
+          const card = document.createElement("div");
+          card.id = "seatCard-" + i;
+          card.className = "bg-gray-800/60 p-2 rounded-lg border border-gray-700 transition";
+
+          let optUsers = '<option value="">-- 清空此座位 --</option>';
+          MOCK_MEMBERS.forEach(m => {
+            optUsers += `<option value="${m}" ${m === memberName ? 'selected' : ''}>${m}</option>`;
+          });
+
+          let optRoles = '';
+          const roles = config.availableRoles || ["預言家", "女巫", "獵人", "白痴", "平民", "狼人"];
+          roles.forEach(r => {
+            optRoles += `<option value="${r}" ${r === roleName ? 'selected' : ''}>${r}</option>`;
+          });
+
+          card.innerHTML = `
+            <div class="flex justify-between items-center mb-1">
+              <span class="font-bold text-amber-400">#${i < 10 ? '0' + i : i} 席位</span>
+              <div class="flex items-center gap-1">
+                <span id="seatDupTag-${i}" class="text-[9px] text-rose-300 bg-rose-950 px-1 py-0.5 rounded border border-rose-700 font-bold" style="display: none;">⚠️ 重複</span>
+                <span class="text-[10px] text-gray-400" id="roleTag-${i}">${roleName}</span>
+              </div>
+            </div>
+            <select id="userSelect-${i}" onchange="checkSeatDuplicates()" class="w-full text-[11px] rounded p-1 mb-1 border outline-none">
+              ${optUsers}
+            </select>
+            <select id="roleSelect-${i}" onchange="onRoleChange(${i})" class="w-full text-[11px] rounded p-1 border outline-none font-bold text-indigo-300">
+              ${optRoles}
+            </select>
+          `;
+          container.appendChild(card);
         }
 
-        card.innerHTML = `
-          <div class="flex justify-between items-center mb-1">
-            <span class="font-bold text-amber-400">#${i < 10 ? '0' + i : i} 席位</span>
-            <div class="flex items-center gap-1">
-              <span id="seatDupTag-${i}" class="text-[9px] text-rose-300 bg-rose-950 px-1 py-0.5 rounded border border-rose-700 font-bold" style="display: none;">⚠️ 重複</span>
-              <span class="text-[10px] text-gray-400" id="roleTag-${i}">${assignedRole}</span>
-            </div>
-          </div>
-          <select id="userSelect-${i}" onchange="checkSeatDuplicates()" class="w-full text-[11px] rounded p-1 mb-1 border outline-none">
-            ${optionsHtml}
-          </select>
-          <select id="roleSelect-${i}" onchange="onRoleChange(${i})" class="w-full text-[11px] rounded p-1 border outline-none font-bold text-indigo-300">
-            ${rolesHtml}
-          </select>
-        `;
-        container.appendChild(card);
+        updateCounts();
+      } catch (e) {
+        console.error("initSeats error:", e);
       }
-      
-      checkSeatDuplicates();
-      updateCounts();
+    }
+
+    function checkSeatDuplicates() {
+      try {
+        const selects = document.querySelectorAll("select[id^='userSelect-']");
+        const counts = {};
+
+        selects.forEach(sel => {
+          const val = sel.value.trim();
+          if (val !== "") counts[val] = (counts[val] || 0) + 1;
+        });
+
+        let hasDup = false;
+        selects.forEach(sel => {
+          const seat = sel.id.replace("userSelect-", "");
+          const card = document.getElementById("seatCard-" + seat);
+          const dupTag = document.getElementById("seatDupTag-" + seat);
+          const currentVal = sel.value.trim();
+
+          if (currentVal !== "" && counts[currentVal] > 1) {
+            hasDup = true;
+            if (card) card.classList.add("seat-duplicate-box");
+            sel.classList.add("seat-duplicate-select");
+            if (dupTag) dupTag.style.display = "inline-block";
+          } else {
+            if (card) card.classList.remove("seat-duplicate-box");
+            sel.classList.remove("seat-duplicate-select");
+            if (dupTag) dupTag.style.display = "none";
+          }
+
+          const p = gameState.players.find(x => x.seat === parseInt(seat));
+          if (p) p.name = currentVal;
+        });
+
+        return { hasDup, counts };
+      } catch (e) {
+        console.error("checkSeatDuplicates error:", e);
+        return { hasDup: false, counts: {} };
+      }
     }
 
     function getSeatType(roleName) {
@@ -451,37 +453,48 @@
     }
 
     function onRoleChange(seat) {
-      const selected = document.getElementById("roleSelect-" + seat).value;
-      document.getElementById("roleTag-" + seat).innerText = selected;
-      const p = gameState.players.find(x => x.seat === seat);
-      if (p) {
-        p.role = selected;
-        p.seatType = getSeatType(selected);
-        p.victoryFaction = getVictoryFaction(selected);
+      try {
+        const sel = document.getElementById("roleSelect-" + seat);
+        if (!sel) return;
+        const selected = sel.value;
+        const tag = document.getElementById("roleTag-" + seat);
+        if (tag) tag.innerText = selected;
+        const p = gameState.players.find(x => x.seat === seat);
+        if (p) {
+          p.role = selected;
+          p.seatType = getSeatType(selected);
+          p.victoryFaction = getVictoryFaction(selected);
+        }
+        updateCounts();
+      } catch (e) {
+        console.error("onRoleChange error:", e);
       }
-      updateCounts();
     }
 
     function updateCounts() {
-      const alive = gameState.players.filter(p => p.isAlive);
-      const gods = alive.filter(p => p.seatType === "GOD").length;
-      const villagers = alive.filter(p => p.seatType === "VILLAGER").length;
-      const wolves = alive.filter(p => p.seatType === "WEREWOLF").length;
+      try {
+        const alive = gameState.players.filter(p => p.isAlive);
+        const gods = alive.filter(p => p.seatType === "GOD").length;
+        const villagers = alive.filter(p => p.seatType === "VILLAGER").length;
+        const wolves = alive.filter(p => p.seatType === "WEREWOLF").length;
 
-      const totalGods = gameState.players.filter(p => p.seatType === "GOD").length;
-      const totalVillagers = gameState.players.filter(p => p.seatType === "VILLAGER").length;
-      const totalWolves = gameState.players.filter(p => p.seatType === "WEREWOLF").length;
+        const totalGods = gameState.players.filter(p => p.seatType === "GOD").length;
+        const totalVillagers = gameState.players.filter(p => p.seatType === "VILLAGER").length;
+        const totalWolves = gameState.players.filter(p => p.seatType === "WEREWOLF").length;
 
-      const gEl = document.getElementById("godCountDisplay");
-      const vEl = document.getElementById("villagerCountDisplay");
-      const wEl = document.getElementById("wolfCountDisplay");
+        const gEl = document.getElementById("godCountDisplay");
+        const vEl = document.getElementById("villagerCountDisplay");
+        const wEl = document.getElementById("wolfCountDisplay");
 
-      if (gEl) gEl.innerText = `${gods} / ${totalGods}`;
-      if (vEl) vEl.innerText = `${villagers} / ${totalVillagers}`;
-      if (wEl) wEl.innerText = `${wolves} / ${totalWolves}`;
-      
-      if (gameState.phase !== "SETUP") {
-        checkGameOver(gods, villagers, wolves);
+        if (gEl) gEl.innerText = `${gods} / ${totalGods}`;
+        if (vEl) vEl.innerText = `${villagers} / ${totalVillagers}`;
+        if (wEl) wEl.innerText = `${wolves} / ${totalWolves}`;
+        
+        if (gameState.phase !== "SETUP") {
+          checkGameOver(gods, villagers, wolves);
+        }
+      } catch (e) {
+        console.error("updateCounts error:", e);
       }
     }
 
@@ -505,353 +518,321 @@
       alert(`✅ 12 席已鎖定，進入第 1 夜！`);
     }
 
-    // ========================================================
-    // 動態夜間卡片引擎
-    // ========================================================
+    // 渲染夜間行動
     function renderNightPanel() {
-      const db = getBoardDatabase();
-      const config = db[currentBoardKey] || DEFAULT_FALLBACK_BOARDS["預女獵白混"];
-      const container = document.getElementById("nightActionsContainer");
-      if (!container) return;
-      container.innerHTML = "";
+      try {
+        const db = getDB();
+        const config = db[currentBoardKey] || BUILTIN_BOARDS["預女獵白混"];
+        const container = document.getElementById("nightActionsContainer");
+        if (!container) return;
+        container.innerHTML = "";
 
-      let script = [];
-      if (gameState.round === 1) {
-        script = config.firstNightOrder || config.nightOrder || [];
-      } else {
-        script = config.repeatingNightOrder || config.nightOrder || [];
-      }
-
-      // 舊格式轉新格式安全保護
-      script = script.map(item => {
-        if (typeof item === 'string') {
-          return { id: item, role: item, type: "SKILL", title: `${item}請睜眼`, prompt: "請依流程行動" };
-        }
-        return item;
-      });
-
-      if (script.length === 0) {
-        container.innerHTML = `<div class="p-3 text-center text-gray-500 text-xs">尚無夜間行動步驟</div>`;
-        return;
-      }
-
-      let alive = gameState.players.filter(p => p.isAlive);
-      if (alive.length === 0 && gameState.players.length > 0) {
-        alive = gameState.players;
-      }
-
-      const formatPlayerOpt = (p) => `<option value="${p.seat}">${p.seat}號 ${p.name ? '- ' + p.name : ''} (${p.role})</option>`;
-      const aliveOptions = alive.map(formatPlayerOpt).join('');
-      const allPlayersOptions = gameState.players.map(formatPlayerOpt).join('');
-
-      script.forEach(step => {
-        const card = document.createElement("div");
-        card.id = `action-card-${step.id}`;
-        card.className = "p-2.5 rounded-lg border text-xs shadow-sm space-y-1.5 transition";
-
-        if (step.type === "GESTURE") {
-          card.classList.add("bg-amber-950/30", "border-amber-700/60");
-        } else if (step.type === "CONFIRM") {
-          card.classList.add("bg-gray-800/80", "border-gray-700");
-        } else if (step.type === "INFO") {
-          card.classList.add("bg-indigo-950/40", "border-indigo-700/60");
+        let script = [];
+        if (gameState.round === 1) {
+          script = config.firstNightOrder || config.nightOrder || [];
         } else {
-          card.classList.add("bg-gray-800/70", "border-gray-700");
+          script = config.repeatingNightOrder || config.nightOrder || [];
         }
 
-        // CONFIRM
-        if (step.type === "CONFIRM") {
-          let targetPlayerDesc = "確認目標";
-          if (step.role === "白痴" || step.role === "騎士" || step.role === "守墓人") {
-            const p = gameState.players.find(x => x.role === step.role);
-            targetPlayerDesc = p ? `${p.seat}號 ${p.name || ''}` : "未配置此身分";
-          } else if (step.id === "wolf_brothers_confirm") {
-            const b = gameState.players.filter(x => x.role === "狼兄" || x.role === "狼弟");
-            targetPlayerDesc = b.length > 0 ? b.map(x => `${x.seat}號(${x.role})`).join('、') : "無狼兄狼弟";
+        script = script.map(item => {
+          if (typeof item === 'string') {
+            return { id: item, role: item, type: "SKILL", title: `${item}請睜眼`, prompt: "請依流程行動" };
+          }
+          return item;
+        });
+
+        if (script.length === 0) {
+          container.innerHTML = `<div class="p-3 text-center text-gray-500 text-xs">尚無夜間行動步驟</div>`;
+          return;
+        }
+
+        let alive = gameState.players.filter(p => p.isAlive);
+        if (alive.length === 0 && gameState.players.length > 0) {
+          alive = gameState.players;
+        }
+
+        const fmt = (p) => `<option value="${p.seat}">${p.seat}號 ${p.name ? '- ' + p.name : ''} (${p.role || ''})</option>`;
+        const aliveOpts = alive.map(fmt).join('');
+        const allOpts = gameState.players.map(fmt).join('');
+
+        script.forEach(step => {
+          const card = document.createElement("div");
+          card.id = `action-card-${step.id}`;
+          card.className = "p-2.5 rounded-lg border text-xs shadow-sm space-y-1.5 transition";
+
+          if (step.type === "GESTURE") {
+            card.classList.add("bg-amber-950/30", "border-amber-700/60");
+          } else if (step.type === "CONFIRM") {
+            card.classList.add("bg-gray-800/80", "border-gray-700");
+          } else if (step.type === "INFO") {
+            card.classList.add("bg-indigo-950/40", "border-indigo-700/60");
+          } else {
+            card.classList.add("bg-gray-800/70", "border-gray-700");
           }
 
-          card.innerHTML = `
-            <div class="flex justify-between items-center">
-              <span class="font-bold text-gray-200">${step.title}</span>
-              <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
-            </div>
-            <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
-              <span class="text-gray-300 font-mono">確認目標：<strong class="text-amber-400">${targetPlayerDesc}</strong></span>
-              <button onclick="markStepDone('${step.id}')" id="btn-done-${step.id}" class="bg-gray-700 text-gray-300 px-2 py-0.5 rounded text-[11px] transition">
-                點擊確認
-              </button>
-            </div>
-          `;
-        }
-        // GESTURE
-        else if (step.type === "GESTURE") {
-          let gestureHtml = "";
-          if (step.id === "hunter_gesture" || step.id === "wolf_king_gesture" || step.id === "gun_lucky_gesture") {
-            gestureHtml = `
+          if (step.type === "CONFIRM") {
+            let desc = "確認目標";
+            if (step.role === "白痴" || step.role === "騎士" || step.role === "守墓人") {
+              const p = gameState.players.find(x => x.role === step.role);
+              desc = p ? `${p.seat}號 ${p.name || ''}` : "未配置此身分";
+            } else if (step.id === "wolf_brothers_confirm") {
+              const b = gameState.players.filter(x => x.role === "狼兄" || x.role === "狼弟");
+              desc = b.length > 0 ? b.map(x => `${x.seat}號(${x.role})`).join('、') : "無狼兄狼弟";
+            }
+            card.innerHTML = `
+              <div class="flex justify-between items-center">
+                <span class="font-bold text-gray-200">${step.title}</span>
+                <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
+              </div>
               <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
-                <span class="text-gray-300">給予開槍手勢：</span>
-                <span id="gesture-badge-${step.id}" class="bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold">
-                  👍 狀態良好 (可開槍)
-                </span>
+                <span class="text-gray-300 font-mono">確認目標：<strong class="text-amber-400">${desc}</strong></span>
+                <button onclick="markStepDone('${step.id}')" id="btn-done-${step.id}" class="bg-gray-700 text-gray-300 px-2 py-0.5 rounded text-[11px] transition">
+                  點擊確認
+                </button>
               </div>
             `;
-          } else if (step.id === "converter_gesture") {
-            const normalWolvesAlive = gameState.players.filter(p => p.isAlive && p.seatType === "WEREWOLF" && p.role !== "覺醒石像鬼").length;
-            const canTakeBlade = (normalWolvesAlive === 0);
-            gestureHtml = `
-              <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
-                <span class="text-gray-300">給予帶刀手勢：</span>
-                <span class="${canTakeBlade ? 'bg-emerald-950 text-emerald-300 border border-emerald-600' : 'bg-rose-950 text-rose-300 border border-rose-600'} px-2 py-0.5 rounded font-bold">
-                  ${canTakeBlade ? '👍 3狼全滅 (可帶刀)' : '👎 仍有狼在場 (不可帶刀)'}
-                </span>
+          } else if (step.type === "GESTURE") {
+            let gestureHtml = "";
+            if (step.id === "hunter_gesture" || step.id === "wolf_king_gesture" || step.id === "gun_lucky_gesture") {
+              gestureHtml = `
+                <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
+                  <span class="text-gray-300">給予開槍手勢：</span>
+                  <span id="gesture-badge-${step.id}" class="bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold">
+                    👍 狀態良好 (可開槍)
+                  </span>
+                </div>
+              `;
+            } else if (step.id === "converter_gesture") {
+              const normalWolves = gameState.players.filter(p => p.isAlive && p.seatType === "WEREWOLF" && p.role !== "覺醒石像鬼").length;
+              const canBlade = (normalWolves === 0);
+              gestureHtml = `
+                <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
+                  <span class="text-gray-300">給予帶刀手勢：</span>
+                  <span class="${canBlade ? 'bg-emerald-950 text-emerald-300 border border-emerald-600' : 'bg-rose-950 text-rose-300 border border-rose-600'} px-2 py-0.5 rounded font-bold">
+                    ${canBlade ? '👍 3狼全滅 (可帶刀)' : '👎 仍有狼在場 (不可帶刀)'}
+                  </span>
+                </div>
+              `;
+            } else if (step.id === "black_market_faction_gesture") {
+              const isWolf = gameState.nightMemory.blackMarketTransformedWolf;
+              gestureHtml = `
+                <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
+                  <span class="text-gray-300">黑商陣營變更手勢：</span>
+                  <span class="${isWolf ? 'bg-rose-950 text-rose-300 border-rose-600' : 'bg-blue-950 text-blue-300 border-blue-600'} border px-2 py-0.5 rounded font-bold">
+                    ${isWolf ? '🐺 變身為狼人' : '🧑 維持好人陣營'}
+                  </span>
+                </div>
+              `;
+            }
+            card.innerHTML = `
+              <div class="flex justify-between items-center">
+                <span class="font-bold text-amber-300">${step.title}</span>
+                <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
+              </div>
+              ${gestureHtml}
+            `;
+          } else if (step.type === "INFO") {
+            const lastExile = gameState.lastExiledPlayer;
+            let infoText = "昨日無放逐出局者";
+            let badgeClass = "bg-gray-800 text-gray-400";
+            if (lastExile) {
+              const isW = (lastExile.seatType === "WEREWOLF");
+              infoText = `昨日放逐 ${lastExile.seat}號：【${isW ? '狼人陣營' : '好人陣營'}】`;
+              badgeClass = isW ? "bg-rose-950 text-rose-300 border border-rose-600" : "bg-blue-950 text-blue-300 border border-blue-600";
+            }
+            card.innerHTML = `
+              <div class="flex justify-between items-center">
+                <span class="font-bold text-indigo-300">${step.title}</span>
+                <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
+              </div>
+              <div class="bg-gray-900/60 p-2 rounded flex justify-between items-center">
+                <span class="text-gray-300">放逐陣營資訊：</span>
+                <span class="${badgeClass} px-2 py-0.5 rounded font-bold">${infoText}</span>
               </div>
             `;
-          } else if (step.id === "black_market_faction_gesture") {
-            const isWolf = gameState.nightMemory.blackMarketTransformedWolf;
-            gestureHtml = `
-              <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
-                <span class="text-gray-300">黑商陣營變更手勢：</span>
-                <span class="${isWolf ? 'bg-rose-950 text-rose-300 border-rose-600' : 'bg-blue-950 text-blue-300 border-blue-600'} border px-2 py-0.5 rounded font-bold">
-                  ${isWolf ? '🐺 變身為狼人 (比狼手勢)' : '🧑 維持好人陣營 (比好人)'}
-                </span>
+          } else {
+            let skillHtml = "";
+            if (step.id === "guard") {
+              const lastT = gameState.nightMemory.guardLastTarget;
+              skillHtml = `
+                <div class="flex items-center gap-2">
+                  <span class="text-gray-400">守護目標：</span>
+                  <select id="guardTarget" class="flex-1 rounded p-1 text-xs border">
+                    <option value="">空守 (不守護任何人)</option>
+                    ${alive.map(p => `<option value="\${p.seat}" ${p.seat === lastT ? 'disabled' : ''}>${p.seat}號 - ${p.name \vert{}\vert{} ''}${p.seat === lastT ? '(昨晚已守)' : ''}</option>`).join('')}
+                  </select>
+                </div>
+              `;
+            } else if (step.id === "nightmare") {
+              const nm = gameState.players.find(p => p.role === "夢魘");
+              const lastT = gameState.nightMemory.nightmareLastTarget;
+              skillHtml = `
+                <div class="flex items-center gap-2">
+                  <span class="text-gray-400">恐懼目標：</span>
+                  <select id="nightmareTarget" class="flex-1 rounded p-1 text-xs border">
+                    <option value="">不恐懼</option>
+                    ${alive.filter(p => !nm || p.seat !== nm.seat).map(p => `<option value="\${p.seat}" ${p.seat === lastT ? 'disabled' : ''}>${p.seat}號 - ${p.name \vert{}\vert{} ''}${p.seat === lastT ? '(昨晚已恐)' : ''}</option>`).join('')}
+                  </select>
+                </div>
+              `;
+            } else if (step.id === "dreamer") {
+              const dm = gameState.players.find(p => p.role === "攝夢人");
+              skillHtml = `
+                <div class="flex items-center gap-2">
+                  <span class="text-gray-400">夢遊目標：</span>
+                  <select id="dreamerTarget" class="flex-1 rounded p-1 text-xs border">
+                    <option value="">選擇夢遊玩家</option>
+                    ${alive.filter(p => !dm || p.seat !== dm.seat).map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name \vert{}\vert{} ''}${p.seat === gameState.nightMemory.dreamerLastTarget ? '(連夢死亡⚠️)' : ''}</option>`).join('')}
+                  </select>
+                </div>
+              `;
+            } else if (step.id === "magician") {
+              skillHtml = `
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="flex items-center gap-1">
+                    <span class="text-gray-400">目標A:</span>
+                    <select id="magicianTargetA" class="w-full rounded p-1 text-xs border">
+                      <option value="">選擇號碼</option>${allOpts}
+                    </select>
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <span class="text-gray-400">目標B:</span>
+                    <select id="magicianTargetB" class="w-full rounded p-1 text-xs border">
+                      <option value="">選擇號碼</option>${allOpts}
+                    </select>
+                  </div>
+                </div>
+              `;
+            } else if (step.id === "hybrid") {
+              skillHtml = `
+                <div class="flex items-center gap-2">
+                  <span class="text-gray-400">選擇榜樣：</span>
+                  <select id="hybridTarget" class="flex-1 rounded p-1 text-xs border">
+                    <option value="">選擇榜樣號碼</option>${allOpts}
+                  </select>
+                </div>
+              `;
+            } else if (step.id === "gargoyle") {
+              skillHtml = `
+                <div class="flex items-center gap-2">
+                  <span class="text-gray-400">轉化目標：</span>
+                  <select id="gargoyleTarget" class="flex-1 rounded p-1 text-xs border">
+                    <option value="">選擇轉化相鄰玩家</option>${allOpts}
+                  </select>
+                </div>
+              `;
+            } else if (step.id === "black_market") {
+              skillHtml = `
+                <div class="space-y-1.5 bg-gray-900/60 p-2 rounded">
+                  <div class="flex items-center justify-between">
+                    <span>🔮 查驗幸運兒：</span>
+                    <select id="blackMarketSeer" class="w-36 rounded p-0.5 text-xs border">
+                      <option value="">選擇玩家</option>${allOpts}
+                    </select>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span>🧪 毒藥幸運兒：</span>
+                    <select id="blackMarketPoison" class="w-36 rounded p-0.5 text-xs border">
+                      <option value="">選擇玩家</option>${allOpts}
+                    </select>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span>🔫 獵槍幸運兒：</span>
+                    <select id="blackMarketGun" class="w-36 rounded p-0.5 text-xs border">
+                      <option value="">選擇玩家</option>${allOpts}
+                    </select>
+                  </div>
+                </div>
+              `;
+            } else if (step.id === "wolf_younger_solo") {
+              const brotherDead = !gameState.players.some(p => p.role === "狼兄" && p.isAlive);
+              skillHtml = `
+                <div class="flex items-center gap-2">
+                  <span class="text-gray-400">狼弟單獨落刀：</span>
+                  <select id="youngWolfTarget" class="flex-1 rounded p-1 text-xs border" ${brotherDead ? '' : 'disabled'}>
+                    <option value="">${brotherDead ? '選擇單獨擊殺目標' : '狼兄尚未出局 (不可單砍)'}</option>
+                    ${brotherDead ? aliveOpts : ''}
+                  </select>
+                </div>
+              `;
+            } else if (step.id === "wolf" || step.id === "wolf_team_confirm") {
+              skillHtml = `
+                <div class="flex items-center gap-2">
+                  <span class="text-gray-400">團隊刀口：</span>
+                  <select id="wolfTarget" onchange="onWolfTargetChange()" class="flex-1 rounded p-1 text-xs border text-rose-300 font-bold">
+                    <option value="">空刀 (不擊殺)</option>
+                    ${aliveOpts}
+                  </select>
+                </div>
+              `;
+            } else if (step.id === "wolf_beauty") {
+              skillHtml = `
+                <div class="flex items-center gap-2">
+                  <span class="text-gray-400">魅惑目標：</span>
+                  <select id="wolfBeautyTarget" class="flex-1 rounded p-1 text-xs border text-pink-300 font-bold">
+                    <option value="">選擇魅惑玩家</option>
+                    ${aliveOpts}
+                  </select>
+                </div>
+              `;
+            } else if (step.id === "witch") {
+              const antUsed = gameState.nightMemory.witchAntidoteUsed;
+              const poiUsed = gameState.nightMemory.witchPoisonUsed;
+              skillHtml = `
+                <div class="flex justify-between items-center mb-1">
+                  <span class="text-[10px] text-amber-400 font-mono font-bold" id="witchRawKillHint">原始刀口：等待落刀</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
+                    <span>解藥</span>
+                    <button id="antidoteBtn" onclick="toggleAntidote()" ${antUsed ? 'disabled' : ''} class="${antUsed ? 'bg-gray-800 text-gray-500' : 'bg-gray-700 text-gray-300'} text-[11px] px-2 py-0.5 rounded transition">
+                      ${antUsed ? '已消耗' : '未使用'}
+                    </button>
+                  </div>
+                  <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
+                    <span>毒藥</span>
+                    <select id="poisonTarget" onchange="updateDynamicGestureBadges()" ${poiUsed ? 'disabled' : ''} class="text-[11px] rounded p-0.5 border">
+                      <option value="">${poiUsed ? '已消耗' : '不使用'}</option>
+                      ${poiUsed ? '' : aliveOpts}
+                    </select>
+                  </div>
+                </div>
+              `;
+            } else if (step.id === "seer") {
+              skillHtml = `
+                <div class="flex items-center gap-2">
+                  <span class="text-gray-400">查驗目標：</span>
+                  <select id="seerTarget" onchange="resolveSeerCheck()" class="flex-1 rounded p-1 text-xs border">
+                    <option value="">選擇查驗目標</option>
+                    ${allOpts}
+                  </select>
+                  <span id="seerResultBadge" class="bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold whitespace-nowrap">
+                    待查驗
+                  </span>
+                </div>
+              `;
+            } else {
+              skillHtml = `<div class="text-gray-500 text-[11px]">標準技能步驟</div>`;
+            }
+
+            card.innerHTML = `
+              <div class="flex justify-between items-center">
+                <span class="font-bold text-gray-200">${step.title}</span>
+                <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
               </div>
+              ${skillHtml}
             `;
           }
 
-          card.innerHTML = `
-            <div class="flex justify-between items-center">
-              <span class="font-bold text-amber-300">${step.title}</span>
-              <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
-            </div>
-            ${gestureHtml}
-          `;
-        }
-        // INFO
-        else if (step.type === "INFO") {
-          const lastExile = gameState.lastExiledPlayer;
-          let infoText = "昨日無放逐出局者";
-          let badgeClass = "bg-gray-800 text-gray-400";
-          if (lastExile) {
-            const isWolf = (lastExile.seatType === "WEREWOLF");
-            infoText = `昨日放逐 ${lastExile.seat}號(${lastExile.name || ''})：【${isWolf ? '狼人陣營' : '好人陣營'}】`;
-            badgeClass = isWolf ? "bg-rose-950 text-rose-300 border border-rose-600" : "bg-blue-950 text-blue-300 border border-blue-600";
-          }
-          card.innerHTML = `
-            <div class="flex justify-between items-center">
-              <span class="font-bold text-indigo-300">${step.title}</span>
-              <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
-            </div>
-            <div class="bg-gray-900/60 p-2 rounded flex justify-between items-center">
-              <span class="text-gray-300">放逐陣營資訊：</span>
-              <span class="${badgeClass} px-2 py-0.5 rounded font-bold">${infoText}</span>
-            </div>
-          `;
-        }
-        // SKILL
-        else {
-          let skillHtml = "";
-          if (step.id === "guard") {
-            const lastTarget = gameState.nightMemory.guardLastTarget;
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">守護目標：</span>
-                <select id="guardTarget" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">空守 (不守護任何人)</option>
-                  ${alive.map(p => {
-                    const isLast = (p.seat === lastTarget);
-                    return `<option value="\${p.seat}" ${isLast ? 'disabled' : ''}>${p.seat}號 - ${p.name \vert{}\vert{} ''}${isLast ? '(昨晚已守)' : ''}</option>`;
-                  }).join('')}
-                </select>
-              </div>
-            `;
-          } else if (step.id === "nightmare") {
-            const nightmarePlayer = gameState.players.find(p => p.role === "夢魘");
-            const lastTarget = gameState.nightMemory.nightmareLastTarget;
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">恐懼目標：</span>
-                <select id="nightmareTarget" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">不恐懼</option>
-                  ${alive.filter(p => !nightmarePlayer || p.seat !== nightmarePlayer.seat).map(p => {
-                    const isLast = (p.seat === lastTarget);
-                    return `<option value="\${p.seat}" ${isLast ? 'disabled' : ''}>${p.seat}號 - ${p.name \vert{}\vert{} ''}${isLast ? '(昨晚已恐)' : ''}</option>`;
-                  }).join('')}
-                </select>
-              </div>
-            `;
-          } else if (step.id === "dreamer") {
-            const dreamerPlayer = gameState.players.find(p => p.role === "攝夢人");
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">夢遊目標：</span>
-                <select id="dreamerTarget" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">選擇夢遊玩家</option>
-                  ${alive.filter(p => !dreamerPlayer || p.seat !== dreamerPlayer.seat).map(p => {
-                    const isLast = (p.seat === gameState.nightMemory.dreamerLastTarget);
-                    return `<option value="${p.seat}">${p.seat}號 - ${p.name \vert{}\vert{} ''}${isLast ? '(連夢死亡⚠️)' : ''}</option>`;
-                  }).join('')}
-                </select>
-              </div>
-            `;
-          } else if (step.id === "magician") {
-            skillHtml = `
-              <div class="grid grid-cols-2 gap-2">
-                <div class="flex items-center gap-1">
-                  <span class="text-gray-400">目標A:</span>
-                  <select id="magicianTargetA" class="w-full rounded p-1 text-xs border">
-                    <option value="">選擇號碼</option>
-                    ${allPlayersOptions}
-                  </select>
-                </div>
-                <div class="flex items-center gap-1">
-                  <span class="text-gray-400">目標B:</span>
-                  <select id="magicianTargetB" class="w-full rounded p-1 text-xs border">
-                    <option value="">選擇號碼</option>
-                    ${allPlayersOptions}
-                  </select>
-                </div>
-              </div>
-            `;
-          } else if (step.id === "hybrid") {
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">選擇榜樣：</span>
-                <select id="hybridTarget" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">選擇榜樣號碼</option>
-                  ${allPlayersOptions}
-                </select>
-              </div>
-            `;
-          } else if (step.id === "gargoyle") {
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">轉化目標：</span>
-                <select id="gargoyleTarget" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">選擇轉化相鄰玩家</option>
-                  ${allPlayersOptions}
-                </select>
-              </div>
-            `;
-          } else if (step.id === "black_market") {
-            skillHtml = `
-              <div class="space-y-1.5 bg-gray-900/60 p-2 rounded">
-                <div class="flex items-center justify-between">
-                  <span>🔮 查驗幸運兒：</span>
-                  <select id="blackMarketSeer" class="w-36 rounded p-0.5 text-xs border">
-                    <option value="">選擇玩家</option>${allPlayersOptions}
-                  </select>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span>🧪 毒藥幸運兒：</span>
-                  <select id="blackMarketPoison" class="w-36 rounded p-0.5 text-xs border">
-                    <option value="">選擇玩家</option>${allPlayersOptions}
-                  </select>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span>🔫 獵槍幸運兒：</span>
-                  <select id="blackMarketGun" class="w-36 rounded p-0.5 text-xs border">
-                    <option value="">選擇玩家</option>${allPlayersOptions}
-                  </select>
-                </div>
-              </div>
-            `;
-          } else if (step.id === "wolf_younger_solo") {
-            const brotherDead = !gameState.players.some(p => p.role === "狼兄" && p.isAlive);
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">狼弟單獨落刀：</span>
-                <select id="youngWolfTarget" class="flex-1 rounded p-1 text-xs border" ${brotherDead ? '' : 'disabled'}>
-                  <option value="">${brotherDead ? '選擇單獨擊殺目標' : '狼兄尚未出局 (不可單砍)'}</option>
-                  ${brotherDead ? aliveOptions : ''}
-                </select>
-              </div>
-            `;
-          } else if (step.id === "wolf" || step.id === "wolf_team_confirm") {
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">團隊刀口：</span>
-                <select id="wolfTarget" onchange="onWolfTargetChange()" class="flex-1 rounded p-1 text-xs border text-rose-300 font-bold">
-                  <option value="">空刀 (不擊殺)</option>
-                  ${aliveOptions}
-                </select>
-              </div>
-            `;
-          } else if (step.id === "wolf_beauty") {
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">魅惑目標：</span>
-                <select id="wolfBeautyTarget" class="flex-1 rounded p-1 text-xs border text-pink-300 font-bold">
-                  <option value="">選擇魅惑玩家</option>
-                  ${aliveOptions}
-                </select>
-              </div>
-            `;
-          } else if (step.id === "witch") {
-            const antidoteUsed = gameState.nightMemory.witchAntidoteUsed;
-            const poisonUsed = gameState.nightMemory.witchPoisonUsed;
-            skillHtml = `
-              <div class="flex justify-between items-center mb-1">
-                <span class="text-[10px] text-amber-400 font-mono font-bold" id="witchRawKillHint">原始刀口：等待落刀</span>
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
-                  <span>解藥</span>
-                  <button id="antidoteBtn" onclick="toggleAntidote()" ${antidoteUsed ? 'disabled' : ''} class="${antidoteUsed ? 'bg-gray-800 text-gray-500' : 'bg-gray-700 text-gray-300'} text-[11px] px-2 py-0.5 rounded transition">
-                    ${antidoteUsed ? '已消耗' : '未使用'}
-                  </button>
-                </div>
-                <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
-                  <span>毒藥</span>
-                  <select id="poisonTarget" onchange="onNightActionChange()" ${poisonUsed ? 'disabled' : ''} class="text-[11px] rounded p-0.5 border">
-                    <option value="">${poisonUsed ? '已消耗' : '不使用'}</option>
-                    ${poisonUsed ? '' : aliveOptions}
-                  </select>
-                </div>
-              </div>
-            `;
-          } else if (step.id === "seer") {
-            skillHtml = `
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400">查驗目標：</span>
-                <select id="seerTarget" onchange="resolveSeerCheck()" class="flex-1 rounded p-1 text-xs border">
-                  <option value="">選擇查驗目標</option>
-                  ${allPlayersOptions}
-                </select>
-                <span id="seerResultBadge" class="bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold whitespace-nowrap">
-                  待查驗
-                </span>
-              </div>
-            `;
-          } else if (step.id === "lucky_skill_action") {
-            skillHtml = `
-              <div class="bg-gray-900/60 p-2 rounded space-y-1">
-                <div class="flex justify-between items-center">
-                  <span>查驗幸運兒：</span>
-                  <button class="bg-blue-900 text-blue-200 px-2 py-0.5 rounded">詢問查驗</button>
-                </div>
-                <div class="flex justify-between items-center">
-                  <span>毒藥幸運兒：</span>
-                  <button class="bg-emerald-900 text-emerald-200 px-2 py-0.5 rounded">詢問用毒</button>
-                </div>
-              </div>
-            `;
-          }
+          container.appendChild(card);
+        });
 
-          card.innerHTML = `
-            <div class="flex justify-between items-center">
-              <span class="font-bold text-gray-200">${step.title}</span>
-              <span class="text-[10px] text-gray-400 font-mono">${step.prompt}</span>
-            </div>
-            ${skillHtml}
-          `;
-        }
-
-        container.appendChild(card);
-      });
-
-      antidoteUsedThisNight = false;
-      onWolfTargetChange();
-      updateDynamicGestureBadges();
+        antidoteUsedThisNight = false;
+        onWolfTargetChange();
+        updateDynamicGestureBadges();
+      } catch (e) {
+        console.error("renderNightPanel error:", e);
+      }
     }
 
     function markStepDone(stepId) {
@@ -874,10 +855,6 @@
       } else {
         elHint.innerText = `原始刀口：空刀`;
       }
-      updateDynamicGestureBadges();
-    }
-
-    function onNightActionChange() {
       updateDynamicGestureBadges();
     }
 
@@ -916,15 +893,15 @@
       const wolfKing = gameState.players.find(p => p.role === "狼王");
       const wolfKingBadge = document.getElementById("gesture-badge-wolf_king_gesture");
       if (wolfKing && wolfKingBadge) {
-        let actualPoisonTarget = poisonTarget;
+        let actualPoison = poisonTarget;
         const magA = parseInt(document.getElementById("magicianTargetA")?.value || 0);
         const magB = parseInt(document.getElementById("magicianTargetB")?.value || 0);
         if (magA && magB) {
-          if (poisonTarget === magA) actualPoisonTarget = magB;
-          else if (poisonTarget === magB) actualPoisonTarget = magA;
+          if (poisonTarget === magA) actualPoison = magB;
+          else if (poisonTarget === magB) actualPoison = magA;
         }
 
-        if (actualPoisonTarget === wolfKing.seat) {
+        if (actualPoison === wolfKing.seat) {
           wolfKingBadge.innerText = "👎 已吃毒 (不可開槍)";
           wolfKingBadge.className = "bg-rose-950 text-rose-300 border border-rose-600 px-2 py-0.5 rounded font-bold";
         } else {
@@ -943,42 +920,40 @@
         return;
       }
       const target = gameState.players.find(p => p.seat === targetSeat);
-      const isWolf = ["狼人", "狼王", "白狼王", "狼兄", "狼弟", "夢魘", "狼美人", "覺醒石像鬼"].includes(target.role);
+      const isWolf = ["狼人", "狼王", "白狼王", "狼兄", "狼弟", "夢魘", "狼美人", "覺醒石像鬼"].includes(target?.role);
       badge.innerText = isWolf ? "查殺 (狼人)" : "金水 (好人)";
       badge.className = isWolf ? "bg-rose-950 text-rose-300 border border-rose-700 px-2 py-0.5 rounded font-bold whitespace-nowrap" : "bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold whitespace-nowrap";
     }
 
     function resolveNight() {
-      let rawWolfTarget = parseInt(document.getElementById("wolfTarget")?.value || 0);
-      let rawPoisonTarget = parseInt(document.getElementById("poisonTarget")?.value || 0);
-      let guardTarget = parseInt(document.getElementById("guardTarget")?.value || 0);
-      let dreamerTarget = parseInt(document.getElementById("dreamerTarget")?.value || 0);
-      let youngWolfSolo = parseInt(document.getElementById("youngWolfTarget")?.value || 0);
-      let hybridTarget = parseInt(document.getElementById("hybridTarget")?.value || 0);
-      let gargoyleTarget = parseInt(document.getElementById("gargoyleTarget")?.value || 0);
+      let rawWolf = parseInt(document.getElementById("wolfTarget")?.value || 0);
+      let rawPoi = parseInt(document.getElementById("poisonTarget")?.value || 0);
+      let guardT = parseInt(document.getElementById("guardTarget")?.value || 0);
+      let dreamT = parseInt(document.getElementById("dreamerTarget")?.value || 0);
+      let youngSolo = parseInt(document.getElementById("youngWolfTarget")?.value || 0);
+      let hybridT = parseInt(document.getElementById("hybridTarget")?.value || 0);
+      let gargT = parseInt(document.getElementById("gargoyleTarget")?.value || 0);
 
       if (gameState.round === 1) {
-        if (hybridTarget) {
+        if (hybridT) {
           const hybrid = gameState.players.find(p => p.role === "混血兒");
           if (hybrid) {
-            hybrid.hybridTarget = hybridTarget;
-            const target = gameState.players.find(p => p.seat === hybridTarget);
-            hybrid.victoryFaction = (target.seatType === "WEREWOLF") ? "werewolf" : "villager";
+            hybrid.hybridTarget = hybridT;
+            const target = gameState.players.find(p => p.seat === hybridT);
+            hybrid.victoryFaction = (target?.seatType === "WEREWOLF") ? "werewolf" : "villager";
           }
         }
-        if (gargoyleTarget) {
-          gameState.nightMemory.gargoyleConvertedTarget = gargoyleTarget;
-        }
+        if (gargT) gameState.nightMemory.gargoyleConvertedTarget = gargT;
 
-        const bmSeer = parseInt(document.getElementById("blackMarketSeer")?.value || 0);
-        const bmPoison = parseInt(document.getElementById("blackMarketPoison")?.value || 0);
-        const bmGun = parseInt(document.getElementById("blackMarketGun")?.value || 0);
-        if (bmSeer && bmPoison && bmGun) {
-          gameState.nightMemory.blackMarketGifts = { seer: bmSeer, poison: bmPoison, gun: bmGun };
-          const s1 = gameState.players.find(p => p.seat === bmSeer);
-          const s2 = gameState.players.find(p => p.seat === bmPoison);
-          const s3 = gameState.players.find(p => p.seat === bmGun);
-          if (s1.seatType !== "WEREWOLF" && s2.seatType !== "WEREWOLF" && s3.seatType !== "WEREWOLF") {
+        const bmS = parseInt(document.getElementById("blackMarketSeer")?.value || 0);
+        const bmP = parseInt(document.getElementById("blackMarketPoison")?.value || 0);
+        const bmG = parseInt(document.getElementById("blackMarketGun")?.value || 0);
+        if (bmS && bmP && bmG) {
+          gameState.nightMemory.blackMarketGifts = { seer: bmS, poison: bmP, gun: bmG };
+          const s1 = gameState.players.find(p => p.seat === bmS);
+          const s2 = gameState.players.find(p => p.seat === bmP);
+          const s3 = gameState.players.find(p => p.seat === bmG);
+          if (s1?.seatType !== "WEREWOLF" && s2?.seatType !== "WEREWOLF" && s3?.seatType !== "WEREWOLF") {
             gameState.nightMemory.blackMarketTransformedWolf = true;
           }
         }
@@ -986,75 +961,67 @@
 
       const magA = parseInt(document.getElementById("magicianTargetA")?.value || 0);
       const magB = parseInt(document.getElementById("magicianTargetB")?.value || 0);
-      const swapMap = (seat) => {
-        if (!magA || !magB || !seat) return seat;
-        if (seat === magA) return magB;
-        if (seat === magB) return magA;
-        return seat;
+      const swap = (s) => {
+        if (!magA || !magB || !s) return s;
+        if (s === magA) return magB;
+        if (s === magB) return magA;
+        return s;
       };
 
-      let finalWolfTarget = swapMap(rawWolfTarget);
-      let finalPoisonTarget = swapMap(rawPoisonTarget);
-      let finalGuardTarget = swapMap(guardTarget);
-      let finalDreamerTarget = swapMap(dreamerTarget);
-      let finalYoungWolfTarget = swapMap(youngWolfSolo);
+      let finalWolf = swap(rawWolf);
+      let finalPoi = swap(rawPoi);
+      let finalGuard = swap(guardT);
+      let finalDream = swap(dreamT);
+      let finalYoung = swap(youngSolo);
 
       let deaths = [];
-      let hunterCanShoot = true;
-      let wolfKingCanShoot = true;
+      let hunterShoot = true;
+      let wolfKingShoot = true;
 
-      if (finalWolfTarget) {
-        const isGuarded = (finalGuardTarget === finalWolfTarget);
+      if (finalWolf) {
+        const isGuarded = (finalGuard === finalWolf);
         const isSaved = antidoteUsedThisNight;
-
         if (isGuarded && isSaved) {
-          deaths.push(finalWolfTarget);
+          deaths.push(finalWolf);
         } else if (isGuarded && !isSaved) {
         } else if (!isGuarded && isSaved) {
         } else {
-          deaths.push(finalWolfTarget);
+          deaths.push(finalWolf);
         }
       }
 
-      if (finalYoungWolfTarget && !deaths.includes(finalYoungWolfTarget)) {
-        deaths.push(finalYoungWolfTarget);
+      if (finalYoung && !deaths.includes(finalYoung)) deaths.push(finalYoung);
+
+      if (finalPoi) {
+        if (!deaths.includes(finalPoi)) deaths.push(finalPoi);
+        const p = gameState.players.find(x => x.seat === finalPoi);
+        if (p?.role === "獵人") hunterShoot = false;
+        if (p?.role === "狼王") wolfKingShoot = false;
       }
 
-      if (finalPoisonTarget) {
-        if (!deaths.includes(finalPoisonTarget)) deaths.push(finalPoisonTarget);
-        const poisonedPlayer = gameState.players.find(p => p.seat === finalPoisonTarget);
-        if (poisonedPlayer) {
-          if (poisonedPlayer.role === "獵人") hunterCanShoot = false;
-          if (poisonedPlayer.role === "狼王") wolfKingCanShoot = false;
+      if (finalDream) {
+        if (gameState.nightMemory.dreamerLastTarget === finalDream) {
+          if (!deaths.includes(finalDream)) deaths.push(finalDream);
+          const p = gameState.players.find(x => x.seat === finalDream);
+          if (p?.role === "獵人") hunterShoot = false;
         }
       }
 
-      if (finalDreamerTarget) {
-        if (gameState.nightMemory.dreamerLastTarget === finalDreamerTarget) {
-          if (!deaths.includes(finalDreamerTarget)) deaths.push(finalDreamerTarget);
-          const dreamtPlayer = gameState.players.find(p => p.seat === finalDreamerTarget);
-          if (dreamtPlayer && dreamtPlayer.role === "獵人") hunterCanShoot = false;
-        }
-      }
-
-      gameState.nightMemory.guardLastTarget = guardTarget || null;
-      gameState.nightMemory.dreamerLastTarget = dreamerTarget || null;
+      gameState.nightMemory.guardLastTarget = guardT || null;
+      gameState.nightMemory.dreamerLastTarget = dreamT || null;
       if (antidoteUsedThisNight) gameState.nightMemory.witchAntidoteUsed = true;
-      if (rawPoisonTarget) gameState.nightMemory.witchPoisonUsed = true;
+      if (rawPoi) gameState.nightMemory.witchPoisonUsed = true;
 
-      deaths.forEach(seat => {
-        const p = gameState.players.find(x => x.seat === seat);
+      deaths.forEach(s => {
+        const p = gameState.players.find(x => x.seat === s);
         if (p) p.isAlive = false;
       });
 
-      const deadHunter = gameState.players.find(p => p.role === "獵人" && deaths.includes(p.seat));
-      const deadWolfKing = gameState.players.find(p => p.role === "狼王" && deaths.includes(p.seat));
+      const deadH = gameState.players.find(p => p.role === "獵人" && deaths.includes(p.seat));
+      const deadWk = gameState.players.find(p => p.role === "狼王" && deaths.includes(p.seat));
 
-      if (deadHunter && hunterCanShoot) {
-        triggerGunAction("獵人", deadHunter.seat);
-      } else if (deadWolfKing && wolfKingCanShoot) {
-        triggerGunAction("狼王", deadWolfKing.seat);
-      }
+      if (deadH && hunterShoot) triggerGunAction("獵人", deadH.seat);
+      else if (deadWk && wolfKingShoot) triggerGunAction("狼王", deadWk.seat);
 
       updateCounts();
 
@@ -1082,8 +1049,8 @@
       const targetSeat = parseInt(document.getElementById("hunterTarget").value);
       if (!targetSeat) return;
       const target = gameState.players.find(p => p.seat === targetSeat);
-      target.isAlive = false;
-      alert(`💥 開槍技能發動，帶走了 ${targetSeat} 號 (${target.name || ''})！`);
+      if (target) target.isAlive = false;
+      alert(`💥 開槍技能發動，帶走了 ${targetSeat} 號！`);
       document.getElementById("hunterActionBox").classList.add("hidden");
       updateCounts();
       setupDayVoting();
@@ -1190,17 +1157,14 @@
       const exiledPlayer = gameState.players.find(p => p.seat === exiledSeat);
       gameState.lastExiledPlayer = exiledPlayer;
 
-      if (exiledPlayer.role === "白痴") {
+      if (exiledPlayer?.role === "白痴") {
         alert(`🔔 ${exiledSeat} 號為白痴，觸發翻牌免死技能！保留發言權，拔除投票權。`);
-      } else {
+      } else if (exiledPlayer) {
         exiledPlayer.isAlive = false;
         alert(`❌ ${exiledSeat} 號玩家 (${exiledPlayer.name || ''}) 被公投放逐出局！`);
         
-        if (exiledPlayer.role === "獵人") {
-          triggerGunAction("獵人", exiledPlayer.seat);
-        } else if (exiledPlayer.role === "狼王") {
-          triggerGunAction("狼王", exiledPlayer.seat);
-        }
+        if (exiledPlayer.role === "獵人") triggerGunAction("獵人", exiledPlayer.seat);
+        else if (exiledPlayer.role === "狼王") triggerGunAction("狼王", exiledPlayer.seat);
       }
 
       updateCounts();
@@ -1263,14 +1227,12 @@
     }
 
     function abandonMatch() {
-      const step1 = confirm("🚨 確定要將本局判定為【流局（抄掉）】嗎？\n\n注意：此操作將直接作廢對局，且「絕不會」將任何勝負或天梯積分寫入資料庫！");
-      if (!step1) return;
-      const step2 = confirm("⚠️ 再次確認：真的要強制作廢並重置目前對局嗎？\n（點擊確定後對局立即清空歸零）");
-      if (!step2) return;
+      if (!confirm("🚨 確定要將本局判定為【流局（抄掉）】嗎？")) return;
+      if (!confirm("⚠️ 再次確認：真的要強制作廢並重置目前對局嗎？")) return;
 
       resetGameStateData();
       initSeats();
-      alert("🛑 本局已判定作廢（流局），所有狀態已重置為初始配置，未產生任何數據紀錄。");
+      alert("🛑 本局已判定作廢（流局），所有狀態已重置為初始配置。");
     }
 
     function resetMatch() {
@@ -1307,22 +1269,18 @@
       document.getElementById("nightPanel").classList.remove("hidden");
       document.getElementById("roundBadge").innerText = "第 1 夜";
       
-      const statusText = document.getElementById("gameStatusText");
-      const statusTextDesk = document.getElementById("gameStatusTextDesk");
-      if (statusText) {
-        statusText.innerText = "進行中";
-        statusText.className = "text-emerald-400 font-bold";
-      }
-      if (statusTextDesk) {
-        statusTextDesk.innerText = "進行中";
-        statusTextDesk.className = "text-sm ml-1 text-emerald-400 font-bold";
-      }
+      const s1 = document.getElementById("gameStatusText");
+      const s2 = document.getElementById("gameStatusTextDesk");
+      if (s1) { s1.innerText = "進行中"; s1.className = "text-emerald-400 font-bold"; }
+      if (s2) { s2.innerText = "進行中"; s2.className = "text-sm ml-1 text-emerald-400 font-bold"; }
     }
 
-    // 啟動入口：DOMContentLoaded 確保 DOM 與外部腳本皆就緒
-    document.addEventListener("DOMContentLoaded", () => {
+    // 雙重保險啟動器：確保 DOM 載入後立即執行
+    if (document.readyState === 'loading') {
+      document.addEventListener("DOMContentLoaded", initBoardSelector);
+    } else {
       initBoardSelector();
-    });
+    }
   </script>
 </body>
 </html>
