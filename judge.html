@@ -17,7 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <!-- 引入規則大腦與獨立設定檔 (加入時間戳參數破除瀏覽器快取) -->
-  <script src="rules_config.js?v=20261015_patch_v2"></script>
+  <script src="rules_config.js?v=20261015_patch_v3"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -237,7 +237,7 @@
         <!-- 動態夜間卡片容器 (依板型動態生成) -->
         <div class="space-y-2 text-xs" id="nightActionsContainer"></div>
 
-        <div class="mt-3 pt-2.5 border-t border-gray-800 flex justify-end">
+        <div class="mt-3 pt-2.5 border-t border-gray-800 flex justify-end" id="nightBottomActionArea">
           <button onclick="resolveNight()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-xs shadow flex items-center justify-center gap-1.5 transition">
             <i class="fa-solid fa-sun text-amber-300"></i> 天亮結算死訊 (同步公播) ➔
           </button>
@@ -257,7 +257,7 @@
           </span>
         </div>
 
-        <!-- 獵人/狼王出局開槍提示區 (出局自動觸發)[cite: 1] -->
+        <!-- 獵人/狼王出局開槍提示區 -->
         <div id="hunterActionBox" class="hidden p-2.5 bg-amber-950/40 border border-amber-600/80 rounded-lg text-xs">
           <div class="font-bold text-amber-300 mb-1 flex items-center gap-1">
             <i class="fa-solid fa-crosshairs"></i> <span id="gunTriggerTitle">觸發出局開槍技能：</span>
@@ -388,7 +388,7 @@
         <!-- 白天底端流程切換 -->
         <div class="pt-2 border-t border-gray-800 flex justify-between items-center">
           <button onclick="backToNight()" class="text-xs text-gray-400 hover:text-white underline">
-            ↩ 返回上一夜查看行動
+            ↩ 返回夜間模式
           </button>
           <button onclick="enterNextNight()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-5 rounded-lg text-xs shadow transition flex items-center gap-1.5">
             進入下一個夜晚 ➔
@@ -791,7 +791,6 @@
     function confirmSetup() {
       const checkResult = checkSeatDuplicates();
 
-      // 強制同步所有席位下拉選單的值，確保型別與身分完全對齊
       for (let i = 1; i <= 12; i++) {
         const selRole = document.getElementById(`roleSelect-${i}`)?.value;
         const selName = document.getElementById(`userSelect-${i}`)?.value;
@@ -893,22 +892,22 @@
       if (!container || !config) return;
       container.innerHTML = "";
 
-      // 判斷該夜是否已被封存（唯讀模式）
-      const isLockedNight = !!(gameState.nightHistory && gameState.nightHistory[gameState.round]);
-      const savedSnapshot = isLockedNight ? gameState.nightHistory[gameState.round] : null;
+      const currentRound = Number(gameState.round) || 1;
+      const isLockedNight = !!(gameState.nightHistory && gameState.nightHistory[currentRound]);
+      const savedSnapshot = isLockedNight ? gameState.nightHistory[currentRound] : null;
 
       const nightHint = document.getElementById("nightPhaseHint");
       if (nightHint) {
         if (isLockedNight) {
-          nightHint.innerText = "🔒 歷史記錄 (已天亮封存，僅供查看不可編輯)";
+          nightHint.innerText = `🔒 第 ${currentRound} 夜歷史記錄 (已天亮封存，僅供查看)`;
           nightHint.className = "text-[10px] text-rose-400 font-mono font-bold";
         } else {
-          nightHint.innerText = "請照順序喚醒確認";
+          nightHint.innerText = `第 ${currentRound} 夜行動中 (請照順序喚醒確認)`;
           nightHint.className = "text-[10px] text-amber-400 font-mono";
         }
       }
 
-      const script = (gameState.round === 1) ? config.firstNightOrder : config.repeatingNightOrder;
+      const script = (currentRound === 1) ? config.firstNightOrder : config.repeatingNightOrder;
       if (!script) return;
 
       let alive = gameState.players.filter(p => p.isAlive);
@@ -971,8 +970,6 @@
             </div>
           `;
         } else if (step.id === "magician") {
-          const sA = savedSnapshot ? savedSnapshot.inputs.swapPair[0] : "";
-          const sB = savedSnapshot ? savedSnapshot.inputs.swapPair[1] : "";
           bodyHtml = `
             <div class="grid grid-cols-2 gap-2">
               <div class="flex items-center gap-1">
@@ -992,8 +989,7 @@
             </div>
           `;
         } else if (step.id === "witch") {
-          const antUsed = isLockedNight ? savedSnapshot.inputs.antidoteUsed : gameState.nightMemory.witchAntidoteUsed;
-          const poiVal = isLockedNight ? savedSnapshot.inputs.rawPoisonTarget : "";
+          const antUsed = isLockedNight ? !!savedSnapshot.inputs.antidoteUsed : !!gameState.nightMemory.witchAntidoteUsed;
           bodyHtml = `
             <div class="flex justify-between items-center mb-1">
               <span class="text-[10px] text-amber-400 font-mono font-bold" id="witchRawKillHint">原始刀口：等待落刀</span>
@@ -1106,10 +1102,10 @@
       }
 
       // 控制底部結算按鈕顯示/隱藏
-      const resolveBtnContainer = document.querySelector("#nightPanel button[onclick='resolveNight()']")?.parentElement;
-      if (resolveBtnContainer) {
+      const bottomArea = document.getElementById("nightBottomActionArea");
+      if (bottomArea) {
         if (isLockedNight) {
-          resolveBtnContainer.innerHTML = `
+          bottomArea.innerHTML = `
             <div class="w-full flex justify-between items-center p-2 rounded bg-gray-800/80 border border-gray-700">
               <span class="text-xs text-rose-300 font-bold">🔒 本夜已封存（死訊：${savedSnapshot ? savedSnapshot.summaryText : ''}）</span>
               <button onclick="returnToDayStage()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-1 px-3 rounded text-xs transition">
@@ -1118,7 +1114,7 @@
             </div>
           `;
         } else {
-          resolveBtnContainer.innerHTML = `
+          bottomArea.innerHTML = `
             <button onclick="resolveNight()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-xs shadow flex items-center justify-center gap-1.5 transition">
               <i class="fa-solid fa-sun text-amber-300"></i> 天亮結算死訊 (同步公播) ➔
             </button>
@@ -1131,7 +1127,7 @@
     }
 
     function returnToDayStage() {
-      gameState.phase = (gameState.day === 1 && !gameState.policeSeat && !gameState.isBadgeTorn) 
+      gameState.phase = (Number(gameState.day) === 1 && !gameState.policeSeat && !gameState.isBadgeTorn) 
         ? "POLICE_ELECTION" 
         : "DAY_EXILE";
       renderAllViews();
@@ -1164,7 +1160,6 @@
       refreshAllRuleDisplays();
     }
 
-    // 完整修復：女巫一律不可自救判定
     function toggleAntidote() {
       if (gameState.nightMemory.witchAntidoteUsed) return;
 
@@ -1174,7 +1169,6 @@
                      document.querySelector("select[id^='target-wolf']");
       const rawWolfTarget = Number(wolfEl?.value || 0);
 
-      // 當狼刀指向女巫本人時，阻擋開解藥
       if (!antidoteUsedThisNight && witch && rawWolfTarget === Number(witch.seat)) {
         alert("⚠️ 本局規則：女巫一律不可自救！");
         return;
@@ -1216,7 +1210,7 @@
         }
       }
 
-      // 2. 狼刀命中女巫：紅底警戒樣式與按鈕鎖定
+      // 2. 狼刀命中女巫紅底防自救
       const witchCard = document.getElementById("action-card-witch");
       const wolfEl = document.getElementById('target-wolf') || 
                      document.getElementById('target-wolf_team_confirm') ||
@@ -1230,7 +1224,6 @@
         const antBtn = document.getElementById("antidoteBtn");
 
         if (isWitchTargeted) {
-          // 命中女巫：套用紅底警示樣式（同獵人欄位的警告風格）
           witchCard.classList.remove("bg-gray-800/70", "border-gray-700");
           witchCard.classList.add("bg-rose-950/40", "border-rose-600/80");
 
@@ -1243,7 +1236,6 @@
             antBtn.className = "bg-gray-800 text-rose-400/60 border border-rose-900/50 text-[11px] px-2 py-0.5 rounded cursor-not-allowed";
           }
         } else {
-          // 未命中女巫：還原一般樣式
           witchCard.classList.remove("bg-rose-950/40", "border-rose-600/80");
           witchCard.classList.add("bg-gray-800/70", "border-gray-700");
 
@@ -1281,8 +1273,8 @@
     // 7. 天亮死訊結算
     // ==========================================
     function resolveNight() {
-      // 1. 防呆確認彈窗
-      const confirmMsg = `☀️ 確定要結算第 ${gameState.round} 夜死訊並進入白天嗎？\n\n⚠️ 天亮後，第 ${gameState.round} 夜的所有操作內容將被鎖定封存，不可再修改！`;
+      const curRound = Number(gameState.round) || 1;
+      const confirmMsg = `☀️ 確定要結算第 ${curRound} 夜死訊並進入白天嗎？\n\n⚠️ 天亮後，第 ${curRound} 夜的所有操作內容將被鎖定封存！`;
       if (!confirm(confirmMsg)) return;
 
       const wolfEl = document.getElementById('target-wolf') || 
@@ -1309,10 +1301,9 @@
 
       const nResult = RULES_ENGINE.resolveNight(inputs, gameState.nightMemory);
 
-      // 2. 封存本夜所有操作快照 (供日後唯讀回顧)
       if (!gameState.nightHistory) gameState.nightHistory = {};
-      gameState.nightHistory[gameState.round] = {
-        round: gameState.round,
+      gameState.nightHistory[curRound] = {
+        round: curRound,
         inputs: JSON.parse(JSON.stringify(inputs)),
         seerTarget: Number(seerEl?.value || 0) || 0,
         deaths: [...nResult.deaths],
@@ -1337,7 +1328,7 @@
         triggerGunAction("狼王", deadWolfKing.seat);
       }
 
-      gameState.day = gameState.round;
+      gameState.day = curRound;
 
       if (gameState.day === 1 && !gameState.policeSeat && !gameState.isBadgeTorn) {
         gameState.phase = "POLICE_ELECTION";
@@ -1672,6 +1663,7 @@
       });
     }
 
+    // 核心修復：放逐確認後彈窗提示直接推進夜間
     function confirmExileVote() {
       const eResult = RULES_ENGINE.resolveExileVote(
         gameState.tempVotes,
@@ -1727,7 +1719,13 @@
       checkPoliceBadgeStatus();
       pushStateToFirebase(`放逐結算：${badgeText}`);
       renderAllViews();
-      alert(`✅ 第 ${gameState.day} 天放逐票型已同步封存至公播！\n${badgeText}`);
+
+      setTimeout(() => {
+        const nextRound = (Number(gameState.round) || 1) + 1;
+        if (confirm(`✅ 第 ${gameState.day} 天放逐票型已同步封存至公播！\n${badgeText}\n\n是否立即天黑，進入【第 ${nextRound} 夜】行動？`)) {
+          enterNextNight();
+        }
+      }, 250);
     }
 
     function handlePrinceReversal() {
@@ -1798,7 +1796,7 @@
       pushStateToFirebase(`💥 ${seat} 號狼人白天自爆出局`);
       renderAllViews();
 
-      if (confirm(`💥 ${seat} 號已自爆出局！是否直接切入第 ${gameState.round + 1} 夜？`)) enterNextNight();
+      if (confirm(`💥 ${seat} 號已自爆出局！是否直接切入第 ${Number(gameState.round || 1) + 1} 夜？`)) enterNextNight();
     }
 
     function handleDaySkillKill() {
@@ -1897,7 +1895,8 @@
     // 10. 推進下個夜晚 / 流局 / 重置
     // ==========================================
     function enterNextNight() {
-      gameState.round += 1;
+      gameState.round = (Number(gameState.round) || 1) + 1;
+      gameState.day = gameState.round;
       gameState.phase = "NIGHT";
       gameState.tempVotes = {};
       gameState.selectedTarget = null;
@@ -1908,7 +1907,6 @@
     }
 
     function backToNight() {
-      // 切換回前一夜檢視模式
       gameState.phase = "NIGHT";
       renderAllViews();
     }
