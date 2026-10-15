@@ -1011,19 +1011,30 @@
             </div>
           `;
         } else if (step.id === "black_market") {
+          // 找出黑市商人席位，過濾排除自己（不能送自己禮物）
+          const bmPlayer = gameState.players.find(p => p.role === "黑市商人");
+          const bmSeat = bmPlayer ? Number(bmPlayer.seat) : 0;
+          const giftRecipientOptions = gameState.players
+            .filter(p => Number(p.seat) !== bmSeat)
+            .map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || '未指派'}</option>`)
+            .join('');
+
           bodyHtml = `
             <div class="space-y-1.5 bg-gray-900/60 p-2 rounded">
+              <div class="text-[10px] text-amber-300 font-bold mb-1">
+                🎁 選擇三位幸運兒 (不可選擇自己)：
+              </div>
               <div class="flex items-center justify-between">
                 <span>🔮 查驗幸運兒：</span>
-                <select id="giftSeer" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${allPlayersOptions}</select>
+                <select id="giftSeer" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${giftRecipientOptions}</select>
               </div>
               <div class="flex items-center justify-between">
                 <span>🧪 毒藥幸運兒：</span>
-                <select id="giftPoison" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${allPlayersOptions}</select>
+                <select id="giftPoison" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${giftRecipientOptions}</select>
               </div>
               <div class="flex items-center justify-between">
                 <span>🔫 獵槍幸運兒：</span>
-                <select id="giftGun" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${allPlayersOptions}</select>
+                <select id="giftGun" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${giftRecipientOptions}</select>
               </div>
             </div>
           `;
