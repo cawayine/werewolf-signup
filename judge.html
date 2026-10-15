@@ -281,7 +281,6 @@
       const config = BOARD_DATABASE[currentBoardKey];
       document.getElementById("currentBoardLabel").innerText = config.name;
       initSeats();
-      renderNightPanel(); // 切換板型時同步渲染夜間引導
     }
 
     function checkSeatDuplicates() {
@@ -452,20 +451,14 @@
     function renderNightPanel() {
       const config = BOARD_DATABASE[currentBoardKey];
       const container = document.getElementById("nightActionsContainer");
-      if (!container || !config) return;
       container.innerHTML = "";
 
       const script = (gameState.round === 1) ? config.firstNightOrder : config.repeatingNightOrder;
       if (!script) return;
 
-      // 名單防空保護：開局前若無存活名單，預設以 12 席作為選項來源
-      let alive = gameState.players.filter(p => p.isAlive);
-      if (alive.length === 0 && gameState.players.length > 0) {
-        alive = gameState.players;
-      }
-
-      const aliveOptions = alive.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || '未指派'}</option>`).join('');
-      const allPlayersOptions = gameState.players.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || '未指派'}</option>`).join('');
+      const alive = gameState.players.filter(p => p.isAlive);
+      const aliveOptions = alive.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name}</option>`).join('');
+      const allPlayersOptions = gameState.players.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name}</option>`).join('');
 
       script.forEach(step => {
         const card = document.createElement("div");
@@ -488,10 +481,10 @@
           let targetPlayerDesc = "確認目標";
           if (step.role === "白痴" || step.role === "騎士" || step.role === "守墓人") {
             const p = gameState.players.find(x => x.role === step.role);
-            targetPlayerDesc = p ? `${p.seat}號 ${p.name || ''}` : "未指派";
+            targetPlayerDesc = p ? `${p.seat}號 ${p.name}` : "無指派";
           } else if (step.id === "wolf_brothers_confirm") {
             const b = gameState.players.filter(x => x.role === "狼兄" || x.role === "狼弟");
-            targetPlayerDesc = b.length > 0 ? b.map(x => `${x.seat}號(${x.role})`).join('、') : "未指派";
+            targetPlayerDesc = b.map(x => `${x.seat}號(${x.role})`).join('、');
           }
 
           card.innerHTML = `
@@ -560,7 +553,7 @@
           let badgeClass = "bg-gray-800 text-gray-400";
           if (lastExile) {
             const isWolf = (lastExile.seatType === "WEREWOLF");
-            infoText = `昨日放逐 ${lastExile.seat}號(${lastExile.name || ''})：【${isWolf ? '狼人陣營' : '好人陣營'}】`;
+            infoText = `昨日放逐 ${lastExile.seat}號(${lastExile.name})：【${isWolf ? '狼人陣營' : '好人陣營'}】`;
             badgeClass = isWolf ? "bg-rose-950 text-rose-300 border border-rose-600" : "bg-blue-950 text-blue-300 border border-blue-600";
           }
           card.innerHTML = `
@@ -589,7 +582,7 @@
                   <option value="">空守 (不守護任何人)</option>
                   ${alive.map(p => {
                     const isLast = (p.seat === lastTarget);
-                    return `<option value="\${p.seat}" ${isLast ? 'disabled' : ''}>${p.seat}號 - ${p.name \vert{}\vert{} ''}${isLast ? '(昨晚已守)' : ''}</option>`;
+                    return `<option value="\${p.seat}" ${isLast ? 'disabled' : ''}>${p.seat}號 - ${p.name}${isLast ? '(昨晚已守)' : ''}</option>`;
                   }).join('')}
                 </select>
               </div>
@@ -607,7 +600,7 @@
                   <option value="">不恐懼</option>
                   ${alive.filter(p => !nightmarePlayer || p.seat !== nightmarePlayer.seat).map(p => {
                     const isLast = (p.seat === lastTarget);
-                    return `<option value="\${p.seat}" ${isLast ? 'disabled' : ''}>${p.seat}號 - ${p.name \vert{}\vert{} ''}${isLast ? '(昨晚已恐)' : ''}</option>`;
+                    return `<option value="\${p.seat}" ${isLast ? 'disabled' : ''}>${p.seat}號 - ${p.name}${isLast ? '(昨晚已恐)' : ''}</option>`;
                   }).join('')}
                 </select>
               </div>
@@ -624,7 +617,7 @@
                   <option value="">選擇夢遊玩家</option>
                   ${alive.filter(p => !dreamerPlayer || p.seat !== dreamerPlayer.seat).map(p => {
                     const isLast = (p.seat === gameState.nightMemory.dreamerLastTarget);
-                    return `<option value="${p.seat}">${p.seat}號 - ${p.name \vert{}\vert{} ''}${isLast ? '(連夢死亡⚠️)' : ''}</option>`;
+                    return `<option value="${p.seat}">${p.seat}號 - ${p.name}${isLast ? '(連夢死亡⚠️)' : ''}</option>`;
                   }).join('')}
                 </select>
               </div>
@@ -886,6 +879,7 @@
       const wolfKing = gameState.players.find(p => p.role === "狼王");
       const wolfKingBadge = document.getElementById("gesture-badge-wolf_king_gesture");
       if (wolfKing && wolfKingBadge) {
+        // 魔術師換位換算
         let actualPoisonTarget = poisonTarget;
         const magA = parseInt(document.getElementById("magicianTargetA")?.value || 0);
         const magB = parseInt(document.getElementById("magicianTargetB")?.value || 0);
@@ -1066,7 +1060,7 @@
       title.innerText = `${shooterSeat}號【${roleName}】出局觸發開槍技能：`;
       const alive = gameState.players.filter(p => p.isAlive);
       document.getElementById("hunterTarget").innerHTML = `<option value="">請選擇帶走對象</option>` +
-        alive.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name || ''}</option>`).join('');
+        alive.map(p => `<option value="${p.seat}">${p.seat}號 - ${p.name}</option>`).join('');
     }
 
     function applyHunterShot() {
@@ -1074,7 +1068,7 @@
       if (!targetSeat) return;
       const target = gameState.players.find(p => p.seat === targetSeat);
       target.isAlive = false;
-      alert(`💥 開槍技能發動，帶走了 ${targetSeat} 號 (${target.name || ''})！`);
+      alert(`💥 開槍技能發動，帶走了 ${targetSeat} 號 (${target.name})！`);
       document.getElementById("hunterActionBox").classList.add("hidden");
       updateCounts();
       setupDayVoting();
@@ -1185,7 +1179,7 @@
         alert(`🔔 ${exiledSeat} 號為白痴，觸發翻牌免死技能！保留發言權，拔除投票權。`);
       } else {
         exiledPlayer.isAlive = false;
-        alert(`❌ ${exiledSeat} 號玩家 (${exiledPlayer.name || ''}) 被公投放逐出局！`);
+        alert(`❌ ${exiledSeat} 號玩家 (${exiledPlayer.name}) 被公投放逐出局！`);
         
         // 放逐開槍判定 (獵人 / 狼王)
         if (exiledPlayer.role === "獵人") {
