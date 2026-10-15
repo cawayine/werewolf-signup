@@ -1203,6 +1203,8 @@
                      document.querySelector("select[id^='target-wolf']");
       const inputs = {
         rawWolfTarget: Number(wolfEl?.value || 0) || 0,
+        // 抓取狼弟覺醒單獨刀目標 (相容超級黑商等狼兄弟板型)
+        youngWolfSoloTarget: Number(document.getElementById("target-wolf_younger_solo")?.value || 0) || 0,
         rawPoisonTarget: Number(document.getElementById("poisonTarget")?.value || 0) || 0,
         guardTarget: Number(document.getElementById("target-guard")?.value || 0) || 0,
         antidoteUsed: antidoteUsedThisNight,
@@ -1232,6 +1234,7 @@
         triggerGunAction("狼王", deadWolfKing.seat);
       }
 
+      // 天亮時對齊天數
       gameState.day = gameState.round;
 
       if (gameState.day === 1 && !gameState.policeSeat && !gameState.isBadgeTorn) {
