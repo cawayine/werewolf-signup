@@ -490,9 +490,15 @@
       btnPrince.innerText = `👑 定序王子：${isPrc ? '開' : '關'}`;
       btnPrince.className = `px-2.5 py-1 rounded text-xs font-bold border transition ${isPrc ? 'bg-amber-900 border-amber-400 text-amber-200' : 'bg-gray-800 text-gray-400 border-gray-700'}`;
 
-      if (gameState.phase === "NIGHT" || gameState.phase === "SETUP") {
+     if (gameState.phase === "NIGHT" || gameState.phase === "SETUP") {
         document.getElementById("nightPanel").classList.remove("hidden");
         document.getElementById("dayPanel").classList.add("hidden");
+        
+        // 若為 SETUP 狀態，確保開局面板展開
+        if (gameState.phase === "SETUP") {
+          document.getElementById("setupPanel")?.setAttribute("open", "true");
+        }
+        
         renderNightPanel();
       } else {
         document.getElementById("nightPanel").classList.add("hidden");
@@ -1475,19 +1481,39 @@
     }
 
     function abandonMatch() {
-      if (!confirm("🚨 確定要將本局判定為【流局（抄掉）】嗎？")) return;
-      gameState = RULES_ENGINE.createInitialGameState();
-      initSeats();
-      pushStateToFirebase("本局已判定流局作廢");
-      renderAllViews();
+      if (!confirm("🚨 確定要將本局判定為【流局（抄掉）】嗎？此操作將作廢本局且不計入天梯積分！")) return;
+      executeResetWorkflow("本局已判定流局作廢");
       alert("🛑 本局已判定作廢，所有狀態已清空。");
     }
 
     function resetMatch() {
-      if (!confirm("確定要重置目前對局嗎？")) return;
+      if (!confirm("確定要重置目前對局嗎？所有雲端資料將歸零清空。")) return;
+      executeResetWorkflow("對局已手動重置");
+      alert("✅ 對局已重置回到開局配置狀態！");
+    }
+
+    // 統一封裝完整的重置流程
+    function executeResetWorkflow(summaryText) {
+      // 1. 回歸初始資料狀態
       gameState = RULES_ENGINE.createInitialGameState();
+      
+      // 2. 重新展開開局設定面板，並切回夜間/設定容器
+      const setupPanel = document.getElementById("setupPanel");
+      if (setupPanel) {
+        setupPanel.setAttribute("open", "true");
+      }
+      
+      document.getElementById("nightPanel").classList.remove("hidden");
+      document.getElementById("dayPanel").classList.add("hidden");
+      
+      // 3. 重新初始化座位與坑位
       initSeats();
-      pushStateToFirebase("對局已手動重置");
+
+      // 4. 重設用藥與暫存標記
+      antidoteUsedThisNight = false;
+
+      // 5. 同步至 Firebase 並全面重繪介面
+      pushStateToFirebase(summaryText);
       renderAllViews();
     }
 
