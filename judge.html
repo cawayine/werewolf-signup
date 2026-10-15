@@ -548,7 +548,8 @@
               const isLast = (p.seat === lastTarget);
               const disabledAttr = isLast ? 'disabled' : '';
               const lastNote = isLast ? ' (昨晚已選)' : '';
-              optionsHtml += `<option value="${p.seat}" ${disabledAttr}>${p.seat}號 - ${p.name || ''}${lastNote}</option>`;
+              const pName = p.name ? (' - ' + p.name) : '';
+              optionsHtml += '<option value="' + p.seat + '" ' + disabledAttr + '>' + p.seat + '號' + pName + lastNote + '</option>';
             });
           }
 
