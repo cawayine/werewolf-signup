@@ -17,7 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <!-- 引入規則大腦與獨立設定檔 (加入時間戳參數破除瀏覽器快取) -->
-  <script src="rules_config.js?v=20261015_patch_v3"></script>
+  <script src="rules_config.js?v=20261016_patch_v4"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -855,6 +855,7 @@
       }
     }
 
+    // 存活總覽點陣圖標：抽離字串拼接，解決反引號解析錯誤
     function renderLiveSeatsOverview() {
       const container = document.getElementById("liveSeatsOverviewGrid");
       container.innerHTML = gameState.players.map(p => {
@@ -1049,6 +1050,45 @@
               <div class="flex items-center justify-between">
                 <span>🔫 獵槍幸運兒：</span>
                 <select id="giftGun" ${isLockedNight ? 'disabled' : ''} class="w-36 rounded p-0.5 text-xs border ${isLockedNight ? 'opacity-60 cursor-not-allowed' : ''}"><option value="">選擇玩家</option>${giftRecipientOptions}</select>
+              </div>
+            </div>
+          `;
+        } else if (step.id === "gargoyle") {
+          // 覺醒石像鬼專屬：只能轉化與狼隊相鄰的好人
+          const wolfSeats = gameState.players
+            .filter(p => p.seatType === "WEREWOLF")
+            .map(p => Number(p.seat));
+
+          const neighborSeatsSet = new Set();
+          const totalSeats = gameState.players.length || 12;
+
+          wolfSeats.forEach(s => {
+            const left = s === 1 ? totalSeats : s - 1;
+            const right = s === totalSeats ? 1 : s + 1;
+            neighborSeatsSet.add(left);
+            neighborSeatsSet.add(right);
+          });
+
+          // 排除狼隊成員本身
+          wolfSeats.forEach(s => neighborSeatsSet.delete(s));
+
+          const eligibleSeats = Array.from(neighborSeatsSet).sort((a, b) => a - b);
+          const gargoyleOptions = eligibleSeats.map(s => {
+            const p = gameState.players.find(x => Number(x.seat) === s);
+            return `<option value="${s}">${s}號 - ${p ? (p.name || p.role) : ''}</option>`;
+          }).join('');
+
+          bodyHtml = `
+            <div class="space-y-1 bg-gray-900/60 p-2 rounded">
+              <div class="text-[10px] text-amber-300 font-bold mb-1">
+                🐺 狼隊成員：${wolfSeats.map(s => s + '號').join('、')} ➔ 合法相鄰目標：【${eligibleSeats.map(s => s + '號').join('、')}】
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400">轉化目標：</span>
+                <select id="target-gargoyle" ${isLockedNight ? 'disabled' : ''} class="flex-1 rounded p-1 text-xs border ${isLockedNight ? 'opacity-60 cursor-not-allowed' : ''}">
+                  <option value="">選擇相鄰玩家轉化</option>
+                  ${gargoyleOptions}
+                </select>
               </div>
             </div>
           `;
@@ -1667,7 +1707,6 @@
       });
     }
 
-    // 核心修復：放逐確認後彈窗提示直接推進夜間
     function confirmExileVote() {
       const eResult = RULES_ENGINE.resolveExileVote(
         gameState.tempVotes,
