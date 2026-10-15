@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <script src="https://cdn.jsdelivr.net/npm/eruda"></script> 
-  <script>eruda.init();</script>
   <meta charset="UTF-8">
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+  <script>eruda.init();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>基地狼人殺 - 上帝專屬記分台</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -446,7 +446,7 @@
     }
 
     // ========================================================
-    // 純粹由 inputSchema 驅動的夜間卡片渲染器 (Zero Role-Hardcoding)
+    // 純粹由 inputSchema 驅動的夜間卡片渲染器
     // ========================================================
     function renderNightPanel() {
       const config = BOARD_DATABASE[currentBoardKey];
@@ -478,7 +478,6 @@
         const schema = step.schema || {};
         let bodyHtml = "";
 
-        // Schema 1: CONFIRM_CARD (純確認身分)
         if (schema.type === "CONFIRM_CARD") {
           let desc = "未指派";
           if (step.role === "狼兄狼弟") {
@@ -496,22 +495,16 @@
               </button>
             </div>
           `;
-        }
-
-        // Schema 2: GESTURE_BADGE (動態手勢卡)
-        else if (schema.type === "GESTURE_BADGE") {
+        } else if (schema.type === "GESTURE_BADGE") {
           bodyHtml = `
             <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
               <span class="text-gray-300">給予手勢：</span>
               <span id="gesture-badge-${step.id}" class="bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold">
-                👍 狀態良好
+                👍 狀態良好 (可開槍)
               </span>
             </div>
           `;
-        }
-
-        // Schema 3: INFO_CARD (守墓人資訊卡)
-        else if (schema.type === "INFO_CARD") {
+        } else if (schema.type === "INFO_CARD") {
           const lastExile = gameState.lastExiledPlayer;
           let infoText = "昨日無放逐出局者";
           let badgeClass = "bg-gray-800 text-gray-400";
@@ -526,10 +519,7 @@
               <span class="${badgeClass} px-2 py-0.5 rounded font-bold">${infoText}</span>
             </div>
           `;
-        }
-
-        // Schema 4: SINGLE_TARGET (單選目標)
-        else if (schema.type === "SINGLE_TARGET") {
+        } else if (schema.type === "SINGLE_TARGET") {
           const pool = (schema.targetScope === "ALL") ? gameState.players : alive;
           const lastTarget = schema.preventConsecutive ? (gameState.nightMemory.guardLastTarget || gameState.nightMemory.nightmareLastTarget) : null;
           
@@ -541,9 +531,9 @@
 
           let optionsHtml = '';
           if (isDisabled) {
-            optionsHtml = `<option value="">${schema.conditionalRoleDead}尚未出局 (不可單砍)</option>`;
+            optionsHtml = '<option value="">' + schema.conditionalRoleDead + '尚未出局 (不可單砍)</option>';
           } else {
-            optionsHtml = `<option value="">${schema.placeholder || '請選擇'}</option>`;
+            optionsHtml = '<option value="">' + (schema.placeholder || '請選擇') + '</option>';
             pool.forEach(p => {
               const isLast = (p.seat === lastTarget);
               const disabledAttr = isLast ? 'disabled' : '';
@@ -561,10 +551,7 @@
               </select>
             </div>
           `;
-        }
-
-        // Schema 5: SWAP_TARGETS (雙選換位：魔術師)
-        else if (schema.type === "SWAP_TARGETS") {
+        } else if (schema.type === "SWAP_TARGETS") {
           bodyHtml = `
             <div class="grid grid-cols-2 gap-2">
               <div class="flex items-center gap-1">
@@ -583,10 +570,7 @@
               </div>
             </div>
           `;
-        }
-
-        // Schema 6: WITCH_POTIONS (女巫雙藥)
-        else if (schema.type === "WITCH_POTIONS") {
+        } else if (schema.type === "WITCH_POTIONS") {
           const antUsed = gameState.nightMemory.witchAntidoteUsed;
           const poiUsed = gameState.nightMemory.witchPoisonUsed;
           bodyHtml = `
@@ -609,10 +593,7 @@
               </div>
             </div>
           `;
-        }
-
-        // Schema 7: SEER_CHECK (查驗)
-        else if (schema.type === "SEER_CHECK") {
+        } else if (schema.type === "SEER_CHECK") {
           bodyHtml = `
             <div class="flex items-center gap-2">
               <span class="text-gray-400">查驗目標：</span>
@@ -625,10 +606,7 @@
               </span>
             </div>
           `;
-        }
-
-        // Schema 8: THREE_GIFTS (黑商三禮物)
-        else if (schema.type === "THREE_GIFTS") {
+        } else if (schema.type === "THREE_GIFTS") {
           bodyHtml = `
             <div class="space-y-1.5 bg-gray-900/60 p-2 rounded">
               <div class="flex items-center justify-between">
@@ -659,7 +637,11 @@
       });
 
       antidoteUsedThisNight = false;
-      refreshAllRuleDisplays();
+      try {
+        refreshAllRuleDisplays();
+      } catch (e) {
+        console.warn("初始狀態跳過即時計算:", e);
+      }
     }
 
     function markStepDone(stepId) {
@@ -703,15 +685,15 @@
 
     // 將所有即時計算統一委託給 RULES_ENGINE
     function refreshAllRuleDisplays() {
-      if (typeof RULES_ENGINE === 'undefined') return;
+      if (typeof RULES_ENGINE === 'undefined' || !gameState.players || gameState.players.length === 0) return;
 
       const swapPair = [
-        parseInt(document.getElementById("swapTargetA")?.value || 0),
-        parseInt(document.getElementById("swapTargetB")?.value || 0)
+        parseInt(document.getElementById("swapTargetA")?.value || 0) || 0,
+        parseInt(document.getElementById("swapTargetB")?.value || 0) || 0
       ];
 
       // 1. 預言家查驗反饋
-      const seerSeat = parseInt(document.getElementById("seerTarget")?.value || 0);
+      const seerSeat = parseInt(document.getElementById("seerTarget")?.value || 0) || 0;
       const seerBadge = document.getElementById("seerResultBadge");
       if (seerBadge) {
         const checkRes = RULES_ENGINE.resolveCheck(seerSeat, swapPair, gameState.players);
@@ -723,9 +705,9 @@
 
       // 2. 評估所有手勢卡片
       const context = {
-        rawPoisonTarget: parseInt(document.getElementById("poisonTarget")?.value || 0),
+        rawPoisonTarget: parseInt(document.getElementById("poisonTarget")?.value || 0) || 0,
         swapPair: swapPair,
-        dreamerTarget: parseInt(document.getElementById("target-dreamer")?.value || 0),
+        dreamerTarget: parseInt(document.getElementById("target-dreamer")?.value || 0) || 0,
         lastDreamerTarget: gameState.nightMemory.dreamerLastTarget,
         players: gameState.players,
         blackMarketTransformedWolf: gameState.nightMemory.blackMarketTransformedWolf
@@ -752,35 +734,32 @@
       const wolfEl = document.getElementById('target-wolf') || document.getElementById('target-wolf_team_confirm');
       
       const inputs = {
-        rawWolfTarget: parseInt(wolfEl?.value || 0),
-        rawPoisonTarget: parseInt(document.getElementById("poisonTarget")?.value || 0),
-        guardTarget: parseInt(document.getElementById("target-guard")?.value || 0),
-        dreamerTarget: parseInt(document.getElementById("target-dreamer")?.value || 0),
-        youngWolfSolo: parseInt(document.getElementById("target-wolf_younger_solo")?.value || 0),
-        hybridTarget: parseInt(document.getElementById("target-hybrid")?.value || 0),
-        gargoyleTarget: parseInt(document.getElementById("target-gargoyle")?.value || 0),
+        rawWolfTarget: parseInt(wolfEl?.value || 0) || 0,
+        rawPoisonTarget: parseInt(document.getElementById("poisonTarget")?.value || 0) || 0,
+        guardTarget: parseInt(document.getElementById("target-guard")?.value || 0) || 0,
+        dreamerTarget: parseInt(document.getElementById("target-dreamer")?.value || 0) || 0,
+        youngWolfSolo: parseInt(document.getElementById("target-wolf_younger_solo")?.value || 0) || 0,
+        hybridTarget: parseInt(document.getElementById("target-hybrid")?.value || 0) || 0,
+        gargoyleTarget: parseInt(document.getElementById("target-gargoyle")?.value || 0) || 0,
         swapPair: [
-          parseInt(document.getElementById("swapTargetA")?.value || 0),
-          parseInt(document.getElementById("swapTargetB")?.value || 0)
+          parseInt(document.getElementById("swapTargetA")?.value || 0) || 0,
+          parseInt(document.getElementById("swapTargetB")?.value || 0) || 0
         ],
         blackMarketGifts: {
-          seer: parseInt(document.getElementById("giftSeer")?.value || 0),
-          poison: parseInt(document.getElementById("giftPoison")?.value || 0),
-          gun: parseInt(document.getElementById("giftGun")?.value || 0)
+          seer: parseInt(document.getElementById("giftSeer")?.value || 0) || 0,
+          poison: parseInt(document.getElementById("giftPoison")?.value || 0) || 0,
+          gun: parseInt(document.getElementById("giftGun")?.value || 0) || 0
         },
         antidoteUsed: antidoteUsedThisNight
       };
 
-      // 呼叫規則引擎取得裁決結果
       const result = RULES_ENGINE.resolveNight(inputs, gameState);
 
-      // UI 執行死訊標記
       result.deaths.forEach(seat => {
         const p = gameState.players.find(x => x.seat === seat);
         if (p) p.isAlive = false;
       });
 
-      // 出局開槍觸發提示
       const deadHunter = gameState.players.find(p => p.role === "獵人" && result.deaths.includes(p.seat));
       const deadWolfKing = gameState.players.find(p => p.role === "狼王" && result.deaths.includes(p.seat));
 
