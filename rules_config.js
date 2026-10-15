@@ -1,11 +1,8 @@
 /**
  * 基地狼人殺 - 規則與板型獨立設定檔 (rules_config.js)
- * 職責：角色屬性、板型腳本、UI InputSchema、規則裁決引擎 (RULES_ENGINE)
+ * 基準版本：全域規則引擎 + 板型動態 Schema
  */
 
-// ==========================================
-// 1. 全域裁決通則 (GLOBAL_RULES)
-// ==========================================
 const GLOBAL_RULES = {
   witchWolfTieBreaker: "WEREWOLF_WIN",
   whiteWolfCheckResult: "WEREWOLF",
@@ -15,9 +12,6 @@ const GLOBAL_RULES = {
   swapAppliesAtResolution: true
 };
 
-// ==========================================
-// 2. 全域角色屬性字典 (ROLE_DEFINITIONS)
-// ==========================================
 const ROLE_DEFINITIONS = {
   "預言家": { seatType: "GOD", faction: "villager", canCheck: true, allowRepeatCheck: true },
   "女巫": { seatType: "GOD", faction: "villager", hasAntidote: true, hasPoison: true, canUseBothPotionsSameNight: false, canSelfHealFirstNight: false, hideKillInfoAfterAntidote: true },
@@ -56,29 +50,31 @@ const ROLE_DEFINITIONS = {
   "狼弟": { seatType: "WEREWOLF", faction: "werewolf" }
 };
 
-// ==========================================
-// 3. 全域規則裁決運算引擎 (RULES_ENGINE)
-// ==========================================
 const RULES_ENGINE = {
   // 魔術師換位映射
   getSwappedTarget(seat, swapPair) {
-    if (!seat || !swapPair || !swapPair[0] || !swapPair[1]) return seat;
-    const [magA, magB] = swapPair;
-    if (seat === magA) return magB;
-    if (seat === magB) return magA;
-    return seat;
+    const s = parseInt(seat) || 0;
+    if (!s || !swapPair || !Array.isArray(swapPair)) return s;
+    const magA = parseInt(swapPair[0]) || 0;
+    const magB = parseInt(swapPair[1]) || 0;
+    if (!magA || !magB) return s;
+    if (s === magA) return magB;
+    if (s === magB) return magA;
+    return s;
   },
 
   // 查驗陣營判定
   resolveCheck(rawTargetSeat, swapPair, players) {
-    if (!rawTargetSeat) return { isReady: false, text: "待查驗", isWolf: false, actualSeat: 0 };
-    const actualSeat = this.getSwappedTarget(rawTargetSeat, swapPair);
-    const targetPlayer = players.find(p => p.seat === actualSeat);
+    const s = parseInt(rawTargetSeat) || 0;
+    if (!s || !Array.isArray(players) || players.length === 0) {
+      return { isReady: false, text: "待查驗", isWolf: false, actualSeat: 0 };
+    }
+    const actualSeat = this.getSwappedTarget(s, swapPair);
+    const targetPlayer = players.find(p => p && p.seat === actualSeat);
     if (!targetPlayer) return { isReady: false, text: "目標不存在", isWolf: false, actualSeat: 0 };
 
-    const roleName = targetPlayer.role;
-    const isWolf = ["狼人", "狼王", "白狼王", "狼兄", "狼弟", "夢魘", "狼美人", "覺醒石像鬼"].includes(roleName);
-    const swapText = (actualSeat !== rawTargetSeat) ? ` (換至${actualSeat}號)` : "";
+    const isWolf = ["狼人", "狼王", "白狼王", "狼兄", "狼弟", "夢魘", "狼美人", "覺醒石像鬼"].includes(targetPlayer.role);
+    const swapText = (actualSeat !== s) ? ` (換至${actualSeat}號)` : "";
 
     return {
       isReady: true,
@@ -90,13 +86,17 @@ const RULES_ENGINE = {
 
   // 手勢即時動態求值
   evaluateGesture(gestureId, context) {
+    if (!context || !Array.isArray(context.players) || context.players.length === 0) {
+      return { text: "👍 狀態良好 (可開槍)", isPositive: true };
+    }
+
     const { rawPoisonTarget, swapPair, dreamerTarget, lastDreamerTarget, players, blackMarketTransformedWolf } = context;
     const actualPoisonTarget = this.getSwappedTarget(rawPoisonTarget, swapPair);
     const actualDreamerTarget = this.getSwappedTarget(dreamerTarget, swapPair);
 
-    // 獵人手勢
+    // 獵人手勢（比對魔術師換位後的實際目標）
     if (gestureId === "hunter_gesture") {
-      const hunter = players.find(p => p.role === "獵人");
+      const hunter = players.find(p => p && p.role === "獵人");
       if (!hunter) return { text: "無此角色", isPositive: false };
       const isPoisoned = (actualPoisonTarget === hunter.seat);
       const isDreamKilled = (actualDreamerTarget === hunter.seat && lastDreamerTarget === hunter.seat);
@@ -106,9 +106,9 @@ const RULES_ENGINE = {
       return { text: "👍 狀態良好 (可開槍)", isPositive: true };
     }
 
-    // 狼王手勢
+    // 狼王手勢（比對魔術師換位後的實際目標）
     if (gestureId === "wolf_king_gesture") {
-      const wolfKing = players.find(p => p.role === "狼王");
+      const wolfKing = players.find(p => p && p.role === "狼王");
       if (!wolfKing) return { text: "無此角色", isPositive: false };
       if (actualPoisonTarget === wolfKing.seat) {
         return { text: "👎 已吃毒 (不可開槍)", isPositive: false };
@@ -118,7 +118,7 @@ const RULES_ENGINE = {
 
     // 轉化者帶刀手勢
     if (gestureId === "converter_gesture") {
-      const normalWolvesAlive = players.filter(p => p.isAlive && p.seatType === "WEREWOLF" && p.role !== "覺醒石像鬼").length;
+      const normalWolvesAlive = players.filter(p => p && p.isAlive && p.seatType === "WEREWOLF" && p.role !== "覺醒石像鬼").length;
       const canTakeBlade = (normalWolvesAlive === 0);
       return {
         text: canTakeBlade ? "👍 3狼全滅 (可帶刀)" : "👎 仍有狼在場 (不可帶刀)",
@@ -143,31 +143,27 @@ const RULES_ENGINE = {
     const { rawWolfTarget, rawPoisonTarget, guardTarget, dreamerTarget, youngWolfSolo, hybridTarget, gargoyleTarget, blackMarketGifts, antidoteUsed } = inputs;
     const { players, nightMemory, round } = state;
 
-    // 1. 首夜身分處理
     if (round === 1) {
       if (hybridTarget) {
-        const hybrid = players.find(p => p.role === "混血兒");
+        const hybrid = players.find(p => p && p.role === "混血兒");
         if (hybrid) {
           hybrid.hybridTarget = hybridTarget;
-          const target = players.find(p => p.seat === hybridTarget);
+          const target = players.find(p => p && p.seat === hybridTarget);
           hybrid.victoryFaction = (target && target.seatType === "WEREWOLF") ? "werewolf" : "villager";
         }
       }
-      if (gargoyleTarget) {
-        nightMemory.gargoyleConvertedTarget = gargoyleTarget;
-      }
+      if (gargoyleTarget) nightMemory.gargoyleConvertedTarget = gargoyleTarget;
       if (blackMarketGifts && blackMarketGifts.seer && blackMarketGifts.poison && blackMarketGifts.gun) {
         nightMemory.blackMarketGifts = blackMarketGifts;
-        const s1 = players.find(p => p.seat === blackMarketGifts.seer);
-        const s2 = players.find(p => p.seat === blackMarketGifts.poison);
-        const s3 = players.find(p => p.seat === blackMarketGifts.gun);
+        const s1 = players.find(p => p && p.seat === blackMarketGifts.seer);
+        const s2 = players.find(p => p && p.seat === blackMarketGifts.poison);
+        const s3 = players.find(p => p && p.seat === blackMarketGifts.gun);
         if (s1 && s2 && s3 && s1.seatType !== "WEREWOLF" && s2.seatType !== "WEREWOLF" && s3.seatType !== "WEREWOLF") {
           nightMemory.blackMarketTransformedWolf = true;
         }
       }
     }
 
-    // 2. 魔術師交換映射
     const swapPair = inputs.swapPair || [0, 0];
     const finalWolfTarget = this.getSwappedTarget(rawWolfTarget, swapPair);
     const finalPoisonTarget = this.getSwappedTarget(rawPoisonTarget, swapPair);
@@ -179,11 +175,10 @@ const RULES_ENGINE = {
     let hunterCanShoot = true;
     let wolfKingCanShoot = true;
 
-    // 3. 狼刀與守衛/解藥判定
+    // 狼刀與守衛/解藥判定 (開解藥救下真正受刀者)
     if (finalWolfTarget) {
       const isGuarded = (finalGuardTarget === finalWolfTarget);
       const isSaved = !!antidoteUsed;
-
       if (isGuarded && isSaved) {
         deaths.push(finalWolfTarget); // 同守同救奶穿
       } else if (isGuarded && !isSaved) {
@@ -195,37 +190,35 @@ const RULES_ENGINE = {
       }
     }
 
-    // 4. 狼弟獨立單刀
+    // 狼弟獨立單刀
     if (finalYoungWolfTarget && !deaths.includes(finalYoungWolfTarget)) {
       deaths.push(finalYoungWolfTarget);
     }
 
-    // 5. 毒藥判定
+    // 毒藥判定
     if (finalPoisonTarget) {
       if (!deaths.includes(finalPoisonTarget)) deaths.push(finalPoisonTarget);
-      const poisonedPlayer = players.find(p => p.seat === finalPoisonTarget);
+      const poisonedPlayer = players.find(p => p && p.seat === finalPoisonTarget);
       if (poisonedPlayer) {
         if (poisonedPlayer.role === "獵人") hunterCanShoot = false;
         if (poisonedPlayer.role === "狼王") wolfKingCanShoot = false;
       }
     }
 
-    // 6. 攝夢人連夢判定
+    // 攝夢人連夢判定
     if (finalDreamerTarget) {
       if (nightMemory.dreamerLastTarget === finalDreamerTarget) {
         if (!deaths.includes(finalDreamerTarget)) deaths.push(finalDreamerTarget);
-        const dreamtPlayer = players.find(p => p.seat === finalDreamerTarget);
+        const dreamtPlayer = players.find(p => p && p.seat === finalDreamerTarget);
         if (dreamtPlayer && dreamtPlayer.role === "獵人") hunterCanShoot = false;
       }
     }
 
-    // 7. 更新記憶庫狀態
     nightMemory.guardLastTarget = guardTarget || null;
     nightMemory.dreamerLastTarget = dreamerTarget || null;
     if (antidoteUsed) nightMemory.witchAntidoteUsed = true;
     if (rawPoisonTarget) nightMemory.witchPoisonUsed = true;
 
-    // 8. 死訊摘要
     const summaryText = deaths.length === 0 ? "昨夜平安夜" : `昨夜死訊：${deaths.map(s => s + '號').join(', ')} 出局`;
 
     return {
@@ -237,12 +230,7 @@ const RULES_ENGINE = {
   }
 };
 
-// ==========================================
-// 4. 第一波 8 套定案板型資料庫 (BOARD_DATABASE)
-// 包含 UI 規格 (inputSchema) 驅動記分台渲染
-// ==========================================
 const BOARD_DATABASE = {
-  // 1. 標準：預女獵白混
   "預女獵白混": {
     name: "預女獵白混 (12人)",
     playerCount: 12,
@@ -265,7 +253,6 @@ const BOARD_DATABASE = {
     rules: { witchSelfHeal: "never", guardWitchOverlap: "milk_through", badgeLossOnDoubleExplode: true }
   },
 
-  // 2. 覺醒石像鬼
   "覺醒石像鬼": {
     name: "覺醒石像鬼 (12人)",
     playerCount: 12,
@@ -292,7 +279,6 @@ const BOARD_DATABASE = {
     rules: { witchSelfHeal: "never", guardWitchOverlap: "milk_through", badgeLossOnDoubleExplode: true }
   },
 
-  // 3. 夢魘攝夢人
   "夢魘攝夢人": {
     name: "夢魘攝夢人 (12人)",
     playerCount: 12,
@@ -317,7 +303,6 @@ const BOARD_DATABASE = {
     rules: { witchSelfHeal: "never", badgeLossOnDoubleExplode: true }
   },
 
-  // 4. 狼王魔術師
   "狼王魔術師": {
     name: "狼王魔術師 (12人)",
     playerCount: 12,
@@ -342,7 +327,6 @@ const BOARD_DATABASE = {
     rules: { witchSelfHeal: "never", badgeLossOnDoubleExplode: true }
   },
 
-  // 5. 狼王攝夢人
   "狼王攝夢人": {
     name: "狼王攝夢人 (12人)",
     playerCount: 12,
@@ -365,7 +349,6 @@ const BOARD_DATABASE = {
     rules: { witchSelfHeal: "never", badgeLossOnDoubleExplode: true }
   },
 
-  // 6. 超級黑商
   "超級黑商": {
     name: "超級黑商 (12人)",
     playerCount: 12,
@@ -393,7 +376,6 @@ const BOARD_DATABASE = {
     rules: { witchSelfHeal: "never", guardWitchOverlap: "milk_through", badgeLossOnDoubleExplode: true }
   },
 
-  // 7. 狼美騎士
   "狼美騎士": {
     name: "狼美騎士 (12人)",
     playerCount: 12,
@@ -417,7 +399,6 @@ const BOARD_DATABASE = {
     rules: { witchSelfHeal: "never", guardWitchOverlap: "milk_through", badgeLossOnDoubleExplode: true }
   },
 
-  // 8. 狼王守衛
   "狼王守衛": {
     name: "狼王守衛 (12人)",
     playerCount: 12,
