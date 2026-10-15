@@ -21,7 +21,7 @@ const GLOBAL_RULES = {
 const ROLE_DEFINITIONS = {
   // --- 好人陣營：神職坑 (GOD) ---
   "預言家": { seatType: "GOD", faction: "villager", canCheck: true, allowRepeatCheck: true },
-  "女巫": { seatType: "GOD", faction: "villager", hasAntidote: true, hasPoison: true, canUseBothPotionsSameNight: false, canSelfHealFirstNight: false },
+  "女巫": { seatType: "GOD", faction: "villager", hasAntidote: true, hasPoison: true, canUseBothPotionsSameNight: false, canSelfHealFirstNight: false, canSelfHeal: false },
   "獵人": { seatType: "GOD", faction: "villager", canShoot: true, triggerCondition: ["WOLF_KILL", "EXILE"], immunePoisonShoot: false, immuneDreamShoot: false, needsNightGesture: true },
   "白痴": { seatType: "GOD", faction: "villager", canImmuneExile: true, loseVoteAfterImmune: true, remainAliveInCount: true, keepBadgeTransfer: true, firstNightConfirmOnly: true },
   "守衛": { seatType: "GOD", faction: "villager", canProtect: true, canSelfProtect: true, canProtectSameTargetConsecutively: false, protectOnlyWolfKill: true, overlapWithWitchRule: "milk_through" },
