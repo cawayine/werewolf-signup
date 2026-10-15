@@ -873,9 +873,13 @@
           statusBadge = "👑";
         }
 
+        const badgeHtml = statusBadge 
+          ? '<span class="absolute -top-1.5 -right-1 text-[10px]">' + statusBadge + '</span>' 
+          : '';
+
         return `
           <div class="h-10 rounded border ${borderStyle} flex flex-col items-center justify-center text-xs relative font-mono">
-            ${statusBadge ? `<span class="absolute -top-1.5 -right-1 text-[10px]">\${statusBadge}</span>` : ''}
+            ${badgeHtml}
             <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
             <span class="text-[8px] truncate px-0.5">${statusText}</span>
           </div>
