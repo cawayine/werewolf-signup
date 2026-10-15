@@ -184,10 +184,15 @@ const BOARD_DATABASE = {
       { id: "wolf_team_confirm", role: "狼人", type: "SKILL", title: "狼兄與兩小狼睜眼", prompt: "落刀" },
       { id: "witch", role: "女巫", type: "SKILL", title: "女巫請睜眼", prompt: "昨夜倒牌與用藥" },
       { id: "seer", role: "預言家", type: "SKILL", title: "預言家請睜眼", prompt: "查驗陣營" },
-      { id: "black_market", role: "黑市商人", type: "SKILL", title: "黑市商人請睜眼", prompt: "贈送三份禮物" }
+      { id: "black_market", role: "黑市商人", type: "SKILL", title: "黑市商人請睜眼", prompt: "贈送三份禮物" },
+      { id: "seer_lucky_confirm", role: "幸運兒", type: "CONFIRM", title: "查驗幸運兒請睜眼", prompt: "確認獲得查驗技能" },
+      { id: "poison_lucky_confirm", role: "幸運兒", type: "CONFIRM", title: "毒藥幸運兒請睜眼", prompt: "確認獲得毒藥技能" },
+      { id: "gun_lucky_gesture", role: "幸運兒", type: "GESTURE", title: "獵槍幸運兒請睜眼", prompt: "給予開槍手勢" }
     ],
     repeatingNightOrder: [
+      { id: "black_market_faction_gesture", role: "黑市商人", type: "GESTURE", title: "黑市商人請睜眼", prompt: "給予陣營手勢 (若3禮物皆給好人則變身為狼)" },
       { id: "guard", role: "守衛", type: "SKILL", title: "守衛請睜眼", prompt: "守護一人或空守" },
+      { id: "wolf_younger_solo", role: "狼弟", type: "SKILL", title: "狼弟請睜眼", prompt: "單獨開刀 (狼兄出局時觸發)" },
       { id: "wolf", role: "狼人", type: "SKILL", title: "狼隊請睜眼", prompt: "狼隊落刀" },
       { id: "witch", role: "女巫", type: "SKILL", title: "女巫請睜眼", prompt: "昨夜倒牌與用藥" },
       { id: "seer", role: "預言家", type: "SKILL", title: "預言家請睜眼", prompt: "查驗陣營" }
@@ -237,7 +242,7 @@ const BOARD_DATABASE = {
 };
 
 // ==========================================
-// 4. RULES_ENGINE 核心運算引擎 (雙端共用大腦)
+// 4. RULES_ENGINE 核心運算引擎 (全域單一大腦)
 // ==========================================
 const RULES_ENGINE = {
   // 工廠方法：產生標準初始對局狀態
@@ -288,12 +293,66 @@ const RULES_ENGINE = {
     };
   },
 
-  // 1. 彩球票型權重統計與排序 (公播端與上帝端通用)
+  // 1. 預言家查驗判定 (支援魔術師號碼牌置換映射)
+  resolveCheck(targetSeat, swapPair = [0, 0], players = []) {
+    if (!targetSeat) return { isReady: false, isWolf: false, text: "待查驗" };
+    
+    let effectiveSeat = targetSeat;
+    if (swapPair[0] === targetSeat) effectiveSeat = swapPair[1];
+    else if (swapPair[1] === targetSeat) effectiveSeat = swapPair[0];
+
+    const targetPlayer = players.find(p => p.seat === effectiveSeat);
+    if (!targetPlayer) return { isReady: false, isWolf: false, text: "查無此人" };
+
+    const isWolf = (targetPlayer.seatType === "WEREWOLF");
+    return {
+      isReady: true,
+      isWolf: isWolf,
+      text: isWolf ? "查驗結果：【狼人 (查殺)】" : "查驗結果：【好人 (金水)】"
+    };
+  },
+
+  // 2. 夜間手勢狀態判定 (獵人/狼王吃毒禁槍、黑商變狼等)
+  evaluateGesture(gestureId, context = {}) {
+    const { rawPoisonTarget = 0, swapPair = [0, 0], players = [], blackMarketTransformedWolf = false } = context;
+
+    let effectivePoison = rawPoisonTarget;
+    if (swapPair[0] === rawPoisonTarget) effectivePoison = swapPair[1];
+    else if (swapPair[1] === rawPoisonTarget) effectivePoison = swapPair[0];
+
+    if (gestureId === "hunter_gesture") {
+      const hunter = players.find(p => p.role === "獵人");
+      const isPoisoned = hunter && (hunter.seat === effectivePoison);
+      return {
+        isPositive: !isPoisoned,
+        text: isPoisoned ? "👎 狀態異常 (吃毒不可開槍)" : "👍 狀態良好 (可開槍)"
+      };
+    }
+
+    if (gestureId === "wolf_king_gesture") {
+      const wolfKing = players.find(p => p.role === "狼王");
+      const isPoisoned = wolfKing && (wolfKing.seat === effectivePoison);
+      return {
+        isPositive: !isPoisoned,
+        text: isPoisoned ? "👎 狀態異常 (吃毒不可開槍)" : "👍 狀態良好 (可開槍)"
+      };
+    }
+
+    if (gestureId === "black_market_faction_gesture") {
+      return {
+        isPositive: !blackMarketTransformedWolf,
+        text: blackMarketTransformedWolf ? "🐺 陣營轉變 (已變為狼人)" : "🧑 陣營正常 (仍為好人)"
+      };
+    }
+
+    return { isPositive: true, text: "👍 狀態良好" };
+  },
+
+  // 3. 彩球票型權重統計與排序 (公播端與上帝端通用)
   calculateLottoTallies(votesMap = {}, effectiveBadgeHolder = null, isElectionStage = false) {
     const allKeys = Object.keys(votesMap).map(k => parseInt(k));
     if (allKeys.length === 0) return [];
 
-    // 受票目標排序：由小到大，0 號棄票固定置底
     const sortedTargets = allKeys.sort((a, b) => {
       if (a === 0) return 1;
       if (b === 0) return -1;
@@ -305,7 +364,6 @@ const RULES_ENGINE = {
       const isAbstain = (targetSeat === 0);
       let totalPoints = 0;
 
-      // 投票人號碼一律由小到大排序
       const sortedVoters = rawVoters.slice().sort((a, b) => a - b).map(vSeat => {
         const isPolice = (effectiveBadgeHolder !== null && vSeat === effectiveBadgeHolder);
         const points = (!isElectionStage && isPolice) ? 1.5 : 1.0;
@@ -328,7 +386,7 @@ const RULES_ENGINE = {
     }).filter(group => group.voters.length > 0);
   },
 
-  // 2. 警長競選 / PK 開票裁決
+  // 4. 警長競選 / PK 開票裁決
   resolvePoliceElection(tempVotes = {}, isPkMode = false, pkCandidates = []) {
     let counts = {};
     Object.entries(tempVotes).forEach(([cand, voters]) => {
@@ -366,7 +424,7 @@ const RULES_ENGINE = {
     }
   },
 
-  // 3. 放逐公投票型裁決 (含詭術師替罪演算法)
+  // 5. 放逐公投票型裁決 (含詭術師替罪演算法)
   resolveExileVote(tempVotes = {}, policeSeat = null, isBadgeTorn = false, modules = {}, tricksterSwap = null, players = []) {
     let maxPoints = 0;
     let topSeats = [];
@@ -420,7 +478,7 @@ const RULES_ENGINE = {
     };
   },
 
-  // 4. 警長競選自爆累計規則
+  // 6. 警長競選自爆累計規則
   resolvePoliceExplode(currentCount = 0) {
     if (currentCount >= 1) {
       return {
@@ -439,7 +497,7 @@ const RULES_ENGINE = {
     }
   },
 
-  // 5. 夜間死訊綜合結算演算法
+  // 7. 夜間死訊綜合結算演算法
   resolveNight(inputs = {}, nightMemory = {}) {
     const rawWolf = inputs.rawWolfTarget || 0;
     const rawPoison = inputs.rawPoisonTarget || 0;
@@ -484,7 +542,7 @@ const RULES_ENGINE = {
     };
   },
 
-  // 6. 勝負判定 (好人滅狼勝 / 狼人屠邊勝)
+  // 8. 勝負判定 (好人滅狼勝 / 狼人屠邊勝)
   checkGameOver(players = []) {
     const alive = players.filter(p => p.isAlive);
     const gods = alive.filter(p => p.seatType === "GOD").length;
