@@ -17,6 +17,9 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
+  <!-- 引入規則大腦與獨立設定檔 -->
+  <script src="rules_config.js"></script>
+
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .neon-border { border: 1px solid #30363d; }
@@ -122,7 +125,6 @@
 
   <!-- 歷史投票輪次切換頁籤 -->
   <nav class="flex gap-1.5 overflow-x-auto pb-2 mb-3 text-xs scrollbar-none" id="historyTabContainer">
-    <!-- 動態生成輪次標籤 -->
   </nav>
 
   <!-- 主版面容器：手機垂直單欄，電腦端 (lg) 雙欄並排 -->
@@ -188,7 +190,7 @@
       </section>
     </main>
 
-    <!-- 右側欄位：電腦端計票控制工作台 (手機端為底部抽屜) -->
+    <!-- 右側欄位：現場計票控制工作台 (手機端為底部抽屜) -->
     <aside id="controlDrawer" class="hidden lg:col-span-5 fixed inset-x-0 bottom-0 lg:static lg:block bg-gray-900 border-t lg:border border-gray-700 p-3 z-50 rounded-t-2xl lg:rounded-xl shadow-2xl max-w-xl lg:max-w-none mx-auto max-h-[88vh] lg:max-h-none overflow-y-auto">
       <div class="flex justify-between items-center pb-2 mb-2 border-b border-gray-800">
         <h3 class="text-xs lg:text-sm font-bold text-amber-400 flex items-center gap-1.5">
@@ -204,7 +206,7 @@
         </div>
       </div>
 
-      <!-- 模組開關配置列 (法官專屬自由開關) -->
+      <!-- 模組開關配置列 -->
       <div class="mb-2.5 p-2 bg-gray-800/80 border border-gray-700 rounded-lg flex items-center justify-between">
         <span class="text-[11px] font-bold text-gray-300 flex items-center gap-1">
           <i class="fa-solid fa-sliders text-indigo-400"></i> 特殊角色模組：
@@ -240,7 +242,7 @@
         </div>
       </div>
 
-      <!-- 模式 1：警長競選計票模組 (含首輪與 PK 決選) -->
+      <!-- 模式 1：警長競選計票模組 -->
       <div id="drawerPoliceModule" class="space-y-2.5">
         <!-- 競選中自爆專屬入口 -->
         <div class="bg-rose-950/40 p-2.5 rounded-lg border border-rose-800/80">
@@ -288,7 +290,7 @@
       <!-- 模式 2：白天放逐與即時操作模組 -->
       <div id="drawerExileModule" class="space-y-2.5 hidden">
         
-        <!-- 特殊角色卡片：詭術師夜間置換 (若開啟則顯示) -->
+        <!-- 特殊角色卡片：詭術師夜間置換 -->
         <div id="tricksterControlBox" class="bg-purple-950/30 p-2.5 rounded-lg border border-purple-800/70 hidden">
           <div class="flex justify-between items-center mb-1.5">
             <span class="text-xs font-bold text-purple-300 flex items-center gap-1">
@@ -374,7 +376,7 @@
               </button>
             </div>
             
-            <!-- 定序王子翻牌專用按鈕 (僅模組開啟且當天首輪時顯示) -->
+            <!-- 定序王子翻牌專用按鈕 -->
             <button id="princeTriggerBtn" onclick="handlePrinceReversal()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-1.5 rounded text-xs shadow transition hidden">
               👑 定序王子翻牌發動【逆轉時空】(票型作廢並重投)
             </button>
@@ -409,7 +411,7 @@
   <script>
     const ADMIN_PASSWORD = "8888";
 
-    // Firebase 配置
+    // Firebase 配置 (與上帝端連線相同節點)
     const firebaseConfig = {
       apiKey: "AIzaSyD-IcZrJUj4pXYxe9ZXNxU5o5A1koSwxbc",
       authDomain: "werewolf-base.firebaseapp.com",
@@ -425,6 +427,12 @@
     const matchRef = db.ref("currentMatch");
 
     let isAdmin = localStorage.getItem("werewolf_board_admin") === "true";
+    let isRemoteUpdate = false;
+    let lastHandledActionId = null;
+
+    // 直接使用 RULES_ENGINE 工廠函式初始化對局狀態
+    let gameState = RULES_ENGINE.createInitialGameState();
+    let currentHistoryViewIndex = -1;
 
     function updateAdminUI() {
       const footer = document.getElementById("adminFooter");
@@ -473,57 +481,36 @@
       alert("🔒 已鎖定計票面板，切回純公播視圖。");
     }
 
-    const defaultState = {
-      day: 1,
-      phase: "POLICE_ELECTION", // POLICE_ELECTION | POLICE_PK | DAY_EXILE
-      policeSeat: null,
-      isBadgeTorn: false,
-      consecutiveExplodeCount: 0,
-      pkCandidates: [],
-      // 特殊板子設定與擴充狀態
-      modules: {
-        enableTrickster: false,
-        enablePrince: false
-      },
-      tricksterSwap: null,     // { seatA: 3, seatB: 7 }
-      princeUsed: false,        // 定序王子全場限用一次
-      isPrinceRevolving: false, // 當前是否為定序時光倒流後的重投輪次
-      players: Array.from({ length: 12 }, (_, i) => ({
-        seat: i + 1,
-        isAlive: true,
-        deathReason: null,
-        isCandidate: false,
-        hasDropped: false
-      })),
-      history: [],
-      tempVotes: {},
-      selectedTarget: null
-    };
-
-    let gameState = JSON.parse(JSON.stringify(defaultState));
-    let currentHistoryViewIndex = -1;
-
+    // ==========================================
+    // 1. 初始化與 Firebase 雙向實時監聽
+    // ==========================================
     window.onload = () => {
       updateAdminUI();
 
       matchRef.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
-          gameState = data;
-          if (!gameState.players) gameState.players = defaultState.players;
+          // 雙向互鎖檢測：若收到來自上帝端的結算更新，自動彈窗提示並清空計票員暫存
+          if (data.actionId && data.actionId !== lastHandledActionId && data.lastActionBy === "JUDGE") {
+            lastHandledActionId = data.actionId;
+            alert(`🔔 【上帝已在主控台完成操作！】\n狀態更新：${data.lastActionSummary || '已完成開票結算'}`);
+          }
+
+          isRemoteUpdate = true;
+          Object.assign(gameState, data);
+          if (!gameState.players) gameState.players = [];
           if (!gameState.history) gameState.history = [];
           if (!gameState.tempVotes) gameState.tempVotes = {};
-          if (gameState.consecutiveExplodeCount === undefined) gameState.consecutiveExplodeCount = 0;
-          if (!gameState.pkCandidates) gameState.pkCandidates = [];
           if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
+
+          renderAll();
+          isRemoteUpdate = false;
         } else {
-          if (isAdmin) pushStateToFirebase();
+          if (isAdmin) pushStateToFirebase("初始化對局狀態");
         }
         
         document.getElementById("syncStatusBadge").innerText = "● 即時同步中";
         document.getElementById("syncStatusBadge").className = "bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] px-1.5 py-0.2 rounded font-bold";
-
-        renderAll();
       }, (error) => {
         console.error("Firebase 連線異常:", error);
         document.getElementById("syncStatusBadge").innerText = "⚠️ 連線中斷";
@@ -531,15 +518,22 @@
       });
     };
 
-    function pushStateToFirebase() {
-      if (!isAdmin) return;
+    // 計票員端推送到 Firebase (標註 lastActionBy: "RECORDER")
+    function pushStateToFirebase(actionSummary = null) {
+      if (!isAdmin || isRemoteUpdate) return;
+      if (actionSummary) {
+        gameState.lastActionBy = "RECORDER";
+        gameState.actionId = "ACT_" + Date.now();
+        gameState.lastActionSummary = actionSummary;
+        lastHandledActionId = gameState.actionId;
+      }
       matchRef.set(gameState);
     }
 
     function toggleModuleSetting(moduleKey) {
       if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
       gameState.modules[moduleKey] = !gameState.modules[moduleKey];
-      pushStateToFirebase();
+      pushStateToFirebase(`更新特殊模組：${moduleKey} = ${gameState.modules[moduleKey]}`);
     }
 
     function renderAll() {
@@ -664,10 +658,12 @@
             }
           }
 
+          const playerName = p.name ? p.name.slice(0, 4) : '';
+
           return `
             <div class="h-10 rounded-lg border ${borderStyle} flex flex-col items-center justify-center text-xs relative">
               ${gameState.policeSeat === p.seat ? '<span class="absolute -top-1.5 -right-1 text-xs">👑</span>' : ''}
-              <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
+              <span>${p.seat < 10 ? '0' + p.seat : p.seat} <span class="text-[9px] font-normal">${playerName}</span></span>
               <span class="text-[9px] ${statusColor}">${statusLabel}</span>
             </div>
           `;
@@ -678,20 +674,23 @@
       if (voters.length === 0) {
         voterGrid.innerHTML = `<div class="col-span-6 lg:col-span-12 text-gray-500 text-xs text-center py-2">全場無合資格選民</div>`;
       } else {
-        voterGrid.innerHTML = voters.map(p => `
-          <div class="h-10 rounded-lg border border-blue-500/50 bg-blue-950/20 text-blue-200 flex flex-col items-center justify-center text-xs font-mono font-bold">
-            ${gameState.policeSeat === p.seat ? '<span class="absolute -top-1.5 -right-1 text-xs">👑</span>' : ''}
-            <span>${p.seat < 10 ? '0' + p.seat : p.seat}</span>
-            <span class="text-[9px] text-blue-400 font-normal">${p.hasDropped ? '退水選民' : '警下選民'}</span>
-          </div>
-        `).join('');
+        voterGrid.innerHTML = voters.map(p => {
+          const playerName = p.name ? p.name.slice(0, 4) : '';
+          return `
+            <div class="h-10 rounded-lg border border-blue-500/50 bg-blue-950/20 text-blue-200 flex flex-col items-center justify-center text-xs font-mono font-bold">
+              ${gameState.policeSeat === p.seat ? '<span class="absolute -top-1.5 -right-1 text-xs">👑</span>' : ''}
+              <span>${p.seat < 10 ? '0' + p.seat : p.seat} <span class="text-[9px] font-normal">${playerName}</span></span>
+              <span class="text-[9px] text-blue-400 font-normal">${p.hasDropped ? '退水選民' : '警下選民'}</span>
+            </div>
+          `;
+        }).join('');
       }
 
       const stdGrid = document.getElementById("standardSeatsGrid");
       stdGrid.innerHTML = gameState.players.map(p => {
         let cardStyle = "seat-alive";
         let badgeHtml = "";
-        let statusText = "存活";
+        let statusText = p.name ? p.name.slice(0, 4) : "存活";
         let textStyle = "text-gray-400";
         let seatNumStyle = "";
 
@@ -699,7 +698,6 @@
           if (gameState.policeSeat === p.seat) {
             cardStyle = "seat-police";
             badgeHtml = '<span class="absolute -top-2 -right-1 text-xs">👑</span>';
-            statusText = "警長";
             textStyle = "text-amber-300 font-bold";
           }
         } else {
@@ -733,13 +731,15 @@
           <div class="h-11 rounded-lg ${cardStyle} flex flex-col items-center justify-center text-xs font-bold relative transition">
             ${badgeHtml}
             <span class="${seatNumStyle}">${seatLabel}</span>
-            <span class="text-[9px] ${textStyle}">${statusText}</span>
+            <span class="text-[9px] ${textStyle} truncate px-0.5">${statusText}</span>
           </div>
         `;
       }).join('');
     }
 
-    // 彩球由小到大排序 (核心實現)
+    // ==========================================
+    // 2. 彩球票型渲染 (委託 RULES_ENGINE.calculateLottoTallies)
+    // ==========================================
     function renderLottoVoteDisplay() {
       const container = document.getElementById("lottoVotesContainer");
       const titleEl = document.getElementById("voteSummaryTitle");
@@ -748,6 +748,7 @@
       let currentDisplayVotes = {};
       let isHistoryView = (currentHistoryViewIndex !== -1);
       let effectiveBadgeHolder = null;
+      let isElectionStage = false;
 
       if (isHistoryView) {
         const histItem = gameState.history[currentHistoryViewIndex];
@@ -755,15 +756,12 @@
         titleEl.innerText = `歷史紀錄：${histItem.title}`;
         badgeEl.innerText = histItem.badgeText || "已結算";
         badgeEl.className = "text-xs bg-amber-950 text-amber-300 border border-amber-700 px-2 py-0.5 rounded font-bold";
-        
-        if (histItem.badgeHolder !== undefined) {
-          effectiveBadgeHolder = histItem.badgeHolder;
-        } else {
-          effectiveBadgeHolder = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
-        }
+        effectiveBadgeHolder = (histItem.badgeHolder !== undefined) ? histItem.badgeHolder : ((!gameState.isBadgeTorn) ? gameState.policeSeat : null);
+        isElectionStage = histItem.title.includes("警選") || histItem.title.includes("警長競選");
       } else {
         currentDisplayVotes = gameState.tempVotes || {};
         effectiveBadgeHolder = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
+        isElectionStage = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
 
         if (gameState.phase === "POLICE_ELECTION") {
           titleEl.innerText = `即時：第 ${gameState.day} 天 警長競選首輪票型`;
@@ -778,66 +776,35 @@
         badgeEl.className = "text-xs bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold";
       }
 
-      const allKeys = Object.keys(currentDisplayVotes).map(k => parseInt(k));
-      if (allKeys.length === 0) {
-        container.innerHTML = `<div class="text-gray-500 text-xs text-center py-6">此輪尚無投票紀錄</div>`;
+      // 呼叫大腦取得排好序的彩球群組
+      const lottoGroups = RULES_ENGINE.calculateLottoTallies(currentDisplayVotes, effectiveBadgeHolder, isElectionStage);
+
+      if (lottoGroups.length === 0) {
+        container.innerHTML = `<div class="text-gray-500 text-xs text-center py-6">此輪尚無有效投票紀錄</div>`;
         return;
       }
 
-      // 1. 受票目標由小到大排序 (0號棄票固定置底)
-      const sortedTargets = allKeys.sort((a, b) => {
-        if (a === 0) return 1;
-        if (b === 0) return -1;
-        return a - b;
-      });
+      container.innerHTML = lottoGroups.map(group => {
+        const voterBallsHtml = group.voters.map(v => {
+          const ballClass = v.isPolice ? "ball-police-voter" : "ball-voter";
+          const crownHtml = v.isPolice ? '<span class="absolute -top-2 -right-1 text-[11px]">👑</span>' : '';
+          return `<div class="lotto-ball ${ballClass}">${crownHtml}${v.label}</div>`;
+        }).join('');
 
-      let cardsHtml = "";
-      sortedTargets.forEach(targetSeatNum => {
-        const rawVoters = currentDisplayVotes[targetSeatNum] || [];
-        if (rawVoters.length === 0) return;
+        const targetBallClass = group.isAbstain ? "ball-abstain" : "ball-target";
 
-        // 2. 投票人彩球一律依號碼「由小到大」排序
-        const sortedVoters = rawVoters.slice().sort((a, b) => a - b);
-
-        const isAbstain = (targetSeatNum === 0);
-        let totalPoints = 0;
-        let voterBallsHtml = "";
-
-        sortedVoters.forEach(vSeat => {
-          const isPolice = (effectiveBadgeHolder !== null && vSeat === effectiveBadgeHolder);
-          const isElectionStage = isHistoryView
-            ? (gameState.history[currentHistoryViewIndex].title.includes("警選") || gameState.history[currentHistoryViewIndex].title.includes("警長競選"))
-            : (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
-
-          if (!isElectionStage && isPolice) {
-            totalPoints += 1.5;
-          } else {
-            totalPoints += 1;
-          }
-
-          const vLabel = (vSeat < 10) ? ("0" + vSeat) : String(vSeat);
-          const ballClass = (!isElectionStage && isPolice) ? "ball-police-voter" : "ball-voter";
-          const crownHtml = (!isElectionStage && isPolice) ? '<span class="absolute -top-2 -right-1 text-[11px]">👑</span>' : '';
-
-          voterBallsHtml += '<div class="lotto-ball ' + ballClass + '">' + crownHtml + vLabel + '</div>';
-        });
-
-        const targetBallClass = isAbstain ? "ball-abstain" : "ball-target";
-        const targetBallLabel = isAbstain ? "棄" : ((targetSeatNum < 10) ? ("0" + targetSeatNum) : String(targetSeatNum));
-        const targetTitle = isAbstain ? "棄票" : (targetSeatNum + " 號候選人");
-
-        cardsHtml += `
+        return `
           <div class="bg-gray-800/80 p-3 rounded-xl border border-gray-700 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3">
               <div class="lotto-ball lotto-ball-lg ${targetBallClass}">
-                ${targetBallLabel}
+                ${group.label}
               </div>
               <div>
-                <div class="text-xs font-bold ${isAbstain ? 'text-gray-400' : 'text-amber-300'}">
-                  ${targetTitle}
+                <div class="text-xs font-bold ${group.isAbstain ? 'text-gray-400' : 'text-amber-300'}">
+                  ${group.title}
                 </div>
                 <div class="text-[11px] font-mono text-gray-400">
-                  得票：<span class="text-amber-400 font-bold">${totalPoints}</span> 票 (${sortedVoters.length}人)
+                  得票：<span class="text-amber-400 font-bold">${group.totalPoints}</span> 票 (${group.voters.length}人)
                 </div>
               </div>
             </div>
@@ -846,9 +813,7 @@
             </div>
           </div>
         `;
-      });
-
-      container.innerHTML = cardsHtml || `<div class="text-gray-500 text-xs text-center py-6">此輪尚無有效得票</div>`;
+      }).join('');
     }
 
     function toggleControlDrawer() {
@@ -861,7 +826,6 @@
       document.getElementById("drawerPoliceModule").classList.toggle("hidden", !isPoliceModuleActive);
       document.getElementById("drawerExileModule").classList.toggle("hidden", isPoliceModuleActive);
 
-      // 模組按鈕高亮狀態更新
       const btnTrickster = document.getElementById("toggleTricksterBtn");
       const btnPrince = document.getElementById("togglePrinceBtn");
       const isTricksterEnabled = !!gameState.modules?.enableTrickster;
@@ -879,9 +843,7 @@
       
       const policeWolfSelect = document.getElementById("policeWolfExplodeSelect");
       if (policeWolfSelect) {
-        policeWolfSelect.innerHTML = alivePlayers.map(p => `
-          <option value="${p.seat}">${p.seat} 號玩家</option>
-        `).join('');
+        policeWolfSelect.innerHTML = alivePlayers.map(p => `<option value="${p.seat}">${p.seat} 號玩家 (${p.name || ''})</option>`).join('');
       }
 
       const explodeLabel = document.getElementById("policeExplodeCountLabel");
@@ -890,27 +852,19 @@
         const cnt = gameState.consecutiveExplodeCount || 0;
         explodeLabel.innerText = `自爆計數：${cnt} / 2 次 (${cnt === 0 ? '正常' : '已自爆1次，再爆即吞警徽'})`;
         explodeLabel.className = cnt > 0 ? "text-[10px] text-rose-400 font-bold animate-pulse" : "text-[10px] text-amber-300 font-bold";
-        
-        if (preserveHint) {
-          preserveHint.innerText = cnt === 1 ? "★ 已保留昨日名單" : "";
-        }
+        if (preserveHint) preserveHint.innerText = cnt === 1 ? "★ 已保留昨日名單" : "";
       }
 
       const wolfSelect = document.getElementById("wolfExplodeSelect");
       if (wolfSelect) {
-        wolfSelect.innerHTML = alivePlayers.map(p => `
-          <option value="${p.seat}">${p.seat} 號玩家</option>
-        `).join('');
+        wolfSelect.innerHTML = alivePlayers.map(p => `<option value="${p.seat}">${p.seat} 號玩家 (${p.name || ''})</option>`).join('');
       }
 
       const skillSelect = document.getElementById("skillTargetSelect");
       if (skillSelect) {
-        skillSelect.innerHTML = alivePlayers.map(p => `
-          <option value="${p.seat}">${p.seat} 號玩家</option>
-        `).join('');
+        skillSelect.innerHTML = alivePlayers.map(p => `<option value="${p.seat}">${p.seat} 號玩家 (${p.name || ''})</option>`).join('');
       }
 
-      // 詭術師後台下拉選單與區塊連動
       const tricksterBox = document.getElementById("tricksterControlBox");
       if (isTricksterEnabled && !isPoliceModuleActive) {
         tricksterBox.classList.remove("hidden");
@@ -934,11 +888,8 @@
         tricksterBox.classList.add("hidden");
       }
 
-      if (isPoliceModuleActive) {
-        renderPoliceDrawerControls();
-      } else {
-        renderExileDrawerControls();
-      }
+      if (isPoliceModuleActive) renderPoliceDrawerControls();
+      else renderExileDrawerControls();
     }
 
     function checkPoliceBadgeStatus() {
@@ -954,7 +905,7 @@
         const alivePlayers = gameState.players.filter(p => p.isAlive);
         const select = document.getElementById("transferBadgeTargetSelect");
         select.innerHTML = alivePlayers.map(p => `
-          <option value="${p.seat}">${p.seat} 號玩家</option>
+          <option value="${p.seat}">${p.seat} 號玩家 (${p.name || ''})</option>
         `).join('');
       } else {
         box.classList.add("hidden");
@@ -970,8 +921,8 @@
       gameState.policeSeat = targetSeat;
       document.getElementById("policeBadgeTransferBox").classList.add("hidden");
       
-      pushStateToFirebase();
-      alert(`👑 ${oldPolice} 號已將警徽順利移交給 ${targetSeat} 號！${targetSeat} 號成為新任警長。`);
+      pushStateToFirebase(`👑 警徽移交：${oldPolice} 號 ➔ ${targetSeat} 號`);
+      alert(`👑 ${oldPolice} 號已將警徽移交給 ${targetSeat} 號！`);
     }
 
     function applyTearBadge() {
@@ -981,42 +932,35 @@
       gameState.isBadgeTorn = true;
       document.getElementById("policeBadgeTransferBox").classList.add("hidden");
 
-      pushStateToFirebase();
-      alert(`🔥 ${oldPolice} 號選擇撕毀警徽！警徽作廢，本局後續投票皆為 1 票。`);
+      pushStateToFirebase(`🔥 警長 ${oldPolice} 號撕毀警徽`);
+      alert(`🔥 警徽已撕毀！本局後續投票皆為 1 票制。`);
     }
 
-    // 詭術師置換儲存/清空
     function saveTricksterSwap() {
       const a = parseInt(document.getElementById("tricksterSeatASelect").value);
       const b = parseInt(document.getElementById("tricksterSeatBSelect").value);
-      if (a === b) {
-        alert("⚠️ 置換兩名玩家號碼牌不可相同！");
-        return;
-      }
+      if (a === b) { alert("⚠️ 置換兩名玩家號碼不可相同！"); return; }
       gameState.tricksterSwap = { seatA: a, seatB: b };
-      pushStateToFirebase();
-      alert(`🎭 詭術師夜間技能已登記：【${a} 號 ⇄ ${b} 號】！`);
+      pushStateToFirebase(`🎭 詭術師夜間置換：${a} ⇄ ${b}`);
+      alert(`🎭 詭術師置換已登記：【${a} 號 ⇄ ${b} 號】！`);
     }
 
     function clearTricksterSwap() {
       gameState.tricksterSwap = null;
-      pushStateToFirebase();
-      alert("🎭 已清空詭術師置換紀錄（本晚為空換或技能失效）。");
+      pushStateToFirebase("清空詭術師置換");
+      alert("🎭 已清空詭術師置換紀錄。");
     }
 
+    // ==========================================
+    // 3. 自爆與技能處理 (委託 RULES_ENGINE.resolvePoliceExplode)
+    // ==========================================
     function handlePoliceWolfExplode() {
       const select = document.getElementById("policeWolfExplodeSelect");
       const wolfSeat = parseInt(select.value);
       if (!wolfSeat) return;
 
-      const currentCount = gameState.consecutiveExplodeCount || 0;
-      const isSecondExplode = (currentCount >= 1);
-
-      const confirmMsg = isSecondExplode 
-        ? `⚠️ 注意：這是第二次在競選階段自爆！\n確定要由【${wolfSeat} 號玩家】自爆嗎？\n確認後將正式【吞警徽（警徽流失）】，天亮直接進入第 ${gameState.day + 1} 天白天放逐！`
-        : `⚠️ 確定要由【${wolfSeat} 號玩家】在競選階段自爆嗎？\n天亮將進入【第 ${gameState.day + 1} 天】，系統將完整保留第一天的上警名單繼續競選。`;
-
-      if (!confirm(confirmMsg)) return;
+      const expRes = RULES_ENGINE.resolvePoliceExplode(gameState.consecutiveExplodeCount || 0);
+      if (!confirm(`⚠️ 確定要由【${wolfSeat} 號玩家】在競選階段自爆嗎？\n${expRes.alertText}`)) return;
 
       const p = gameState.players.find(x => x.seat === wolfSeat);
       if (p) {
@@ -1025,50 +969,25 @@
         p.isCandidate = false;
       }
 
-      if (!gameState.history) gameState.history = [];
+      gameState.consecutiveExplodeCount = expRes.nextCount;
+      gameState.isBadgeTorn = expRes.isBadgeLoss;
+      if (expRes.isBadgeLoss) gameState.policeSeat = null;
 
-      if (!isSecondExplode) {
-        gameState.consecutiveExplodeCount = 1;
-        gameState.history.push({
-          title: `D${gameState.day} 警選自爆`,
-          badgeText: `💥 ${wolfSeat}號自爆 (保留警徽，延續名單補選)`,
-          votes: {},
-          badgeHolder: null
-        });
+      gameState.history.push({
+        title: `D${gameState.day} 警選自爆`,
+        badgeText: `💥 ${wolfSeat}號自爆 (${expRes.isBadgeLoss ? '警徽流失吞警徽' : '保留名單補選'})`,
+        votes: {},
+        badgeHolder: null
+      });
 
-        gameState.day += 1;
-        gameState.phase = "POLICE_ELECTION";
-        gameState.pkCandidates = [];
-
-        alert(`💥 ${wolfSeat} 號狼人競選自爆出局！\n天亮進入【第 ${gameState.day} 天】，已保留第 1 天其餘玩家的上警名單繼續競選。若今天再次自爆，則警徽正式流失！`);
-      } else {
-        gameState.consecutiveExplodeCount = 2;
-        gameState.isBadgeTorn = true;
-        gameState.policeSeat = null;
-
-        gameState.history.push({
-          title: `D${gameState.day} 警選二次自爆`,
-          badgeText: `💥 ${wolfSeat}號自爆 (警徽流失吞警徽)`,
-          votes: {},
-          badgeHolder: null
-        });
-
-        gameState.day += 1;
-        gameState.phase = "DAY_EXILE";
-        gameState.pkCandidates = [];
-        gameState.players.forEach(pl => {
-          pl.isCandidate = false;
-          pl.hasDropped = false;
-        });
-
-        alert(`🔥 ${wolfSeat} 號狼人連續兩天在競選階段自爆！\n觸發規則【警徽流失】！本局不再產生警長，進入【第 ${gameState.day} 天白天放逐】！`);
-      }
-
+      gameState.day += 1;
+      gameState.phase = expRes.nextPhase;
+      gameState.pkCandidates = [];
       gameState.tempVotes = {};
       gameState.selectedTarget = null;
       currentHistoryViewIndex = gameState.history.length - 1;
 
-      pushStateToFirebase();
+      pushStateToFirebase(`💥 競選階段自爆：${wolfSeat} 號`);
     }
 
     function handleWolfExplode() {
@@ -1084,7 +1003,6 @@
         p.deathReason = "EXPLODE";
       }
 
-      if (!gameState.history) gameState.history = [];
       gameState.history.push({
         title: `D${gameState.day} 白天自爆`,
         badgeText: `💥 ${wolfSeat} 號自爆`,
@@ -1097,12 +1015,10 @@
       currentHistoryViewIndex = gameState.history.length - 1;
 
       checkPoliceBadgeStatus();
-      pushStateToFirebase();
+      pushStateToFirebase(`💥 白天自爆：${wolfSeat} 號`);
 
-      if (confirm(`💥 ${wolfSeat} 號狼人已自爆出局！\n是否直接進入第 ${gameState.day + 1} 天白天？`)) {
+      if (confirm(`💥 ${wolfSeat} 號已自爆出局！是否直接切入第 ${gameState.day + 1} 天白天？`)) {
         enterNextDayCycle(true);
-      } else {
-        alert(`💥 ${wolfSeat} 號狼人已自爆出局，看板已同步。`);
       }
     }
 
@@ -1111,7 +1027,7 @@
       const targetSeat = parseInt(select.value);
       if (!targetSeat) return;
 
-      const reason = prompt(`請輸入連帶帶走的技能原因（例如：獵人槍殺、狼美人魅惑、騎士決鬥）：`, "獵人開槍");
+      const reason = prompt("請輸入連帶帶走的技能原因（例如：獵人開槍、狼美人魅惑、騎士決鬥）：", "獵人開槍");
       if (reason === null) return;
 
       const p = gameState.players.find(x => x.seat === targetSeat);
@@ -1120,7 +1036,6 @@
         p.deathReason = "SKILL";
       }
 
-      if (!gameState.history) gameState.history = [];
       gameState.history.push({
         title: `D${gameState.day} 技能帶走`,
         badgeText: `🎯 ${targetSeat} 號出局 (${reason})`,
@@ -1130,10 +1045,13 @@
 
       currentHistoryViewIndex = gameState.history.length - 1;
       checkPoliceBadgeStatus();
-      pushStateToFirebase();
-      alert(`🎯 ${targetSeat} 號玩家因【${reason}】連帶出局！`);
+      pushStateToFirebase(`🎯 ${targetSeat} 號因【${reason}】出局`);
+      alert(`🎯 已標記：${targetSeat} 號玩家因【${reason}】連帶出局！`);
     }
 
+    // ==========================================
+    // 4. 警長競選與 PK 計票 (委託 RULES_ENGINE.resolvePoliceElection)
+    // ==========================================
     function renderPoliceDrawerControls() {
       const isPkMode = (gameState.phase === "POLICE_PK");
       const pkCandidates = gameState.pkCandidates || [];
@@ -1145,7 +1063,6 @@
       document.getElementById("selectVoterDescLabel").innerText = isPkMode ? "合資格選民投票 (未退水者無投票權)：" : "警下投票人點擊投票：";
       document.getElementById("confirmPoliceBtn").innerText = isPkMode ? "確認 PK 開票 (二次平票則警徽流失)" : "確認首輪開票 (若平票則進入 PK)";
 
-      // 上警/退水切換點陣
       const toggleGrid = document.getElementById("drawerCandidateToggleGrid");
       toggleGrid.innerHTML = gameState.players.map(p => {
         let btnClass = "bg-gray-800 border-gray-700 text-gray-300";
@@ -1160,7 +1077,7 @@
               btnClass = "bg-amber-500 border-amber-300 text-black font-extrabold";
               label = `${p.seat}號(PK)`;
             } else {
-              btnClass = "bg-amber-600 border-amber-400 text-white";
+              btnClass = "bg-amber-600 border-amber-400 text-white font-bold";
             }
           }
         }
@@ -1172,15 +1089,10 @@
         `;
       }).join('');
 
-      // 受票候選人容器
       const candContainer = document.getElementById("drawerPoliceTargetCandidatesContainer");
-      let activeCandidates = [];
-
-      if (!isPkMode) {
-        activeCandidates = gameState.players.filter(p => p.isCandidate && !p.hasDropped && p.isAlive);
-      } else {
-        activeCandidates = gameState.players.filter(p => pkCandidates.includes(p.seat) && p.isAlive);
-      }
+      let activeCandidates = !isPkMode
+        ? gameState.players.filter(p => p.isCandidate && !p.hasDropped && p.isAlive)
+        : gameState.players.filter(p => pkCandidates.includes(p.seat) && p.isAlive);
       
       if (activeCandidates.length === 0) {
         candContainer.innerHTML = `<span class="text-xs text-gray-500">無有效候選人</span>`;
@@ -1196,32 +1108,19 @@
         `;
       }
 
-      // 投票選民容器
       const votersGrid = document.getElementById("drawerPoliceEligibleVotersGrid");
       votersGrid.innerHTML = gameState.players.map(p => {
         let isEligible = false;
         let disableReason = "";
 
-        if (!p.isAlive) {
-          isEligible = false;
-          disableReason = "出局";
-        } else if (!isPkMode) {
-          if (!p.isCandidate) {
-            isEligible = true;
-          } else {
-            isEligible = false;
-            disableReason = p.hasDropped ? "已退水" : "在警上";
-          }
+        if (!p.isAlive) { isEligible = false; disableReason = "出局"; }
+        else if (!isPkMode) {
+          if (!p.isCandidate) isEligible = true;
+          else { isEligible = false; disableReason = p.hasDropped ? "已退水" : "在警上"; }
         } else {
-          if (pkCandidates.includes(p.seat)) {
-            isEligible = false;
-            disableReason = "PK候選";
-          } else if (p.isCandidate && !p.hasDropped) {
-            isEligible = false;
-            disableReason = "未退水無票";
-          } else {
-            isEligible = true;
-          }
+          if (pkCandidates.includes(p.seat)) { isEligible = false; disableReason = "PK候選"; }
+          else if (p.isCandidate && !p.hasDropped) { isEligible = false; disableReason = "未退水無票"; }
+          else isEligible = true;
         }
 
         let votedTarget = null;
@@ -1256,23 +1155,96 @@
         }
         if (p.isCandidate) {
           p.hasDropped = !p.hasDropped;
-          pushStateToFirebase();
+          pushStateToFirebase(`PK退水狀態更新：${seat}號`);
         }
         return;
       }
 
-      if (!p.isCandidate) {
-        p.isCandidate = true;
-        p.hasDropped = false;
-      } else if (!p.hasDropped) {
-        p.hasDropped = true;
-      } else {
-        p.isCandidate = false;
-        p.hasDropped = false;
-      }
-      pushStateToFirebase();
+      if (!p.isCandidate) { p.isCandidate = true; p.hasDropped = false; }
+      else if (!p.hasDropped) { p.hasDropped = true; }
+      else { p.isCandidate = false; p.hasDropped = false; }
+      pushStateToFirebase(`上警狀態更新：${seat}號`);
     }
 
+    function confirmPoliceElection() {
+      const isPkMode = (gameState.phase === "POLICE_PK");
+      const pResult = RULES_ENGINE.resolvePoliceElection(gameState.tempVotes, isPkMode, gameState.pkCandidates);
+
+      if (pResult.status === "ALL_ABSTAIN") {
+        alert("⚠️ 所有人都棄票或尚未輸入任何有效投票！無法結算。");
+        return;
+      }
+
+      if (pResult.status === "TIE_ENTER_PK") {
+        if (!confirm(`⚖️ 檢測到平票！【${pResult.topCandidates.join(' 號、')} 號】同獲 ${pResult.maxVotes} 票最高票！\n\n確定進入【警長競選 PK 輪次】嗎？`)) return;
+
+        gameState.history.push({
+          title: `D${gameState.day} 警選首輪(平票)`,
+          badgeText: `⚖️ ${pResult.topCandidates.join('、')}號平票 (${pResult.maxVotes}票)`,
+          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+          badgeHolder: null
+        });
+
+        gameState.phase = "POLICE_PK";
+        gameState.pkCandidates = pResult.topCandidates;
+        gameState.tempVotes = {};
+        gameState.selectedTarget = null;
+        currentHistoryViewIndex = -1;
+
+        pushStateToFirebase("警長競選平票，進入 PK 決選");
+        alert(`⚖️ 已切換至【警長競選 PK 輪次】！僅 ${pResult.topCandidates.join(' 號與 ')} 號可被投票。`);
+        return;
+      }
+
+      if (pResult.status === "PK_TIE_BADGE_LOSS") {
+        alert(`🔥 PK 輪次再次平票！【${pResult.topCandidates.join(' 號與 ')} 號】同獲 ${pResult.maxVotes} 票！\n觸發規則【警徽流失】！本局不再有警長，所有人回歸 1 票制！`);
+
+        gameState.history.push({
+          title: `D${gameState.day} 警選PK(二次平票)`,
+          badgeText: `🔥 二次平票 (警徽流失)`,
+          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+          badgeHolder: null
+        });
+
+        gameState.policeSeat = null;
+        gameState.isBadgeTorn = true;
+        gameState.phase = "DAY_EXILE";
+        gameState.pkCandidates = [];
+        gameState.tempVotes = {};
+        gameState.selectedTarget = null;
+        currentHistoryViewIndex = -1;
+
+        pushStateToFirebase("警長 PK 二次平票，警徽流失");
+        return;
+      }
+
+      if (pResult.status === "WINNER") {
+        const winnerSeat = pResult.winner;
+        gameState.policeSeat = winnerSeat;
+        gameState.isBadgeTorn = false;
+        gameState.consecutiveExplodeCount = 0;
+        gameState.pkCandidates = [];
+
+        gameState.history.push({
+          title: isPkMode ? `D${gameState.day} 警選PK決選` : `D${gameState.day} 警長競選`,
+          badgeText: `👑 ${winnerSeat}號當選警長 (${pResult.maxVotes}票)`,
+          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
+          badgeHolder: null
+        });
+
+        gameState.phase = "DAY_EXILE";
+        gameState.tempVotes = {};
+        gameState.selectedTarget = null;
+        currentHistoryViewIndex = -1;
+
+        pushStateToFirebase(`👑 警長誕生：${winnerSeat} 號當選警長`);
+        alert(`🎉 恭喜！${winnerSeat} 號玩家當選警長！進入【第 ${gameState.day} 天 白天放逐對局】。`);
+      }
+    }
+
+    // ==========================================
+    // 5. 放逐投票計票 (委託 RULES_ENGINE.resolveExileVote)
+    // ==========================================
     function renderExileDrawerControls() {
       const isPrinceEnabled = !!gameState.modules?.enablePrince;
       const isPrinceRevolving = !!gameState.isPrinceRevolving;
@@ -1288,7 +1260,6 @@
         princeTag.classList.add("hidden");
       }
 
-      // 定序王子按鈕顯示邏輯：模組開啟、且整局尚未使用過、且目前不是重投狀態
       if (isPrinceEnabled && !gameState.princeUsed && !isPrinceRevolving) {
         princeBtn.classList.remove("hidden");
       } else {
@@ -1364,172 +1335,18 @@
       if (p.isAlive) {
         p.isAlive = false;
         p.deathReason = "NIGHT";
-        promptChainedSkillDeath(seat, "夜間倒牌");
       } else {
         p.isAlive = true;
         p.deathReason = null;
       }
-      pushStateToFirebase();
+      pushStateToFirebase(`更新夜間死訊：${seat}號`);
     }
 
-    function promptChainedSkillDeath(triggerSeat, triggerPhaseName) {
-      setTimeout(() => {
-        if (confirm(`【${triggerSeat} 號玩家 (${triggerPhaseName})】出局！\n是否有發動技能連帶帶走其他玩家（如獵人開槍/狼美人魅惑）？`)) {
-          const aliveOptions = gameState.players.filter(p => p.isAlive).map(p => p.seat).join('、');
-          const targetStr = prompt(`請輸入被連帶帶走的玩家號碼：\n（目前存活：${aliveOptions}）`);
-          const targetSeat = parseInt(targetStr);
-          if (targetSeat && gameState.players.find(p => p.seat === targetSeat && p.isAlive)) {
-            const skillTarget = gameState.players.find(p => p.seat === targetSeat);
-            skillTarget.isAlive = false;
-            skillTarget.deathReason = "SKILL";
-
-            if (!gameState.history) gameState.history = [];
-            gameState.history.push({
-              title: `D${gameState.day} 技能連帶`,
-              badgeText: `🎯 ${triggerSeat}號帶走${targetSeat}號`,
-              votes: {},
-              badgeHolder: (!gameState.isBadgeTorn) ? gameState.policeSeat : null
-            });
-            alert(`🎯 已標記：${targetSeat} 號被 ${triggerSeat} 號連帶帶走！`);
-            checkPoliceBadgeStatus();
-            pushStateToFirebase();
-          }
-        }
-      }, 200);
-    }
-
-    function confirmPoliceElection() {
-      const isPkMode = (gameState.phase === "POLICE_PK");
-      
-      let voteCounts = {};
-      Object.entries(gameState.tempVotes || {}).forEach(([cand, voters]) => {
-        if (cand != 0 && voters.length > 0) {
-          voteCounts[cand] = voters.length;
-        }
-      });
-
-      let maxVotes = 0;
-      let topCandidates = [];
-
-      Object.entries(voteCounts).forEach(([cand, count]) => {
-        if (count > maxVotes) {
-          maxVotes = count;
-          topCandidates = [parseInt(cand)];
-        } else if (count === maxVotes) {
-          topCandidates.push(parseInt(cand));
-        }
-      });
-
-      if (!isPkMode) {
-        if (topCandidates.length === 0 || maxVotes === 0) {
-          alert("⚠️ 所有人都棄票或尚未輸入任何有效投票！無法結算。");
-          return;
-        }
-
-        if (topCandidates.length > 1) {
-          if (!confirm(`⚖️ 檢測到平票！【${topCandidates.join(' 號、')} 號】同獲 ${maxVotes} 票最高票！\n\n確定進入【警長競選 PK 輪次】嗎？\n（第一輪票型將自動封存，未退水玩家在 PK 輪次將喪失投票權）`)) return;
-
-          if (!gameState.history) gameState.history = [];
-          gameState.history.push({
-            title: `D${gameState.day} 警選首輪(平票)`,
-            badgeText: `⚖️ ${topCandidates.join('、')}號平票 (${maxVotes}票)`,
-            votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
-            badgeHolder: null
-          });
-
-          gameState.phase = "POLICE_PK";
-          gameState.pkCandidates = topCandidates;
-          gameState.tempVotes = {};
-          gameState.selectedTarget = null;
-          currentHistoryViewIndex = -1;
-
-          pushStateToFirebase();
-          alert(`⚖️ 已切換至【警長競選 PK 輪次】！\n僅 ${topCandidates.join(' 號與 ')} 號可被投票。\n請法官確認其餘警上玩家退水情況後進行第二輪投票。`);
-          return;
-        }
-
-        const winnerSeat = topCandidates[0];
-        gameState.policeSeat = winnerSeat;
-        gameState.isBadgeTorn = false;
-        gameState.consecutiveExplodeCount = 0;
-        gameState.pkCandidates = [];
-
-        if (!gameState.history) gameState.history = [];
-        gameState.history.push({
-          title: `D${gameState.day} 警長競選`,
-          badgeText: `👑 ${winnerSeat}號當選警長 (${maxVotes}票)`,
-          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
-          badgeHolder: null
-        });
-
-        gameState.phase = "DAY_EXILE";
-        gameState.tempVotes = {};
-        gameState.selectedTarget = null;
-        currentHistoryViewIndex = -1;
-
-        pushStateToFirebase();
-        alert(`🎉 恭喜！${winnerSeat} 號玩家以 ${maxVotes} 票當選警長！\n進入【第 ${gameState.day} 天 白天放逐對局】。`);
-
-      } else {
-        if (topCandidates.length === 0 || maxVotes === 0) {
-          alert("⚠️ PK 輪次無有效得票！");
-          return;
-        }
-
-        if (topCandidates.length > 1) {
-          alert(`🔥 PK 輪次再次平票！【${topCandidates.join(' 號與 ')} 號】同獲 ${maxVotes} 票！\n觸發規則【警徽流失】！\n本局不再有警長，所有人回歸 1 票制！`);
-
-          if (!gameState.history) gameState.history = [];
-          gameState.history.push({
-            title: `D${gameState.day} 警選PK(二次平票)`,
-            badgeText: `🔥 二次平票 (警徽流失)`,
-            votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
-            badgeHolder: null
-          });
-
-          gameState.policeSeat = null;
-          gameState.isBadgeTorn = true;
-          gameState.phase = "DAY_EXILE";
-          gameState.pkCandidates = [];
-          gameState.tempVotes = {};
-          gameState.selectedTarget = null;
-          currentHistoryViewIndex = -1;
-
-          pushStateToFirebase();
-          return;
-        }
-
-        const winnerSeat = topCandidates[0];
-        gameState.policeSeat = winnerSeat;
-        gameState.isBadgeTorn = false;
-        gameState.consecutiveExplodeCount = 0;
-        gameState.pkCandidates = [];
-
-        if (!gameState.history) gameState.history = [];
-        gameState.history.push({
-          title: `D${gameState.day} 警選PK決選`,
-          badgeText: `👑 ${winnerSeat}號PK勝出 (${maxVotes}票)`,
-          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
-          badgeHolder: null
-        });
-
-        gameState.phase = "DAY_EXILE";
-        gameState.tempVotes = {};
-        gameState.selectedTarget = null;
-        currentHistoryViewIndex = -1;
-
-        pushStateToFirebase();
-        alert(`🎉 PK 決選完成！${winnerSeat} 號玩家勝出當選警長！\n進入【第 ${gameState.day} 天 白天放逐對局】。`);
-      }
-    }
-
-    // 定序王子翻牌發動【逆轉時空】
     function handlePrinceReversal() {
       if (!confirm("👑 確定現場有【定序王子】翻牌發動【逆轉時空】嗎？\n\n此動作將：\n1. 封存剛剛的票型（供全場盤邏輯）\n2. 取消放逐出局（本次無人出局）\n3. 定序王子單獨發言後進行【第二次放逐投票】")) return;
 
       const activePoliceAtThisVote = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
 
-      if (!gameState.history) gameState.history = [];
       gameState.history.push({
         title: `D${gameState.day} 放逐(定序逆轉)`,
         badgeText: `⏳ 定序王子發動時光倒流 (本次無人出局)`,
@@ -1541,103 +1358,49 @@
       gameState.isPrinceRevolving = true;
       gameState.tempVotes = {};
       gameState.selectedTarget = null;
-
       currentHistoryViewIndex = -1;
-      pushStateToFirebase();
 
-      alert(`⏳ 定序王子技能已觸發！\n票型已封存進歷史紀錄，現場請定序王子額外發言一次，隨後進行【第 ${gameState.day} 天 第二次放逐投票】！`);
+      pushStateToFirebase("定序王子翻牌發動逆轉時空");
+      alert(`⏳ 定序王子技能已觸發！請定序王子額外發言一次，隨後進行【第 ${gameState.day} 天 第二次放逐投票】！`);
     }
 
-    // 放逐票型確認結算 (含詭術師智慧置換檢驗)
     function confirmExileVote() {
-      let maxPoints = 0;
-      let topVotedSeats = [];
+      const eResult = RULES_ENGINE.resolveExileVote(
+        gameState.tempVotes,
+        gameState.policeSeat,
+        gameState.isBadgeTorn,
+        gameState.modules,
+        gameState.tricksterSwap,
+        gameState.players
+      );
+
+      if (eResult.status === "ALL_ABSTAIN") {
+        alert("⚠️ 平票或全體棄票，無人被放逐！");
+        return;
+      }
 
       const activePoliceAtThisVote = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
-
-      Object.entries(gameState.tempVotes || {}).forEach(([target, voters]) => {
-        if (target != 0) {
-          let points = 0;
-          voters.forEach(v => {
-            const isPolice = (activePoliceAtThisVote !== null && v === activePoliceAtThisVote);
-            points += (isPolice ? 1.5 : 1);
-          });
-
-          if (points > maxPoints) {
-            maxPoints = points;
-            topVotedSeats = [parseInt(target)];
-          } else if (points === maxPoints && maxPoints > 0) {
-            topVotedSeats.push(parseInt(target));
-          }
-        }
-      });
-
-      let exiledSeat = null;
-      let isTricksterSubstituted = false;
-      let originalVotedSeat = null;
-
-      if (topVotedSeats.length === 1) {
-        originalVotedSeat = topVotedSeats[0];
-        exiledSeat = originalVotedSeat;
-
-        // 詭術師機制檢驗 (僅當模組開啟且有置換紀錄時判定)
-        const isTricksterEnabled = !!gameState.modules?.enableTrickster;
-        const swap = gameState.tricksterSwap;
-
-        if (isTricksterEnabled && swap) {
-          if (swap.seatA === originalVotedSeat || swap.seatB === originalVotedSeat) {
-            const substituteSeat = (swap.seatA === originalVotedSeat) ? swap.seatB : swap.seatA;
-            const subPlayer = gameState.players.find(p => p.seat === substituteSeat);
-
-            if (subPlayer && subPlayer.isAlive) {
-              const confirmTrickster = confirm(
-                `🎭 【檢測到詭術師置換！】\n\n` +
-                `最高票為【${originalVotedSeat} 號】(${maxPoints}票)！\n` +
-                `夜間詭術師曾將【${swap.seatA} 號 ⇄ ${swap.seatB} 號】號碼牌置換！\n\n` +
-                `點擊【確定】：發動詭術置換，${originalVotedSeat} 號存活，改由【${substituteSeat} 號】代替放逐出局！\n` +
-                `點擊【取消】：不發動（技能失效或抵消），依正常票型由 ${originalVotedSeat} 號出局。`
-              );
-
-              if (confirmTrickster) {
-                exiledSeat = substituteSeat;
-                isTricksterSubstituted = true;
-              }
-            } else {
-              alert(`🎭 詭術師置換對象【${substituteSeat} 號】早已出局，置換技能失敗，仍由 ${originalVotedSeat} 號出局。`);
-            }
-          }
-        }
-      }
-
-      if (exiledSeat) {
-        const p = gameState.players.find(x => x.seat === exiledSeat);
-        if (p) {
-          p.isAlive = false;
-          p.deathReason = "EXILE";
-        }
-      }
-
-      gameState.consecutiveExplodeCount = 0;
-
-      // 產生歷史記錄標籤文字
       let historyBadgeText = "";
-      if (topVotedSeats.length > 1) {
-        historyBadgeText = `⚖️ 平票無人出局 (${topVotedSeats.join('、')}號同得${maxPoints}票)`;
-      } else if (exiledSeat) {
-        if (isTricksterSubstituted) {
-          historyBadgeText = `❌ ${exiledSeat}號替罪出局 (🎭詭術置換原投${originalVotedSeat}號)`;
-        } else {
-          historyBadgeText = `❌ ${exiledSeat}號放逐出局 (${maxPoints}票)`;
+
+      if (eResult.status === "TIE_NO_EXILE") {
+        historyBadgeText = `⚖️ 平票無人出局 (${eResult.topSeats.join('、')}號同得${eResult.maxPoints}票)`;
+      } else if (eResult.status === "EXILED") {
+        const exiledPlayer = gameState.players.find(x => x.seat === eResult.exiledSeat);
+        if (exiledPlayer) {
+          exiledPlayer.isAlive = false;
+          exiledPlayer.deathReason = "EXILE";
+          gameState.lastExiledPlayer = exiledPlayer;
         }
-      } else {
-        historyBadgeText = "平票或全體棄票，無人出局";
+
+        if (eResult.isTricksterSubstituted) {
+          historyBadgeText = `❌ ${eResult.exiledSeat}號替罪出局 (🎭詭術置換原投${eResult.originalVotedSeat}號)`;
+        } else {
+          historyBadgeText = `❌ ${eResult.exiledSeat}號放逐出局 (${eResult.maxPoints}票)`;
+        }
       }
 
-      const historyTitle = gameState.isPrinceRevolving 
-        ? `D${gameState.day} 放逐重投` 
-        : `D${gameState.day} 白天放逐`;
+      const historyTitle = gameState.isPrinceRevolving ? `D${gameState.day} 放逐重投` : `D${gameState.day} 白天放逐`;
 
-      if (!gameState.history) gameState.history = [];
       gameState.history.push({
         title: historyTitle,
         badgeText: historyBadgeText,
@@ -1645,17 +1408,15 @@
         badgeHolder: activePoliceAtThisVote
       });
 
-      // 結算後重置重投狀態與單日詭術置換
+      gameState.consecutiveExplodeCount = 0;
       gameState.isPrinceRevolving = false;
       gameState.tricksterSwap = null; 
-
+      gameState.tempVotes = {};
+      gameState.selectedTarget = null;
       currentHistoryViewIndex = gameState.history.length - 1;
-      pushStateToFirebase();
 
-      if (exiledSeat) {
-        promptChainedSkillDeath(exiledSeat, isTricksterSubstituted ? "詭術替罪出局" : "白天放逐");
-      }
-
+      checkPoliceBadgeStatus();
+      pushStateToFirebase(`放逐結算：${historyBadgeText}`);
       alert(`✅ 第 ${gameState.day} 天放逐票型已同步封存！\n${historyBadgeText}`);
     }
 
@@ -1671,16 +1432,15 @@
       gameState.tricksterSwap = null;
       currentHistoryViewIndex = -1;
 
-      pushStateToFirebase();
+      pushStateToFirebase(`進入第 ${gameState.day} 天白天`);
       alert(`☀️ 已進入第 ${gameState.day} 天白天！雲端已同步更新。`);
     }
 
     function resetMatchData() {
-      if (confirm("⚠️ 確定要將雲端整局資料歸零重置嗎？所有裝置將同步重置！")) {
-        gameState = JSON.parse(JSON.stringify(defaultState));
-        currentHistoryViewIndex = -1;
-        pushStateToFirebase();
-      }
+      if (!confirm("⚠️ 確定要將雲端整局資料歸零重置嗎？所有裝置將同步重置！")) return;
+      gameState = RULES_ENGINE.createInitialGameState();
+      currentHistoryViewIndex = -1;
+      pushStateToFirebase("整局資料歸零重置");
     }
   </script>
 </body>
