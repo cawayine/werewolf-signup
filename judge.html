@@ -1080,13 +1080,32 @@
     }
 
     function toggleAntidote() {
-      if (gameState.nightMemory.witchAntidoteUsed) return;
-      antidoteUsedThisNight = !antidoteUsedThisNight;
-      const btn = document.getElementById("antidoteBtn");
-      btn.innerText = antidoteUsedThisNight ? "已使用 (救人)" : "未使用";
-      btn.className = antidoteUsedThisNight ? "bg-emerald-600 text-white text-[11px] px-2 py-0.5 rounded font-bold transition" : "bg-gray-700 text-gray-300 text-[11px] px-2 py-0.5 rounded transition";
-      refreshAllRuleDisplays();
-    }
+  if (gameState.nightMemory.witchAntidoteUsed) return;
+
+  // 1. 抓取女巫玩家席位
+  const witch = gameState.players.find(p => p.role === "女巫");
+  
+  // 2. 抓取當前狼刀目標
+  const wolfEl = document.getElementById('target-wolf') || 
+                 document.getElementById('target-wolf_team_confirm') ||
+                 document.querySelector("select[id^='target-wolf']");
+  const rawWolfTarget = Number(wolfEl?.value || 0);
+
+  // 3. 判定一律不可自救
+  if (!antidoteUsedThisNight && witch && rawWolfTarget === Number(witch.seat)) {
+    alert("⚠️ 本局規則：女巫一律不可自救！");
+    return;
+  }
+
+  antidoteUsedThisNight = !antidoteUsedThisNight;
+  const btn = document.getElementById("antidoteBtn");
+  btn.innerText = antidoteUsedThisNight ? "已使用 (救人)" : "未使用";
+  btn.className = antidoteUsedThisNight 
+    ? "bg-emerald-600 text-white text-[11px] px-2 py-0.5 rounded font-bold transition" 
+    : "bg-gray-700 text-gray-300 text-[11px] px-2 py-0.5 rounded transition";
+    
+  refreshAllRuleDisplays();
+}
 
     function refreshAllRuleDisplays() {
       if (typeof RULES_ENGINE === 'undefined' || !gameState.players || gameState.players.length === 0) return;
