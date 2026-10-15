@@ -536,18 +536,27 @@
           let isDisabled = false;
           if (schema.conditionalRoleDead) {
             const roleAlive = gameState.players.some(p => p.role === schema.conditionalRoleDead && p.isAlive);
-            isDisabled = roleAlive; // 條件角色存活時禁用
+            isDisabled = roleAlive;
+          }
+
+          let optionsHtml = '';
+          if (isDisabled) {
+            optionsHtml = `<option value="">${schema.conditionalRoleDead}尚未出局 (不可單砍)</option>`;
+          } else {
+            optionsHtml = `<option value="">${schema.placeholder || '請選擇'}</option>`;
+            pool.forEach(p => {
+              const isLast = (p.seat === lastTarget);
+              const disabledAttr = isLast ? 'disabled' : '';
+              const lastNote = isLast ? ' (昨晚已選)' : '';
+              optionsHtml += `<option value="${p.seat}" ${disabledAttr}>${p.seat}號 - ${p.name || ''}${lastNote}</option>`;
+            });
           }
 
           bodyHtml = `
             <div class="flex items-center gap-2">
               <span class="text-gray-400">選擇目標：</span>
               <select id="target-${step.id}" onchange="onFormActionChange('${step.id}')" ${isDisabled ? 'disabled' : ''} class="flex-1 rounded p-1 text-xs border">
-                <option value="">${isDisabled ? (schema.conditionalRoleDead + '尚未出局 (不可單砍)') : (schema.placeholder || '請選擇')}</option>
-                ${!isDisabled ? pool.map(p => {
-                  const isLast = (p.seat === lastTarget);
-                  return `<option value="\${p.seat}" ${isLast ? 'disabled' : ''}>${p.seat}號 - ${p.name \vert{}\vert{} ''}${isLast ? ' (昨晚已選)' : ''}</option>`;
-                }).join('') : ''}
+                ${optionsHtml}
               </select>
             </div>
           `;
