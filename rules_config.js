@@ -1,6 +1,6 @@
 /**
  * 基地狼人殺 - 規則與板型獨立設定檔 (rules_config.js)
- * 基準版本：全域規則大腦 + 26位角色字典 + 8套定案板型 + RULES_ENGINE 核心運算引擎
+ * 基準版本：全域規則大腦 + 26位角色字典 + 8套定案板型 + RULES_ENGINE 核心運算引擎 (完整修復版)
  */
 
 // ==========================================
@@ -293,15 +293,19 @@ const RULES_ENGINE = {
     };
   },
 
-  // 1. 預言家查驗判定 (支援魔術師號碼牌置換映射)
+  // 1. 預言家查驗判定 (支援魔術師號碼牌置換映射 + 強制轉型比對)
   resolveCheck(targetSeat, swapPair = [0, 0], players = []) {
-    if (!targetSeat) return { isReady: false, isWolf: false, text: "待查驗" };
+    const tSeat = Number(targetSeat) || 0;
+    if (!tSeat) return { isReady: false, isWolf: false, text: "待查驗" };
     
-    let effectiveSeat = targetSeat;
-    if (swapPair[0] === targetSeat) effectiveSeat = swapPair[1];
-    else if (swapPair[1] === targetSeat) effectiveSeat = swapPair[0];
+    const s0 = Number(swapPair[0]) || 0;
+    const s1 = Number(swapPair[1]) || 0;
 
-    const targetPlayer = players.find(p => p.seat === effectiveSeat);
+    let effectiveSeat = tSeat;
+    if (s0 === tSeat) effectiveSeat = s1;
+    else if (s1 === tSeat) effectiveSeat = s0;
+
+    const targetPlayer = players.find(p => Number(p.seat) === effectiveSeat);
     if (!targetPlayer) return { isReady: false, isWolf: false, text: "查無此人" };
 
     const isWolf = (targetPlayer.seatType === "WEREWOLF");
@@ -312,17 +316,22 @@ const RULES_ENGINE = {
     };
   },
 
-  // 2. 夜間手勢狀態判定 (獵人/狼王吃毒禁槍、黑商變狼等)
+  // 2. 夜間手勢狀態判定 (全面支援型別安全 Number() 轉換)
   evaluateGesture(gestureId, context = {}) {
-    const { rawPoisonTarget = 0, swapPair = [0, 0], players = [], blackMarketTransformedWolf = false } = context;
+    const rawPoisonTarget = Number(context.rawPoisonTarget) || 0;
+    const swapPair = context.swapPair || [0, 0];
+    const s0 = Number(swapPair[0]) || 0;
+    const s1 = Number(swapPair[1]) || 0;
+    const players = context.players || [];
+    const blackMarketTransformedWolf = !!context.blackMarketTransformedWolf;
 
     let effectivePoison = rawPoisonTarget;
-    if (swapPair[0] === rawPoisonTarget) effectivePoison = swapPair[1];
-    else if (swapPair[1] === rawPoisonTarget) effectivePoison = swapPair[0];
+    if (s0 === rawPoisonTarget) effectivePoison = s1;
+    else if (s1 === rawPoisonTarget) effectivePoison = s0;
 
     if (gestureId === "hunter_gesture") {
       const hunter = players.find(p => p.role === "獵人");
-      const isPoisoned = hunter && (hunter.seat === effectivePoison);
+      const isPoisoned = !!hunter && effectivePoison > 0 && (Number(hunter.seat) === effectivePoison);
       return {
         isPositive: !isPoisoned,
         text: isPoisoned ? "👎 狀態異常 (吃毒不可開槍)" : "👍 狀態良好 (可開槍)"
@@ -331,10 +340,17 @@ const RULES_ENGINE = {
 
     if (gestureId === "wolf_king_gesture") {
       const wolfKing = players.find(p => p.role === "狼王");
-      const isPoisoned = wolfKing && (wolfKing.seat === effectivePoison);
+      const isPoisoned = !!wolfKing && effectivePoison > 0 && (Number(wolfKing.seat) === effectivePoison);
       return {
         isPositive: !isPoisoned,
         text: isPoisoned ? "👎 狀態異常 (吃毒不可開槍)" : "👍 狀態良好 (可開槍)"
+      };
+    }
+
+    if (gestureId === "converter_gesture") {
+      return {
+        isPositive: true,
+        text: "🔪 轉化確認 (可參與落刀)"
       };
     }
 
@@ -350,7 +366,7 @@ const RULES_ENGINE = {
 
   // 3. 彩球票型權重統計與排序 (公播端與上帝端通用)
   calculateLottoTallies(votesMap = {}, effectiveBadgeHolder = null, isElectionStage = false) {
-    const allKeys = Object.keys(votesMap).map(k => parseInt(k));
+    const allKeys = Object.keys(votesMap).map(k => Number(k));
     if (allKeys.length === 0) return [];
 
     const sortedTargets = allKeys.sort((a, b) => {
@@ -359,18 +375,21 @@ const RULES_ENGINE = {
       return a - b;
     });
 
+    const activePolice = effectiveBadgeHolder !== null ? Number(effectiveBadgeHolder) : null;
+
     return sortedTargets.map(targetSeat => {
       const rawVoters = votesMap[targetSeat] || [];
       const isAbstain = (targetSeat === 0);
       let totalPoints = 0;
 
-      const sortedVoters = rawVoters.slice().sort((a, b) => a - b).map(vSeat => {
-        const isPolice = (effectiveBadgeHolder !== null && vSeat === effectiveBadgeHolder);
+      const sortedVoters = rawVoters.slice().sort((a, b) => Number(a) - Number(b)).map(vSeat => {
+        const vNum = Number(vSeat);
+        const isPolice = (activePolice !== null && vNum === activePolice);
         const points = (!isElectionStage && isPolice) ? 1.5 : 1.0;
         totalPoints += points;
         return {
-          seat: vSeat,
-          label: (vSeat < 10) ? ("0" + vSeat) : String(vSeat),
+          seat: vNum,
+          label: (vNum < 10) ? ("0" + vNum) : String(vNum),
           isPolice: isPolice && !isElectionStage
         };
       });
@@ -390,8 +409,9 @@ const RULES_ENGINE = {
   resolvePoliceElection(tempVotes = {}, isPkMode = false, pkCandidates = []) {
     let counts = {};
     Object.entries(tempVotes).forEach(([cand, voters]) => {
-      if (cand != 0 && voters.length > 0) {
-        counts[cand] = voters.length;
+      const cNum = Number(cand);
+      if (cNum !== 0 && Array.isArray(voters) && voters.length > 0) {
+        counts[cNum] = voters.length;
       }
     });
 
@@ -399,11 +419,12 @@ const RULES_ENGINE = {
     let topCandidates = [];
 
     Object.entries(counts).forEach(([cand, count]) => {
+      const cNum = Number(cand);
       if (count > maxVotes) {
         maxVotes = count;
-        topCandidates = [parseInt(cand)];
+        topCandidates = [cNum];
       } else if (count === maxVotes) {
-        topCandidates.push(parseInt(cand));
+        topCandidates.push(cNum);
       }
     });
 
@@ -428,19 +449,20 @@ const RULES_ENGINE = {
   resolveExileVote(tempVotes = {}, policeSeat = null, isBadgeTorn = false, modules = {}, tricksterSwap = null, players = []) {
     let maxPoints = 0;
     let topSeats = [];
-    const activePolice = (!isBadgeTorn) ? policeSeat : null;
+    const activePolice = (!isBadgeTorn && policeSeat !== null) ? Number(policeSeat) : null;
 
     Object.entries(tempVotes).forEach(([target, voters]) => {
-      if (target != 0) {
+      const tNum = Number(target);
+      if (tNum !== 0 && Array.isArray(voters)) {
         let pts = 0;
         voters.forEach(v => {
-          pts += (activePolice !== null && v === activePolice) ? 1.5 : 1.0;
+          pts += (activePolice !== null && Number(v) === activePolice) ? 1.5 : 1.0;
         });
         if (pts > maxPoints) {
           maxPoints = pts;
-          topSeats = [parseInt(target)];
+          topSeats = [tNum];
         } else if (pts === maxPoints && maxPoints > 0) {
-          topSeats.push(parseInt(target));
+          topSeats.push(tNum);
         }
       }
     });
@@ -459,9 +481,11 @@ const RULES_ENGINE = {
 
     // 檢查詭術師號碼牌置換
     if (modules?.enableTrickster && tricksterSwap) {
-      if (tricksterSwap.seatA === origSeat || tricksterSwap.seatB === origSeat) {
-        const substituteSeat = (tricksterSwap.seatA === origSeat) ? tricksterSwap.seatB : tricksterSwap.seatA;
-        const subPlayer = players.find(p => p.seat === substituteSeat);
+      const sA = Number(tricksterSwap.seatA);
+      const sB = Number(tricksterSwap.seatB);
+      if (sA === origSeat || sB === origSeat) {
+        const substituteSeat = (sA === origSeat) ? sB : sA;
+        const subPlayer = players.find(p => Number(p.seat) === substituteSeat);
         if (subPlayer && subPlayer.isAlive) {
           finalSeat = substituteSeat;
           isSubstituted = true;
@@ -497,42 +521,57 @@ const RULES_ENGINE = {
     }
   },
 
-  // 7. 夜間死訊綜合結算演算法
+  // 7. 夜間死訊綜合結算演算法 (含魔術師號碼牌交換與技能禁槍)
   resolveNight(inputs = {}, nightMemory = {}) {
-    const rawWolf = inputs.rawWolfTarget || 0;
-    const rawPoison = inputs.rawPoisonTarget || 0;
-    const guard = inputs.guardTarget || 0;
+    const rawWolf = Number(inputs.rawWolfTarget) || 0;
+    const rawPoison = Number(inputs.rawPoisonTarget) || 0;
+    const guard = Number(inputs.guardTarget) || 0;
     const antidoteUsed = !!inputs.antidoteUsed;
+
+    const swapPair = inputs.swapPair || [0, 0];
+    const s0 = Number(swapPair[0]) || 0;
+    const s1 = Number(swapPair[1]) || 0;
+
+    const applySwap = (seat) => {
+      if (!seat) return 0;
+      if (seat === s0) return s1;
+      if (seat === s1) return s0;
+      return seat;
+    };
+
+    const effectiveWolf = applySwap(rawWolf);
+    const effectivePoison = applySwap(rawPoison);
+    const effectiveGuard = applySwap(guard);
 
     let deaths = [];
     let hunterCanShoot = true;
     let wolfKingCanShoot = true;
 
     // 狼刀 + 守衛 + 女巫解藥 (同守同救奶穿)
-    if (rawWolf) {
-      if (antidoteUsed && guard === rawWolf) {
-        deaths.push(rawWolf); // 同守同救奶穿
-      } else if (antidoteUsed || guard === rawWolf) {
+    if (effectiveWolf) {
+      if (antidoteUsed && effectiveGuard === effectiveWolf) {
+        deaths.push(effectiveWolf); // 同守同救奶穿
+      } else if (antidoteUsed || effectiveGuard === effectiveWolf) {
         // 平安
       } else {
-        deaths.push(rawWolf);
+        deaths.push(effectiveWolf);
       }
     }
 
     // 女巫毒藥
-    if (rawPoison && !deaths.includes(rawPoison)) {
-      deaths.push(rawPoison);
+    if (effectivePoison && !deaths.includes(effectivePoison)) {
+      deaths.push(effectivePoison);
     }
 
     // 獵人 / 狼王 吃毒禁槍判定
-    if (deaths.includes(rawPoison)) {
+    if (deaths.includes(effectivePoison)) {
       hunterCanShoot = false;
       wolfKingCanShoot = false;
     }
 
     const summaryText = deaths.length === 0 
       ? "昨夜是平安夜" 
-      : `昨夜倒牌：${deaths.map(s => s + '號').join('、')}`;
+      : `昨夜倒牌：${deaths.sort((a,b)=>a-b).map(s => s + '號').join('、')}`;
 
     return {
       deaths: deaths,
