@@ -893,6 +893,21 @@
       if (!container || !config) return;
       container.innerHTML = "";
 
+      // 判斷該夜是否已被封存（唯讀模式）
+      const isLockedNight = !!(gameState.nightHistory && gameState.nightHistory[gameState.round]);
+      const savedSnapshot = isLockedNight ? gameState.nightHistory[gameState.round] : null;
+
+      const nightHint = document.getElementById("nightPhaseHint");
+      if (nightHint) {
+        if (isLockedNight) {
+          nightHint.innerText = "🔒 歷史記錄 (已天亮封存，僅供查看不可編輯)";
+          nightHint.className = "text-[10px] text-rose-400 font-mono font-bold";
+        } else {
+          nightHint.innerText = "請照順序喚醒確認";
+          nightHint.className = "text-[10px] text-amber-400 font-mono";
+        }
+      }
+
       const script = (gameState.round === 1) ? config.firstNightOrder : config.repeatingNightOrder;
       if (!script) return;
 
@@ -926,8 +941,8 @@
           bodyHtml = `
             <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
               <span class="text-gray-300 font-mono">確認目標：<strong class="text-amber-400">${desc}</strong></span>
-              <button onclick="markStepDone('${step.id}')" id="btn-done-${step.id}" class="bg-gray-700 text-gray-300 px-2 py-0.5 rounded text-[11px] transition">
-                點擊確認
+              <button onclick="markStepDone('${step.id}')" id="btn-done-${step.id}" ${isLockedNight ? 'disabled' : ''} class="${isLockedNight ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 text-gray-300'} px-2 py-0.5 rounded text-[11px] transition">
+                ${isLockedNight ? '已封存' : '點擊確認'}
               </button>
             </div>
           `;
@@ -956,18 +971,20 @@
             </div>
           `;
         } else if (step.id === "magician") {
+          const sA = savedSnapshot ? savedSnapshot.inputs.swapPair[0] : "";
+          const sB = savedSnapshot ? savedSnapshot.inputs.swapPair[1] : "";
           bodyHtml = `
             <div class="grid grid-cols-2 gap-2">
               <div class="flex items-center gap-1">
                 <span class="text-gray-400">目標A:</span>
-                <select id="swapTargetA" onchange="onFormActionChange('swap')" class="w-full rounded p-1 text-xs border">
+                <select id="swapTargetA" ${isLockedNight ? 'disabled' : ''} onchange="onFormActionChange('swap')" class="w-full rounded p-1 text-xs border ${isLockedNight ? 'opacity-60 cursor-not-allowed' : ''}">
                   <option value="">選擇號碼</option>
                   ${allPlayersOptions}
                 </select>
               </div>
               <div class="flex items-center gap-1">
                 <span class="text-gray-400">目標B:</span>
-                <select id="swapTargetB" onchange="onFormActionChange('swap')" class="w-full rounded p-1 text-xs border">
+                <select id="swapTargetB" ${isLockedNight ? 'disabled' : ''} onchange="onFormActionChange('swap')" class="w-full rounded p-1 text-xs border ${isLockedNight ? 'opacity-60 cursor-not-allowed' : ''}">
                   <option value="">選擇號碼</option>
                   ${allPlayersOptions}
                 </select>
@@ -975,8 +992,8 @@
             </div>
           `;
         } else if (step.id === "witch") {
-          const antUsed = gameState.nightMemory.witchAntidoteUsed;
-          const poiUsed = gameState.nightMemory.witchPoisonUsed;
+          const antUsed = isLockedNight ? savedSnapshot.inputs.antidoteUsed : gameState.nightMemory.witchAntidoteUsed;
+          const poiVal = isLockedNight ? savedSnapshot.inputs.rawPoisonTarget : "";
           bodyHtml = `
             <div class="flex justify-between items-center mb-1">
               <span class="text-[10px] text-amber-400 font-mono font-bold" id="witchRawKillHint">原始刀口：等待落刀</span>
@@ -984,15 +1001,15 @@
             <div class="grid grid-cols-2 gap-2">
               <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
                 <span>解藥</span>
-                <button id="antidoteBtn" onclick="toggleAntidote()" ${antUsed ? 'disabled' : ''} class="${antUsed ? 'bg-gray-800 text-gray-500' : 'bg-gray-700 text-gray-300'} text-[11px] px-2 py-0.5 rounded transition">
-                  ${antUsed ? '已消耗' : '未使用'}
+                <button id="antidoteBtn" onclick="toggleAntidote()" ${isLockedNight || antUsed ? 'disabled' : ''} class="${antUsed ? 'bg-emerald-800 text-white' : 'bg-gray-700 text-gray-300'} text-[11px] px-2 py-0.5 rounded transition ${isLockedNight ? 'cursor-not-allowed opacity-75' : ''}">
+                  ${antUsed ? '已救人' : '未使用'}
                 </button>
               </div>
               <div class="bg-gray-900/80 p-2 rounded border border-gray-700 flex justify-between items-center">
                 <span>毒藥</span>
-                <select id="poisonTarget" onchange="onFormActionChange('poison')" ${poiUsed ? 'disabled' : ''} class="text-[11px] rounded p-0.5 border">
-                  <option value="">${poiUsed ? '已消耗' : '不使用'}</option>
-                  ${poiUsed ? '' : aliveOptions}
+                <select id="poisonTarget" ${isLockedNight ? 'disabled' : ''} onchange="onFormActionChange('poison')" class="text-[11px] rounded p-0.5 border ${isLockedNight ? 'opacity-60 cursor-not-allowed' : ''}">
+                  <option value="">不使用</option>
+                  ${aliveOptions}
                 </select>
               </div>
             </div>
@@ -1001,7 +1018,7 @@
           bodyHtml = `
             <div class="flex items-center gap-2">
               <span class="text-gray-400">查驗目標：</span>
-              <select id="seerTarget" onchange="onFormActionChange('seer')" class="flex-1 rounded p-1 text-xs border">
+              <select id="seerTarget" ${isLockedNight ? 'disabled' : ''} onchange="onFormActionChange('seer')" class="flex-1 rounded p-1 text-xs border ${isLockedNight ? 'opacity-60 cursor-not-allowed' : ''}">
                 <option value="">選擇查驗目標</option>
                 ${allPlayersOptions}
               </select>
@@ -1011,7 +1028,6 @@
             </div>
           `;
         } else if (step.id === "black_market") {
-          // 找出黑市商人席位，過濾排除自己（不能送自己禮物）
           const bmPlayer = gameState.players.find(p => p.role === "黑市商人");
           const bmSeat = bmPlayer ? Number(bmPlayer.seat) : 0;
           const giftRecipientOptions = gameState.players
@@ -1021,20 +1037,18 @@
 
           bodyHtml = `
             <div class="space-y-1.5 bg-gray-900/60 p-2 rounded">
-              <div class="text-[10px] text-amber-300 font-bold mb-1">
-                🎁 選擇三位幸運兒 (不可選擇自己)：
-              </div>
+              <div class="text-[10px] text-amber-300 font-bold mb-1">🎁 選擇三位幸運兒 (不可選擇自己)：</div>
               <div class="flex items-center justify-between">
                 <span>🔮 查驗幸運兒：</span>
-                <select id="giftSeer" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${giftRecipientOptions}</select>
+                <select id="giftSeer" ${isLockedNight ? 'disabled' : ''} class="w-36 rounded p-0.5 text-xs border ${isLockedNight ? 'opacity-60 cursor-not-allowed' : ''}"><option value="">選擇玩家</option>${giftRecipientOptions}</select>
               </div>
               <div class="flex items-center justify-between">
                 <span>🧪 毒藥幸運兒：</span>
-                <select id="giftPoison" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${giftRecipientOptions}</select>
+                <select id="giftPoison" ${isLockedNight ? 'disabled' : ''} class="w-36 rounded p-0.5 text-xs border ${isLockedNight ? 'opacity-60 cursor-not-allowed' : ''}"><option value="">選擇玩家</option>${giftRecipientOptions}</select>
               </div>
               <div class="flex items-center justify-between">
                 <span>🔫 獵槍幸運兒：</span>
-                <select id="giftGun" class="w-36 rounded p-0.5 text-xs border"><option value="">選擇玩家</option>${giftRecipientOptions}</select>
+                <select id="giftGun" ${isLockedNight ? 'disabled' : ''} class="w-36 rounded p-0.5 text-xs border ${isLockedNight ? 'opacity-60 cursor-not-allowed' : ''}"><option value="">選擇玩家</option>${giftRecipientOptions}</select>
               </div>
             </div>
           `;
@@ -1042,7 +1056,7 @@
           bodyHtml = `
             <div class="flex items-center gap-2">
               <span class="text-gray-400">選擇目標：</span>
-              <select id="target-${step.id}" onchange="onFormActionChange('${step.id}')" class="flex-1 rounded p-1 text-xs border">
+              <select id="target-${step.id}" ${isLockedNight ? 'disabled' : ''} onchange="onFormActionChange('${step.id}')" class="flex-1 rounded p-1 text-xs border ${isLockedNight ? 'opacity-60 cursor-not-allowed' : ''}">
                 <option value="">請選擇</option>
                 ${aliveOptions}
               </select>
@@ -1061,8 +1075,66 @@
         container.appendChild(card);
       });
 
+      // 歷史封存資料回填
+      if (savedSnapshot) {
+        setTimeout(() => {
+          const wolfEl = document.getElementById('target-wolf') || 
+                         document.getElementById('target-wolf_team_confirm') ||
+                         document.querySelector("select[id^='target-wolf']");
+          if (wolfEl && savedSnapshot.inputs.rawWolfTarget) wolfEl.value = savedSnapshot.inputs.rawWolfTarget;
+          
+          const youngSoloEl = document.getElementById("target-wolf_younger_solo");
+          if (youngSoloEl && savedSnapshot.inputs.youngWolfSoloTarget) youngSoloEl.value = savedSnapshot.inputs.youngWolfSoloTarget;
+
+          const poisonEl = document.getElementById("poisonTarget");
+          if (poisonEl && savedSnapshot.inputs.rawPoisonTarget) poisonEl.value = savedSnapshot.inputs.rawPoisonTarget;
+
+          const guardEl = document.getElementById("target-guard");
+          if (guardEl && savedSnapshot.inputs.guardTarget) guardEl.value = savedSnapshot.inputs.guardTarget;
+
+          const swapAEl = document.getElementById("swapTargetA");
+          if (swapAEl && savedSnapshot.inputs.swapPair[0]) swapAEl.value = savedSnapshot.inputs.swapPair[0];
+
+          const swapBEl = document.getElementById("swapTargetB");
+          if (swapBEl && savedSnapshot.inputs.swapPair[1]) swapBEl.value = savedSnapshot.inputs.swapPair[1];
+
+          const seerEl = document.getElementById("seerTarget");
+          if (seerEl && savedSnapshot.seerTarget) seerEl.value = savedSnapshot.seerTarget;
+
+          refreshAllRuleDisplays();
+        }, 10);
+      }
+
+      // 控制底部結算按鈕顯示/隱藏
+      const resolveBtnContainer = document.querySelector("#nightPanel button[onclick='resolveNight()']")?.parentElement;
+      if (resolveBtnContainer) {
+        if (isLockedNight) {
+          resolveBtnContainer.innerHTML = `
+            <div class="w-full flex justify-between items-center p-2 rounded bg-gray-800/80 border border-gray-700">
+              <span class="text-xs text-rose-300 font-bold">🔒 本夜已封存（死訊：${savedSnapshot ? savedSnapshot.summaryText : ''}）</span>
+              <button onclick="returnToDayStage()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-1 px-3 rounded text-xs transition">
+                返回白天工作台 ➔
+              </button>
+            </div>
+          `;
+        } else {
+          resolveBtnContainer.innerHTML = `
+            <button onclick="resolveNight()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-xs shadow flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-sun text-amber-300"></i> 天亮結算死訊 (同步公播) ➔
+            </button>
+          `;
+        }
+      }
+
       antidoteUsedThisNight = false;
       refreshAllRuleDisplays();
+    }
+
+    function returnToDayStage() {
+      gameState.phase = (gameState.day === 1 && !gameState.policeSeat && !gameState.isBadgeTorn) 
+        ? "POLICE_ELECTION" 
+        : "DAY_EXILE";
+      renderAllViews();
     }
 
     function markStepDone(stepId) {
@@ -1209,23 +1281,43 @@
     // 7. 天亮死訊結算
     // ==========================================
     function resolveNight() {
+      // 1. 防呆確認彈窗
+      const confirmMsg = `☀️ 確定要結算第 ${gameState.round} 夜死訊並進入白天嗎？\n\n⚠️ 天亮後，第 ${gameState.round} 夜的所有操作內容將被鎖定封存，不可再修改！`;
+      if (!confirm(confirmMsg)) return;
+
       const wolfEl = document.getElementById('target-wolf') || 
                      document.getElementById('target-wolf_team_confirm') ||
                      document.querySelector("select[id^='target-wolf']");
+      const youngSoloEl = document.getElementById("target-wolf_younger_solo");
+      const poisonEl = document.getElementById("poisonTarget");
+      const guardEl = document.getElementById("target-guard");
+      const swapAEl = document.getElementById("swapTargetA");
+      const swapBEl = document.getElementById("swapTargetB");
+      const seerEl = document.getElementById("seerTarget");
+
       const inputs = {
         rawWolfTarget: Number(wolfEl?.value || 0) || 0,
-        // 抓取狼弟覺醒單獨刀目標 (相容超級黑商等狼兄弟板型)
-        youngWolfSoloTarget: Number(document.getElementById("target-wolf_younger_solo")?.value || 0) || 0,
-        rawPoisonTarget: Number(document.getElementById("poisonTarget")?.value || 0) || 0,
-        guardTarget: Number(document.getElementById("target-guard")?.value || 0) || 0,
+        youngWolfSoloTarget: Number(youngSoloEl?.value || 0) || 0,
+        rawPoisonTarget: Number(poisonEl?.value || 0) || 0,
+        guardTarget: Number(guardEl?.value || 0) || 0,
         antidoteUsed: antidoteUsedThisNight,
         swapPair: [
-          Number(document.getElementById("swapTargetA")?.value || 0) || 0,
-          Number(document.getElementById("swapTargetB")?.value || 0) || 0
+          Number(swapAEl?.value || 0) || 0,
+          Number(swapBEl?.value || 0) || 0
         ]
       };
 
       const nResult = RULES_ENGINE.resolveNight(inputs, gameState.nightMemory);
+
+      // 2. 封存本夜所有操作快照 (供日後唯讀回顧)
+      if (!gameState.nightHistory) gameState.nightHistory = {};
+      gameState.nightHistory[gameState.round] = {
+        round: gameState.round,
+        inputs: JSON.parse(JSON.stringify(inputs)),
+        seerTarget: Number(seerEl?.value || 0) || 0,
+        deaths: [...nResult.deaths],
+        summaryText: nResult.summaryText
+      };
 
       nResult.deaths.forEach(seat => {
         const p = gameState.players.find(x => Number(x.seat) === Number(seat));
@@ -1245,7 +1337,6 @@
         triggerGunAction("狼王", deadWolfKing.seat);
       }
 
-      // 天亮時對齊天數
       gameState.day = gameState.round;
 
       if (gameState.day === 1 && !gameState.policeSeat && !gameState.isBadgeTorn) {
@@ -1817,8 +1908,8 @@
     }
 
     function backToNight() {
+      // 切換回前一夜檢視模式
       gameState.phase = "NIGHT";
-      pushStateToFirebase(`返回第 ${gameState.round} 夜重新操作`);
       renderAllViews();
     }
 
