@@ -17,8 +17,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-  <!-- 引入規則大腦與獨立設定檔 -->
-  <script src="rules_config.js?v=20261016_patch_v7"></script>
+  <!-- 引入規則大腦與獨立設定檔 (對齊最新版本號) -->
+  <script src="rules_config.js?v=20261017_patch_v8"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -160,7 +160,7 @@
         </div>
       </section>
 
-      <!-- 階段 B：席位即時存活點陣 -->
+      <!-- 階段 B：席位即時存活點陣 (資訊黑盒：只顯示席位與死因標籤，無身分外洩) -->
       <section id="seatStatusSection">
         <div class="bg-gray-900 rounded-xl neon-border p-3">
           <div class="flex justify-between items-center mb-2">
@@ -479,7 +479,6 @@
       alert("🔒 已鎖定計票面板，切回純瀏覽展示視圖。");
     }
 
-    // 主控計票員手動切換全場運行模式 (廣播至所有設備)
     function toggleGlobalMode() {
       if (!isAdmin) {
         alert("⚠️ 請先解鎖計票員權限後再切換模式！");
@@ -500,7 +499,6 @@
       renderAll();
     }
 
-    // 更新介面呈現 (嚴格分離「全局模式」與「本設備權限」)
     function updateDeviceUI() {
       const modeBadge = document.getElementById("operatingModeBadge");
       const modeSwitchBtn = document.getElementById("modeSwitchBtn");
@@ -509,7 +507,6 @@
       const controlDrawer = document.getElementById("controlDrawer");
       const displayMainCol = document.getElementById("displayMainCol");
 
-      // 1. 全局模式指示列 (現場所有設備均可同步看見)
       if (operatingMode === "STANDALONE") {
         modeBadge.innerText = "★ 獨立控制中";
         modeBadge.className = "bg-amber-950 text-amber-300 border border-amber-600 text-[10px] px-1.5 py-0.2 rounded font-bold animate-pulse";
@@ -526,7 +523,6 @@
         }
       }
 
-      // 2. 本設備控制抽屜 (僅輸入密碼的設備可見)
       if (isAdmin) {
         lockBtn.innerHTML = '<i class="fa-solid fa-unlock-keyhole text-amber-400 text-xs"></i>';
         footer.classList.remove("hidden");
@@ -551,10 +547,8 @@
       matchRef.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
-          // 同步雲端對局的運行模式
           operatingMode = data.operatingMode || "SLAVE";
 
-          // 上帝端提示檢測 (跟隨模式下收到上帝結算才彈窗)
           if (operatingMode === "SLAVE" && data.actionId && data.actionId !== lastHandledActionId && data.lastActionBy === "JUDGE") {
             lastHandledActionId = data.actionId;
             alert(`🔔 【上帝已在主控台完成操作！】\n狀態更新：${data.lastActionSummary || '已完成開票結算'}`);
@@ -709,6 +703,7 @@
       document.getElementById("candidateCountLabel").innerText = isPkMode ? `${pkCandidates.length} 人角逐 PK` : `${candidates.length} 人上警`;
       document.getElementById("votersCountLabel").innerText = `${voters.length} 人有投票權`;
 
+      // 1. 警上候選人區（僅顯示號碼、玩家暱稱、上警/退水狀態，絕無角色資訊）
       const candGrid = document.getElementById("candidatesGrid");
       if (candidates.length === 0) {
         candGrid.innerHTML = `<div class="col-span-6 lg:col-span-12 text-gray-500 text-xs text-center py-2">目前無人上警</div>`;
@@ -746,6 +741,7 @@
         }).join('');
       }
 
+      // 2. 警下投票區（僅顯示號碼與選民資格）
       const voterGrid = document.getElementById("votersGrid");
       if (voters.length === 0) {
         voterGrid.innerHTML = `<div class="col-span-6 lg:col-span-12 text-gray-500 text-xs text-center py-2">全場無合資格選民</div>`;
@@ -762,6 +758,7 @@
         }).join('');
       }
 
+      // 3. 全場席位存活狀態（嚴格黑盒保護：只顯示席位、玩家名字與出局死因圖標，絕不顯示角色或轉化註記）
       const stdGrid = document.getElementById("standardSeatsGrid");
       stdGrid.innerHTML = gameState.players.map(p => {
         let cardStyle = "seat-alive";
@@ -1536,7 +1533,7 @@
     }
 
     // ==========================================
-    // 6. 重置整局資料 (包含警選環節修復)
+    // 6. 重置整局資料 (包含警選環節修復與 originalSeatType 補齊)
     // ==========================================
     function resetMatchData() {
       if (!isAdmin) {
@@ -1550,7 +1547,7 @@
         if (!confirm("⚠️ 確定要將整局資料歸零重置嗎？\n此操作將回到【第 1 天 警長競選】首輪環節，所有看板螢幕將同步重置！")) return;
       }
 
-      // 初始化 1~12 號基礎席位
+      // 初始化 1~12 號基礎席位 (補齊 originalSeatType)
       const initialPlayers = [];
       for (let i = 1; i <= 12; i++) {
         initialPlayers.push({
@@ -1558,6 +1555,7 @@
           name: "",
           role: "平民",
           seatType: "VILLAGER",
+          originalSeatType: "VILLAGER",
           isAlive: true,
           deathReason: null,
           isCandidate: false,
@@ -1570,7 +1568,7 @@
         operatingMode: operatingMode,
         day: 1,
         round: 1,
-        phase: "POLICE_ELECTION",      // 強制回到警選階段
+        phase: "POLICE_ELECTION",
         policeSeat: null,
         isBadgeTorn: false,
         consecutiveExplodeCount: 0,
