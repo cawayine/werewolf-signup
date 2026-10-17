@@ -17,7 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <!-- 引入規則大腦與獨立設定檔 (加入時間戳參數破除瀏覽器快取) -->
-  <script src="rules_config.js?v=20261016_patch_v7"></script>
+  <script src="rules_config.js?v=20261017_patch_v8"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -118,7 +118,7 @@
     <!-- 左側欄位（佔 7 欄）：坑位監控 + 座位存活 + 警徽處置 -->
     <div class="lg:col-span-7 space-y-3 mb-3 lg:mb-0">
       
-      <!-- 坑位即時監控面板 -->
+      <!-- 坑位即時監控面板 (依動態轉化實時重新計算分母與分子) -->
       <section class="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
         <div class="bg-gray-900 p-2.5 rounded-xl border border-blue-900/60 shadow">
           <div class="text-blue-400 font-bold">神職存活 (GOD)</div>
@@ -442,12 +442,10 @@
       matchRef.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
-          // 支援識別 RECORDER 與 STANDALONE_RECORDER
           const isFromBoard = (data.lastActionBy === "RECORDER" || data.lastActionBy === "STANDALONE_RECORDER");
           if (data.actionId && data.actionId !== lastHandledActionId && isFromBoard) {
             lastHandledActionId = data.actionId;
 
-            // 若公播看板發動重置，上帝主控台全面歸零 UI 避免反向覆蓋舊狀態
             if (data.actionId.startsWith("RESET_")) {
               alert(`🔔 【現場公播看板已執行重置開局！】\n主控台已同步歸零回到第 1 夜配置。`);
               document.getElementById("setupPanel")?.setAttribute("open", "true");
@@ -719,6 +717,7 @@
           role: assignedRole,
           seatType: ROLE_DEFINITIONS[assignedRole]?.seatType || "VILLAGER",
           victoryFaction: ROLE_DEFINITIONS[assignedRole]?.faction || "villager",
+          originalSeatType: ROLE_DEFINITIONS[assignedRole]?.seatType || "VILLAGER",
           isAlive: true,
           deathReason: null,
           isCandidate: false,
@@ -803,6 +802,7 @@
         p.role = selected;
         p.seatType = ROLE_DEFINITIONS[selected]?.seatType || "VILLAGER";
         p.victoryFaction = ROLE_DEFINITIONS[selected]?.faction || "villager";
+        p.originalSeatType = p.seatType;
       }
       updateCounts();
 
@@ -825,6 +825,7 @@
             p.role = selRole;
             p.seatType = ROLE_DEFINITIONS[selRole]?.seatType || "VILLAGER";
             p.victoryFaction = ROLE_DEFINITIONS[selRole]?.faction || "villager";
+            p.originalSeatType = p.seatType;
           }
         }
       }
@@ -851,7 +852,7 @@
     }
 
     // ==========================================
-    // 5. 坑位監控與勝負判定
+    // 5. 坑位監控與勝負判定 (動態以當前 seatType 為準)
     // ==========================================
     function updateCounts() {
       const isPoliceStage = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
@@ -863,6 +864,7 @@
       const villagers = alive.filter(p => p.seatType === "VILLAGER").length;
       const wolves = alive.filter(p => p.seatType === "WEREWOLF").length;
 
+      // 總坑位動態重新配額（分子與分母完全對齊當前 seatType）
       const totalGods = gameState.players.filter(p => p.seatType === "GOD").length;
       const totalVillagers = gameState.players.filter(p => p.seatType === "VILLAGER").length;
       const totalWolves = gameState.players.filter(p => p.seatType === "WEREWOLF").length;
@@ -968,10 +970,10 @@
         if (step.type === "CONFIRM") {
           let desc = "未指派";
           if (step.role === "狼兄狼弟") {
-            const b = gameState.players.filter(x => x.role === "狼兄" || x.role === "狼弟");
+            const b = gameState.players.filter(x => x.role.includes("狼兄") || x.role.includes("狼弟"));
             desc = b.length > 0 ? b.map(x => `${x.seat}號(${x.role})`).join('、') : "未配置";
           } else {
-            const p = gameState.players.find(x => x.role === step.role);
+            const p = gameState.players.find(x => x.role.includes(step.role));
             desc = p ? `${p.seat}號 ${p.name || ''}` : "未配置";
           }
           bodyHtml = `
@@ -987,7 +989,7 @@
             <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
               <span class="text-gray-300">給予手勢：</span>
               <span id="gesture-badge-${step.id}" class="bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold">
-                👍 狀態良好 (可開槍)
+                👍 狀態良好
               </span>
             </div>
           `;
@@ -1061,7 +1063,7 @@
             </div>
           `;
         } else if (step.id === "black_market") {
-          const bmPlayer = gameState.players.find(p => p.role === "黑市商人");
+          const bmPlayer = gameState.players.find(p => p.role.includes("黑市商人"));
           const bmSeat = bmPlayer ? Number(bmPlayer.seat) : 0;
           const giftRecipientOptions = gameState.players
             .filter(p => Number(p.seat) !== bmSeat)
@@ -1170,6 +1172,9 @@
           const seerEl = document.getElementById("seerTarget");
           if (seerEl && savedSnapshot.seerTarget) seerEl.value = savedSnapshot.seerTarget;
 
+          const gargoyleEl = document.getElementById("target-gargoyle");
+          if (gargoyleEl && savedSnapshot.inputs.gargoyleTarget) gargoyleEl.value = savedSnapshot.inputs.gargoyleTarget;
+
           refreshAllRuleDisplays();
         }, 10);
       }
@@ -1235,7 +1240,7 @@
     function toggleAntidote() {
       if (gameState.nightMemory?.witchAntidoteUsed) return;
 
-      const witch = gameState.players.find(p => p.role === "女巫");
+      const witch = gameState.players.find(p => p.role.includes("女巫"));
       const wolfEl = document.getElementById('target-wolf') || 
                      document.getElementById('target-wolf_team_confirm') ||
                      document.querySelector("select[id^='target-wolf']");
@@ -1286,7 +1291,7 @@
                      document.getElementById('target-wolf_team_confirm') ||
                      document.querySelector("select[id^='target-wolf']");
       const rawWolfTarget = Number(wolfEl?.value || 0);
-      const witchPlayer = gameState.players.find(p => p.role === "女巫");
+      const witchPlayer = gameState.players.find(p => p.role.includes("女巫"));
       const isWitchTargeted = (witchPlayer && rawWolfTarget > 0 && Number(witchPlayer.seat) === rawWolfTarget);
 
       if (witchCard) {
@@ -1339,7 +1344,7 @@
     }
 
     // ==========================================
-    // 7. 天亮死訊結算
+    // 7. 天亮死訊結算 (包含動態轉化與身分同步)
     // ==========================================
     function resolveNight() {
       const curRound = Number(gameState.round) || 1;
@@ -1355,12 +1360,24 @@
       const swapAEl = document.getElementById("swapTargetA");
       const swapBEl = document.getElementById("swapTargetB");
       const seerEl = document.getElementById("seerTarget");
+      const gargoyleEl = document.getElementById("target-gargoyle");
+
+      // 提取黑市商人三份禮物選定對象
+      const giftSeerEl = document.getElementById("giftSeer");
+      const giftPoisonEl = document.getElementById("giftPoison");
+      const giftGunEl = document.getElementById("giftGun");
 
       const inputs = {
         rawWolfTarget: Number(wolfEl?.value || 0) || 0,
         youngWolfSoloTarget: Number(youngSoloEl?.value || 0) || 0,
         rawPoisonTarget: Number(poisonEl?.value || 0) || 0,
         guardTarget: Number(guardEl?.value || 0) || 0,
+        gargoyleTarget: Number(gargoyleEl?.value || 0) || 0,
+        blackMarketGifts: {
+          seer: Number(giftSeerEl?.value || 0) || null,
+          poison: Number(giftPoisonEl?.value || 0) || null,
+          gun: Number(giftGunEl?.value || 0) || null
+        },
         antidoteUsed: antidoteUsedThisNight,
         swapPair: [
           Number(swapAEl?.value || 0) || 0,
@@ -1369,7 +1386,9 @@
       };
 
       if (!gameState.nightMemory) gameState.nightMemory = {};
-      const nResult = RULES_ENGINE.resolveNight(inputs, gameState.nightMemory);
+
+      // 規則大腦一併結算死訊與陣營轉換
+      const nResult = RULES_ENGINE.resolveNight(inputs, gameState.nightMemory, gameState.players);
 
       if (!gameState.nightHistory) gameState.nightHistory = {};
       gameState.nightHistory[curRound] = {
@@ -1380,7 +1399,6 @@
         summaryText: nResult.summaryText
       };
 
-      // 紀錄昨夜倒牌名單
       gameState.lastNightDeaths = [...nResult.deaths];
 
       nResult.deaths.forEach(seat => {
@@ -1393,7 +1411,6 @@
 
       gameState.day = curRound;
 
-      // 首日警選階段：死訊尚未公開
       if (gameState.day === 1 && !gameState.policeSeat && !gameState.isBadgeTorn) {
         gameState.phase = "POLICE_ELECTION";
       } else {
@@ -1402,14 +1419,20 @@
       }
 
       document.getElementById("nightDeathSummary").innerText = nResult.summaryText;
+
+      // 若有觸發身分轉化，跳出提示並同步雲端
+      if (nResult.transformationLogs && nResult.transformationLogs.length > 0) {
+        alert(nResult.transformationLogs.join('\n'));
+      }
+
       pushStateToFirebase(`天亮死訊結算：${nResult.summaryText}`);
       renderAllViews();
     }
 
     function checkPostNightGunAction(nResult) {
       const deaths = nResult ? nResult.deaths : (gameState.lastNightDeaths || []);
-      const deadHunter = gameState.players.find(p => p.role === "獵人" && deaths.includes(Number(p.seat)));
-      const deadWolfKing = gameState.players.find(p => p.role === "狼王" && deaths.includes(Number(p.seat)));
+      const deadHunter = gameState.players.find(p => p.role.includes("獵人") && deaths.includes(Number(p.seat)));
+      const deadWolfKing = gameState.players.find(p => p.role.includes("狼王") && deaths.includes(Number(p.seat)));
 
       if (deadHunter && (nResult ? nResult.hunterCanShoot : true)) {
         triggerGunAction("獵人", deadHunter.seat);
@@ -1767,15 +1790,15 @@
       } else if (eResult.status === "EXILED") {
         const exiledPlayer = gameState.players.find(x => Number(x.seat) === Number(eResult.exiledSeat));
         if (exiledPlayer) {
-          if (exiledPlayer.role === "白痴") {
+          if (exiledPlayer.role.includes("白痴")) {
             alert(`🔔 ${exiledPlayer.seat} 號為白痴，觸發翻牌免死技能！保留發言權，拔除投票權。`);
           } else {
             exiledPlayer.isAlive = false;
             exiledPlayer.deathReason = "EXILE";
             gameState.lastExiledPlayer = exiledPlayer;
 
-            if (exiledPlayer.role === "獵人") triggerGunAction("獵人", exiledPlayer.seat);
-            else if (exiledPlayer.role === "狼王") triggerGunAction("狼王", exiledPlayer.seat);
+            if (exiledPlayer.role.includes("獵人")) triggerGunAction("獵人", exiledPlayer.seat);
+            else if (exiledPlayer.role.includes("狼王")) triggerGunAction("狼王", exiledPlayer.seat);
           }
         }
 
@@ -2021,7 +2044,6 @@
       initSeats();
       antidoteUsedThisNight = false;
 
-      // 產生帶有 RESET_ 前綴的獨立 ID，通知看板端強制刷新
       gameState.lastActionBy = "JUDGE";
       gameState.actionId = "RESET_" + Date.now();
       gameState.lastActionSummary = summaryText;
@@ -2039,3 +2061,7 @@
   </script>
 </body>
 </html>
+```<FollowUp>
+- 是否需要對公播端（`recorder.html` / 大螢幕看板）也進行相應的坑位顯示或標籤微調？
+- 覺醒石像鬼轉化相鄰玩家後，是否需要在上帝主控台的 12 席座位卡片上顯示特殊的標籤提醒（例如「狼(轉化)」）？
+</FollowUp>
