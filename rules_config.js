@@ -1,17 +1,17 @@
 /**
  * 基地狼人殺 - 規則與板型獨立設定檔 (rules_config.js)
- * 基準版本：全域規則大腦 + 27位角色字典 + 8套定案板型 + RULES_ENGINE 核心運算引擎 (動態轉化與坑位重塑增強版)
+ * 基準版本：全域規則大腦 + 27位角色字典 + 8套定案板型 + RULES_ENGINE 核心運算引擎 (完整精簡重構版)
  */
 
 // ==========================================
 // 1. 全域裁決通則 (GLOBAL_RULES)
 // ==========================================
 const GLOBAL_RULES = {
-  witchWolfTieBreaker: "WEREWOLF_WIN", // 爪擊在先原則
+  witchWolfTieBreaker: "WEREWOLF_WIN",
   whiteWolfCheckResult: "WEREWOLF",
-  duelWolfNoSkill: true,               // 騎士決鬥狼人不觸發技能
-  consecutiveExplodeBadgeLoss: true,   // 連續兩天警長競選自爆吞警徽
-  witchSeesRawWolfKill: true,          // 女巫見原始刀口
+  duelWolfNoSkill: true,
+  consecutiveExplodeBadgeLoss: true,
+  witchSeesRawWolfKill: true,
   swapAppliesAtResolution: true
 };
 
@@ -19,61 +19,47 @@ const GLOBAL_RULES = {
 // 2. 全域角色屬性字典 (ROLE_DEFINITIONS)
 // ==========================================
 const ROLE_DEFINITIONS = {
-  // --- 好人陣營：神職坑 (GOD) ---
+  // 好人神職
   "預言家": { seatType: "GOD", faction: "villager", canCheck: true, allowRepeatCheck: true },
-  "女巫": { seatType: "GOD", faction: "villager", hasAntidote: true, hasPoison: true, canUseBothPotionsSameNight: false, canSelfHealFirstNight: false, canSelfHeal: false },
-  "獵人": { seatType: "GOD", faction: "villager", canShoot: true, triggerCondition: ["WOLF_KILL", "EXILE"], immunePoisonShoot: false, immuneDreamShoot: false, needsNightGesture: true },
-  "白痴": { seatType: "GOD", faction: "villager", canImmuneExile: true, loseVoteAfterImmune: true, remainAliveInCount: true, keepBadgeTransfer: true, firstNightConfirmOnly: true },
-  "守衛": { seatType: "GOD", faction: "villager", canProtect: true, canSelfProtect: true, canProtectSameTargetConsecutively: false, protectOnlyWolfKill: true, overlapWithWitchRule: "milk_through" },
-  "攝夢人": { seatType: "GOD", faction: "villager", canDream: true, mustDreamOthers: true, dreamerImmuneWolfKill: true, continuousDreamKill: true, chainedDeathOnNightKill: true, suppressVictimSkill: true },
-  "魔術師": { seatType: "GOD", faction: "villager", canSwap: true, canSwapSelf: true, firstNightUnlimited: true, swapLimitPerGame: 1, priority: "FIRST", witchSeesRawKill: true },
+  "女巫": { seatType: "GOD", faction: "villager", hasAntidote: true, hasPoison: true, canUseBothPotionsSameNight: false, canSelfHeal: false },
+  "獵人": { seatType: "GOD", faction: "villager", canShoot: true, triggerCondition: ["WOLF_KILL", "EXILE"], needsNightGesture: true },
+  "白痴": { seatType: "GOD", faction: "villager", canImmuneExile: true, loseVoteAfterImmune: true, firstNightConfirmOnly: true },
+  "守衛": { seatType: "GOD", faction: "villager", canProtect: true, canSelfProtect: true, canProtectSameTargetConsecutively: false },
+  "攝夢人": { seatType: "GOD", faction: "villager", canDream: true, mustDreamOthers: true, dreamerImmuneWolfKill: true, continuousDreamKill: true },
+  "魔術師": { seatType: "GOD", faction: "villager", canSwap: true, swapLimitPerGame: 1, priority: "FIRST" },
   "騎士": { seatType: "GOD", faction: "villager", canDuel: true, duelWolfInstantNight: true, firstNightConfirmOnly: true },
   "守墓人": { seatType: "GOD", faction: "villager", canInspectGrave: true, activeNightStart: 2, firstNightConfirmOnly: true },
-  "烏鴉": { seatType: "GOD", faction: "villager", canCurse: true, canCurseSelf: true, canCurseSameTargetConsecutively: false, extraVoteCount: 1 },
-  "獵魔人": { seatType: "GOD", faction: "villager", canHunt: true, activeNightStart: 2, canHuntSelf: false, canHuntSameTargetConsecutively: true, immunePoison: true },
+  "烏鴉": { seatType: "GOD", faction: "villager", canCurse: true, extraVoteCount: 1 },
+  "獵魔人": { seatType: "GOD", faction: "villager", canHunt: true, activeNightStart: 2 },
   "定序王子": { seatType: "GOD", faction: "villager", canReverseVote: true, limitPerGame: 1 },
   "熊": { seatType: "GOD", faction: "villager", hasRoar: true },
   "白晝學者": { seatType: "GOD", faction: "villager", canBuffOrDebuff: true, activeNightStart: 2 },
-  "覺醒預言家": { seatType: "GOD", faction: "villager", canPeep: true, peepTwoTargets: true },
-  "通靈師": { seatType: "GOD", faction: "villager", canCheckExactRole: true, canCheckSelf: false, allowRepeatCheck: false },
-  "覺醒攝夢人": { seatType: "GOD", faction: "villager", canDreamWord: true, canDreamSelf: true, dreamerImmuneDamage: true, activeExileStart: 2, suppressVictimSkill: true, immunePoison: true },
-  "黑市商人": { 
-    seatType: "GOD", 
-    faction: "villager", 
-    activeNight: 1, 
-    canTradeSkill: true, 
-    canTradeSelf: false, 
-    threeGiftsMode: true,
-    transformsOnAllVillagerGifts: true // 標記：若三禮物皆贈與好人，則墮落轉化為狼人
-  },
+  "覺醒預言家": { seatType: "GOD", faction: "villager", canPeep: true },
+  "通靈師": { seatType: "GOD", faction: "villager", canCheckExactRole: true },
+  "覺醒攝夢人": { seatType: "GOD", faction: "villager", canDreamWord: true },
+  "黑市商人": { seatType: "GOD", faction: "villager", activeNight: 1, canTradeSkill: true, transformsOnAllVillagerGifts: true },
 
-  // --- 好人陣營：平民坑 (VILLAGER) ---
+  // 好人平民
   "平民": { seatType: "VILLAGER", faction: "villager" },
-  "燈影預言家": { seatType: "VILLAGER", faction: "villager", canCheck: true, reversedCheckResult: true, allowRepeatCheck: false },
-  "混血兒": { seatType: "VILLAGER", faction: null, activeNight: 1, canSelfExplode: false, seerCheckResult: "villager" },
-  "覺醒孤獨少女": { seatType: "VILLAGER", faction: null, activeNight: 1, canSelfExplode: false },
+  "燈影預言家": { seatType: "VILLAGER", faction: "villager", canCheck: true, reversedCheckResult: true },
+  "混血兒": { seatType: "VILLAGER", faction: null, activeNight: 1, seerCheckResult: "villager" },
+  "覺醒孤獨少女": { seatType: "VILLAGER", faction: null, activeNight: 1 },
 
-  // --- 狼人陣營：狼坑 (WEREWOLF) ---
+  // 狼人陣營
   "狼人": { seatType: "WEREWOLF", faction: "werewolf", canNightKill: true },
-  "狼王": { seatType: "WEREWOLF", faction: "werewolf", canShoot: true, triggerCondition: ["WOLF_KILL", "EXILE"], immunePoisonShoot: false, immuneDreamShoot: false, immuneDuelShoot: false },
-  "白狼王": { seatType: "WEREWOLF", faction: "werewolf", canSelfExplodeShoot: true, seerCheckResult: "werewolf" },
-  "狼美人": { seatType: "WEREWOLF", faction: "werewolf", canCharm: true, canSelfExplode: false, canNightKillSelf: false, charmedChainedDeath: true, duelDisableCharm: true, dreamDisableCharm: true },
-  "覺醒狼美人": { seatType: "WEREWOLF", faction: "werewolf", canSubstituteCharm: true, canSelfExplode: false },
+  "狼王": { seatType: "WEREWOLF", faction: "werewolf", canShoot: true, triggerCondition: ["WOLF_KILL", "EXILE"] },
+  "白狼王": { seatType: "WEREWOLF", faction: "werewolf", canSelfExplodeShoot: true },
+  "狼美人": { seatType: "WEREWOLF", faction: "werewolf", canCharm: true, charmedChainedDeath: true },
+  "覺醒狼美人": { seatType: "WEREWOLF", faction: "werewolf", canSubstituteCharm: true },
   "赤月使徒": { seatType: "WEREWOLF", faction: "werewolf", canSealSkillsOnExplode: true },
-  "機械狼": { seatType: "WEREWOLF", faction: "werewolf", canImitate: true, canSelfExplode: false },
-  "尋香魅影": { seatType: "WEREWOLF", faction: "werewolf", canBind: true, canSelfExplode: false, limitPerGame: 1, allowConsecutiveBindUntilTriggered: true },
-  "夢魘": { seatType: "WEREWOLF", faction: "werewolf", canFear: true, priority: "FIRST", canFearSameTargetConsecutively: false, canFearSelf: false },
-  "覺醒石像鬼": { 
-    seatType: "WEREWOLF", 
-    faction: "werewolf", 
-    canConvertNeighbor: true, 
-    activeNight: 1,
-    convertsTargetTo: "轉化者" // 標記：轉化目標
-  },
-  "轉化者": { seatType: "WEREWOLF", faction: "werewolf", isConverted: true, canNightKill: true }, // 覺醒石像鬼轉化之衍生角色
-  "寂夜導師": { seatType: "WEREWOLF", faction: "werewolf", canBuffOrDebuff: true, activeNightStart: 2, canSelfExplode: false },
-  "狼兄": { seatType: "WEREWOLF", faction: "werewolf", canNightKill: true, canSelfExplode: false },
-  "狼弟": { seatType: "WEREWOLF", faction: "werewolf", canNightKill: false, canSelfExplode: true, seerCheckBeforeBrotherDead: "villager", seerCheckAfterBrotherDead: "werewolf" }
+  "機械狼": { seatType: "WEREWOLF", faction: "werewolf", canImitate: true },
+  "尋香魅影": { seatType: "WEREWOLF", faction: "werewolf", canBind: true },
+  "夢魘": { seatType: "WEREWOLF", faction: "werewolf", canFear: true, priority: "FIRST" },
+  "覺醒石像鬼": { seatType: "WEREWOLF", faction: "werewolf", canConvertNeighbor: true, activeNight: 1 },
+  "轉化者": { seatType: "WEREWOLF", faction: "werewolf", isConverted: true, canNightKill: true },
+  "寂夜導師": { seatType: "WEREWOLF", faction: "werewolf", canBuffOrDebuff: true },
+  "狼兄": { seatType: "WEREWOLF", faction: "werewolf", canNightKill: true },
+  "狼弟": { seatType: "WEREWOLF", faction: "werewolf", canNightKill: false }
 };
 
 // ==========================================
@@ -260,12 +246,11 @@ const BOARD_DATABASE = {
 // 4. RULES_ENGINE 核心運算引擎 (全域單一大腦)
 // ==========================================
 const RULES_ENGINE = {
-  // 工廠方法：產生標準初始對局狀態
   createInitialGameState() {
     return {
       day: 1,
       round: 1,
-      phase: "SETUP", // SETUP | NIGHT | POLICE_ELECTION | POLICE_PK | DAY_EXILE | GAME_OVER
+      phase: "SETUP",
       winner: null,
       policeSeat: null,
       isBadgeTorn: false,
@@ -281,8 +266,8 @@ const RULES_ENGINE = {
         name: "",
         role: "平民",
         seatType: "VILLAGER",
-        victoryFaction: "villager",
         originalSeatType: "VILLAGER",
+        victoryFaction: "villager",
         isAlive: true,
         deathReason: null,
         isCandidate: false,
@@ -291,43 +276,86 @@ const RULES_ENGINE = {
       history: [],
       tempVotes: {},
       selectedTarget: null,
-      lastActionBy: null,
-      actionId: null,
-      lastActionSummary: null,
       nightMemory: {
         guardLastTarget: null,
-        dreamerLastTarget: null,
-        nightmareLastTarget: null,
-        magicianSwappedSeats: [],
         witchAntidoteUsed: false,
         witchPoisonUsed: false,
         gargoyleConvertedTarget: null,
         blackMarketGifts: { seer: null, poison: null, gun: null },
-        blackMarketTransformedWolf: false,
-        youngWolfSoloKillUsed: false
+        blackMarketTransformedWolf: false
       }
     };
   },
 
-  // 0. 動態身分轉化與坑位重塑機制 (支援覺醒石像鬼轉化與黑市商人變狼)
+  // 席位屬性自動同步（徹底防止 F5 資料庫身分丟失變 12 平民）
+  syncPlayerRoles(players = [], boardKey = "") {
+    if (!players || players.length === 0) return;
+    const config = BOARD_DATABASE[boardKey];
+    const isAllVillagers = players.every(p => p.role === "平民");
+
+    players.forEach((p, idx) => {
+      p.seat = Number(p.seat);
+      if (isAllVillagers && config?.defaultSlots && config.defaultSlots[idx]) {
+        p.role = config.defaultSlots[idx];
+      }
+      const baseRole = (p.role || "平民").replace(/\(轉化\)|\(狼\)/g, "");
+      const def = ROLE_DEFINITIONS[baseRole] || ROLE_DEFINITIONS[p.role];
+
+      if (def) {
+        if (!p.role.includes("轉化") && !p.role.includes("(狼)")) {
+          p.seatType = def.seatType;
+        } else {
+          p.seatType = "WEREWOLF";
+        }
+        if (!p.originalSeatType) p.originalSeatType = def.seatType;
+        if (!p.victoryFaction) p.victoryFaction = def.faction || "villager";
+      } else {
+        p.seatType = p.seatType || "VILLAGER";
+        p.originalSeatType = p.originalSeatType || "VILLAGER";
+      }
+    });
+  },
+
+  // 覺醒石像鬼：計算合法相鄰轉化席位
+  getGargoyleTargets(players = []) {
+    const wolfSeats = players.filter(p => p.seatType === "WEREWOLF").map(p => Number(p.seat));
+    const neighbors = new Set();
+    const total = players.length || 12;
+
+    wolfSeats.forEach(s => {
+      neighbors.add(s === 1 ? total : s - 1);
+      neighbors.add(s === total ? 1 : s + 1);
+    });
+    wolfSeats.forEach(s => neighbors.delete(s));
+    return Array.from(neighbors).sort((a, b) => a - b);
+  },
+
+  // 黑市商人：取得合法受贈對象（排除自己）
+  getBlackMarketTargets(players = []) {
+    const bm = players.find(p => p.role.includes("黑市商人"));
+    const bmSeat = bm ? Number(bm.seat) : 0;
+    return players.filter(p => Number(p.seat) !== bmSeat);
+  },
+
+  // 動態身分轉化邏輯
   applyRoleTransformations(inputs = {}, players = [], nightMemory = {}) {
     const logs = [];
 
-    // --- A. 覺醒石像鬼首夜轉化處理 ---
+    // 石像鬼轉化
     const gargoyleTarget = Number(inputs.gargoyleTarget) || 0;
     if (gargoyleTarget > 0 && !nightMemory.gargoyleConvertedTarget) {
-      const targetPlayer = players.find(p => Number(p.seat) === gargoyleTarget);
-      if (targetPlayer) {
-        if (!targetPlayer.originalSeatType) targetPlayer.originalSeatType = targetPlayer.seatType;
-        targetPlayer.seatType = "WEREWOLF";
-        targetPlayer.victoryFaction = "werewolf";
-        targetPlayer.role = `${targetPlayer.role}(轉化)`;
+      const target = players.find(p => Number(p.seat) === gargoyleTarget);
+      if (target) {
+        if (!target.originalSeatType) target.originalSeatType = target.seatType;
+        target.seatType = "WEREWOLF";
+        target.victoryFaction = "werewolf";
+        target.role = `${target.role}(轉化)`;
         nightMemory.gargoyleConvertedTarget = gargoyleTarget;
-        logs.push(`【覺醒石像鬼】成功轉化 ${gargoyleTarget} 號！其身分已正式變更為狼坑！`);
+        logs.push(`【覺醒石像鬼】成功轉化 ${gargoyleTarget} 號！身分已變更為狼坑！`);
       }
     }
 
-    // --- B. 黑市商人三禮物送好人墮落變狼處理 ---
+    // 黑市商人變狼
     const gifts = inputs.blackMarketGifts;
     if (gifts && !nightMemory.blackMarketTransformedWolf) {
       const gSeer = Number(gifts.seer) || 0;
@@ -336,61 +364,43 @@ const RULES_ENGINE = {
 
       if (gSeer > 0 && gPoison > 0 && gGun > 0) {
         nightMemory.blackMarketGifts = { seer: gSeer, poison: gPoison, gun: gGun };
+        const t1 = players.find(p => Number(p.seat) === gSeer);
+        const t2 = players.find(p => Number(p.seat) === gPoison);
+        const t3 = players.find(p => Number(p.seat) === gGun);
 
-        const targetSeer = players.find(p => Number(p.seat) === gSeer);
-        const targetPoison = players.find(p => Number(p.seat) === gPoison);
-        const targetGun = players.find(p => Number(p.seat) === gGun);
-
-        // 判定三個接收者是否「全體為好人」
-        const allGood = [targetSeer, targetPoison, targetGun].every(p => {
-          if (!p) return false;
-          // 若為被石像鬼轉化者，則視為狼人
-          return p.seatType !== "WEREWOLF";
-        });
-
+        const allGood = [t1, t2, t3].every(p => p && p.seatType !== "WEREWOLF");
         if (allGood) {
-          const bmPlayer = players.find(p => p.role.includes("黑市商人"));
-          if (bmPlayer) {
-            if (!bmPlayer.originalSeatType) bmPlayer.originalSeatType = bmPlayer.seatType;
-            bmPlayer.seatType = "WEREWOLF";
-            bmPlayer.victoryFaction = "werewolf";
-            bmPlayer.role = "黑市商人(狼)";
+          const bm = players.find(p => p.role.includes("黑市商人"));
+          if (bm) {
+            if (!bm.originalSeatType) bm.originalSeatType = bm.seatType;
+            bm.seatType = "WEREWOLF";
+            bm.victoryFaction = "werewolf";
+            bm.role = "黑市商人(狼)";
             nightMemory.blackMarketTransformedWolf = true;
-            logs.push(`【黑市商人】三份禮物皆贈與好人，已變身墮落為狼坑！神坑縮減、狼坑擴增！`);
+            logs.push(`【黑市商人】三份禮物皆贈與好人，墮落變身為狼人！`);
           }
         }
       }
     }
-
     return logs;
   },
 
-  // 1. 預言家查驗判定 (支援魔術師號碼牌置換 + 狼弟在狼兄死前為好人金水)
+  // 預言家查驗
   resolveCheck(targetSeat, swapPair = [0, 0], players = []) {
     const tSeat = Number(targetSeat) || 0;
     if (!tSeat) return { isReady: false, isWolf: false, text: "待查驗" };
     
-    const s0 = Number(swapPair[0]) || 0;
-    const s1 = Number(swapPair[1]) || 0;
-
     let effectiveSeat = tSeat;
-    if (s0 === tSeat) effectiveSeat = s1;
-    else if (s1 === tSeat) effectiveSeat = s0;
+    if (Number(swapPair[0]) === tSeat) effectiveSeat = Number(swapPair[1]);
+    else if (Number(swapPair[1]) === tSeat) effectiveSeat = Number(swapPair[0]);
 
-    const targetPlayer = players.find(p => Number(p.seat) === effectiveSeat);
-    if (!targetPlayer) return { isReady: false, isWolf: false, text: "查無此人" };
+    const target = players.find(p => Number(p.seat) === effectiveSeat);
+    if (!target) return { isReady: false, isWolf: false, text: "查無此人" };
 
-    let isWolf = (targetPlayer.seatType === "WEREWOLF");
-
-    // 狼弟專屬規則：狼兄存活時，狼弟查驗結果為好人 (金水)；狼兄出局後為狼人 (查殺)
-    if (targetPlayer.role === "狼弟") {
+    let isWolf = (target.seatType === "WEREWOLF");
+    if (target.role === "狼弟") {
       const brother = players.find(p => p.role === "狼兄");
-      const isBrotherAlive = brother ? brother.isAlive : false;
-      if (isBrotherAlive) {
-        isWolf = false;
-      } else {
-        isWolf = true;
-      }
+      isWolf = brother ? !brother.isAlive : true;
     }
 
     return {
@@ -400,308 +410,174 @@ const RULES_ENGINE = {
     };
   },
 
-  // 2. 夜間手勢狀態判定 (全面支援型別安全 Number() 轉換)
+  // 手勢狀態判定
   evaluateGesture(gestureId, context = {}) {
-    const rawPoisonTarget = Number(context.rawPoisonTarget) || 0;
+    const rawPoison = Number(context.rawPoisonTarget) || 0;
     const swapPair = context.swapPair || [0, 0];
-    const s0 = Number(swapPair[0]) || 0;
-    const s1 = Number(swapPair[1]) || 0;
+    let effPoison = rawPoison;
+    if (Number(swapPair[0]) === rawPoison) effPoison = Number(swapPair[1]);
+    else if (Number(swapPair[1]) === rawPoison) effPoison = Number(swapPair[0]);
+
     const players = context.players || [];
-    const blackMarketTransformedWolf = !!context.blackMarketTransformedWolf;
-
-    let effectivePoison = rawPoisonTarget;
-    if (s0 === rawPoisonTarget) effectivePoison = s1;
-    else if (s1 === rawPoisonTarget) effectivePoison = s0;
-
-    if (gestureId === "hunter_gesture") {
-      const hunter = players.find(p => p.role === "獵人");
-      const isPoisoned = !!hunter && effectivePoison > 0 && (Number(hunter.seat) === effectivePoison);
-      return {
-        isPositive: !isPoisoned,
-        text: isPoisoned ? "👎 狀態異常 (吃毒不可開槍)" : "👍 狀態良好 (可開槍)"
-      };
+    if (gestureId === "hunter_gesture" || gestureId === "wolf_king_gesture") {
+      const roleName = gestureId === "hunter_gesture" ? "獵人" : "狼王";
+      const target = players.find(p => p.role.includes(roleName));
+      const isPoisoned = !!target && effPoison > 0 && Number(target.seat) === effPoison;
+      return { isPositive: !isPoisoned, text: isPoisoned ? "👎 狀態異常 (吃毒禁槍)" : "👍 狀態良好 (可開槍)" };
     }
-
-    if (gestureId === "wolf_king_gesture") {
-      const wolfKing = players.find(p => p.role === "狼王");
-      const isPoisoned = !!wolfKing && effectivePoison > 0 && (Number(wolfKing.seat) === effectivePoison);
-      return {
-        isPositive: !isPoisoned,
-        text: isPoisoned ? "👎 狀態異常 (吃毒不可開槍)" : "👍 狀態良好 (可開槍)"
-      };
-    }
-
-    if (gestureId === "converter_gesture") {
-      return {
-        isPositive: true,
-        text: "🔪 轉化確認 (可參與落刀)"
-      };
-    }
-
+    if (gestureId === "converter_gesture") return { isPositive: true, text: "🔪 轉化確認 (可參與落刀)" };
     if (gestureId === "black_market_faction_gesture") {
-      return {
-        isPositive: !blackMarketTransformedWolf,
-        text: blackMarketTransformedWolf ? "🐺 陣營轉變 (已變為狼人)" : "🧑 陣營正常 (仍為好人)"
-      };
+      const isWolf = !!context.blackMarketTransformedWolf;
+      return { isPositive: !isWolf, text: isWolf ? "🐺 陣營轉變 (已變為狼人)" : "🧑 陣營正常 (仍為好人)" };
     }
-
     return { isPositive: true, text: "👍 狀態良好" };
   },
 
-  // 3. 彩球票型權重統計與排序 (公播端與上帝端通用)
+  // 票型統計
   calculateLottoTallies(votesMap = {}, effectiveBadgeHolder = null, isElectionStage = false) {
     const allKeys = Object.keys(votesMap).map(k => Number(k));
     if (allKeys.length === 0) return [];
-
-    const sortedTargets = allKeys.sort((a, b) => {
-      if (a === 0) return 1;
-      if (b === 0) return -1;
-      return a - b;
-    });
-
+    const sortedTargets = allKeys.sort((a, b) => (a === 0 ? 1 : b === 0 ? -1 : a - b));
     const activePolice = effectiveBadgeHolder !== null ? Number(effectiveBadgeHolder) : null;
 
-    return sortedTargets.map(targetSeat => {
-      const rawVoters = votesMap[targetSeat] || [];
-      const isAbstain = (targetSeat === 0);
+    return sortedTargets.map(tSeat => {
+      const rawVoters = votesMap[tSeat] || [];
+      const isAbstain = (tSeat === 0);
       let totalPoints = 0;
-
       const sortedVoters = rawVoters.slice().sort((a, b) => Number(a) - Number(b)).map(vSeat => {
         const vNum = Number(vSeat);
         const isPolice = (activePolice !== null && vNum === activePolice);
-        const points = (!isElectionStage && isPolice) ? 1.5 : 1.0;
-        totalPoints += points;
-        return {
-          seat: vNum,
-          label: (vNum < 10) ? ("0" + vNum) : String(vNum),
-          isPolice: isPolice && !isElectionStage
-        };
+        const pts = (!isElectionStage && isPolice) ? 1.5 : 1.0;
+        totalPoints += pts;
+        return { seat: vNum, label: vNum < 10 ? "0" + vNum : String(vNum), isPolice: isPolice && !isElectionStage };
       });
-
       return {
-        targetSeat: targetSeat,
+        targetSeat: tSeat,
         isAbstain: isAbstain,
-        label: isAbstain ? "棄" : ((targetSeat < 10) ? ("0" + targetSeat) : String(targetSeat)),
-        title: isAbstain ? "棄票" : `${targetSeat} 號候選人`,
+        label: isAbstain ? "棄" : (tSeat < 10 ? "0" + tSeat : String(tSeat)),
+        title: isAbstain ? "棄票" : `${tSeat} 號候選人`,
         totalPoints: totalPoints,
         voters: sortedVoters
       };
-    }).filter(group => group.voters.length > 0);
+    }).filter(g => g.voters.length > 0);
   },
 
-  // 4. 警長競選 / PK 開票裁決
-  resolvePoliceElection(tempVotes = {}, isPkMode = false, pkCandidates = []) {
+  // 警選開票
+  resolvePoliceElection(tempVotes = {}, isPkMode = false) {
     let counts = {};
     Object.entries(tempVotes).forEach(([cand, voters]) => {
       const cNum = Number(cand);
-      if (cNum !== 0 && Array.isArray(voters) && voters.length > 0) {
-        counts[cNum] = voters.length;
-      }
+      if (cNum !== 0 && Array.isArray(voters) && voters.length > 0) counts[cNum] = voters.length;
     });
 
     let maxVotes = 0;
-    let topCandidates = [];
-
+    let top = [];
     Object.entries(counts).forEach(([cand, count]) => {
       const cNum = Number(cand);
-      if (count > maxVotes) {
-        maxVotes = count;
-        topCandidates = [cNum];
-      } else if (count === maxVotes) {
-        topCandidates.push(cNum);
-      }
+      if (count > maxVotes) { maxVotes = count; top = [cNum]; }
+      else if (count === maxVotes) { top.push(cNum); }
     });
 
-    if (topCandidates.length === 0 || maxVotes === 0) {
-      return { status: "ALL_ABSTAIN", maxVotes: 0, topCandidates: [] };
-    }
-
+    if (top.length === 0 || maxVotes === 0) return { status: "ALL_ABSTAIN", maxVotes: 0, topCandidates: [] };
     if (!isPkMode) {
-      if (topCandidates.length > 1) {
-        return { status: "TIE_ENTER_PK", maxVotes: maxVotes, topCandidates: topCandidates };
-      }
-      return { status: "WINNER", winner: topCandidates[0], maxVotes: maxVotes };
-    } else {
-      if (topCandidates.length > 1) {
-        return { status: "PK_TIE_BADGE_LOSS", maxVotes: maxVotes, topCandidates: topCandidates };
-      }
-      return { status: "WINNER", winner: topCandidates[0], maxVotes: maxVotes };
+      return top.length > 1 ? { status: "TIE_ENTER_PK", maxVotes, topCandidates: top } : { status: "WINNER", winner: top[0], maxVotes };
     }
+    return top.length > 1 ? { status: "PK_TIE_BADGE_LOSS", maxVotes, topCandidates: top } : { status: "WINNER", winner: top[0], maxVotes };
   },
 
-  // 5. 放逐公投票型裁決 (含詭術師替罪演算法)
+  // 放逐開票
   resolveExileVote(tempVotes = {}, policeSeat = null, isBadgeTorn = false, modules = {}, tricksterSwap = null, players = []) {
     let maxPoints = 0;
-    let topSeats = [];
+    let top = [];
     const activePolice = (!isBadgeTorn && policeSeat !== null) ? Number(policeSeat) : null;
 
     Object.entries(tempVotes).forEach(([target, voters]) => {
       const tNum = Number(target);
       if (tNum !== 0 && Array.isArray(voters)) {
         let pts = 0;
-        voters.forEach(v => {
-          pts += (activePolice !== null && Number(v) === activePolice) ? 1.5 : 1.0;
-        });
-        if (pts > maxPoints) {
-          maxPoints = pts;
-          topSeats = [tNum];
-        } else if (pts === maxPoints && maxPoints > 0) {
-          topSeats.push(tNum);
-        }
+        voters.forEach(v => { pts += (activePolice !== null && Number(v) === activePolice) ? 1.5 : 1.0; });
+        if (pts > maxPoints) { maxPoints = pts; top = [tNum]; }
+        else if (pts === maxPoints && maxPoints > 0) { top.push(tNum); }
       }
     });
 
-    if (topSeats.length === 0 || maxPoints === 0) {
-      return { status: "ALL_ABSTAIN", maxPoints: 0, exiledSeat: null };
-    }
+    if (top.length === 0 || maxPoints === 0) return { status: "ALL_ABSTAIN", maxPoints: 0, exiledSeat: null };
+    if (top.length > 1) return { status: "TIE_NO_EXILE", maxPoints, topSeats: top, exiledSeat: null };
 
-    if (topSeats.length > 1) {
-      return { status: "TIE_NO_EXILE", maxPoints: maxPoints, topSeats: topSeats, exiledSeat: null };
-    }
-
-    const origSeat = topSeats[0];
-    let finalSeat = origSeat;
-    let isSubstituted = false;
-
-    // 檢查詭術師號碼牌置換
+    let finalSeat = top[0];
+    let isSub = false;
     if (modules?.enableTrickster && tricksterSwap) {
       const sA = Number(tricksterSwap.seatA);
       const sB = Number(tricksterSwap.seatB);
-      if (sA === origSeat || sB === origSeat) {
-        const substituteSeat = (sA === origSeat) ? sB : sA;
-        const subPlayer = players.find(p => Number(p.seat) === substituteSeat);
-        if (subPlayer && subPlayer.isAlive) {
-          finalSeat = substituteSeat;
-          isSubstituted = true;
-        }
+      if (sA === finalSeat || sB === finalSeat) {
+        const sub = (sA === finalSeat) ? sB : sA;
+        const subP = players.find(p => Number(p.seat) === sub);
+        if (subP && subP.isAlive) { finalSeat = sub; isSub = true; }
       }
     }
-
-    return {
-      status: "EXILED",
-      maxPoints: maxPoints,
-      exiledSeat: finalSeat,
-      originalVotedSeat: origSeat,
-      isTricksterSubstituted: isSubstituted
-    };
+    return { status: "EXILED", maxPoints, exiledSeat: finalSeat, originalVotedSeat: top[0], isTricksterSubstituted: isSub };
   },
 
-  // 6. 警長競選自爆累計規則
+  // 警選自爆
   resolvePoliceExplode(currentCount = 0) {
     if (currentCount >= 1) {
-      return {
-        nextCount: 2,
-        isBadgeLoss: true,
-        nextPhase: "DAY_EXILE",
-        alertText: "連續兩天在警選階段自爆！觸發規則【警徽流失（吞警徽）】，本局不再有警長，進入白天放逐！"
-      };
-    } else {
-      return {
-        nextCount: 1,
-        isBadgeLoss: false,
-        nextPhase: "POLICE_ELECTION",
-        alertText: "狼人競選自爆！保留警徽，延續今日警上名單於次日補選。"
-      };
+      return { nextCount: 2, isBadgeLoss: true, nextPhase: "DAY_EXILE", alertText: "連續兩天警選自爆！觸發【警徽流失】，本局不再有警長！" };
     }
+    return { nextCount: 1, isBadgeLoss: false, nextPhase: "POLICE_ELECTION", alertText: "狼人競選自爆！保留警徽，延續名單於次日補選。" };
   },
 
-  // 7. 夜間死訊綜合結算演算法 (含轉化執行、狼兄弟同刀穿透、守衛、女巫與魔術師換位)
+  // 夜間死訊結算
   resolveNight(inputs = {}, nightMemory = {}, players = []) {
-    // 優先執行身分動態轉化與陣營覆寫
     const transformationLogs = this.applyRoleTransformations(inputs, players, nightMemory);
-
     const rawWolf = Number(inputs.rawWolfTarget) || 0;
-    const rawSoloWolf = Number(inputs.youngWolfSoloTarget) || 0; // 狼弟覺醒單獨刀
+    const rawSolo = Number(inputs.youngWolfSoloTarget) || 0;
     const rawPoison = Number(inputs.rawPoisonTarget) || 0;
     const guard = Number(inputs.guardTarget) || 0;
-    const antidoteUsed = !!inputs.antidoteUsed;
+    const antidote = !!inputs.antidoteUsed;
 
-    const swapPair = inputs.swapPair || [0, 0];
-    const s0 = Number(swapPair[0]) || 0;
-    const s1 = Number(swapPair[1]) || 0;
+    const s0 = Number(inputs.swapPair?.[0]) || 0;
+    const s1 = Number(inputs.swapPair?.[1]) || 0;
+    const swap = (s) => (s === s0 ? s1 : (s === s1 ? s0 : s));
 
-    const applySwap = (seat) => {
-      if (!seat) return 0;
-      if (seat === s0) return s1;
-      if (seat === s1) return s0;
-      return seat;
-    };
-
-    const effectiveWolf = applySwap(rawWolf);
-    const effectiveSoloWolf = applySwap(rawSoloWolf);
-    const effectivePoison = applySwap(rawPoison);
-    const effectiveGuard = applySwap(guard);
+    const effWolf = swap(rawWolf);
+    const effSolo = swap(rawSolo);
+    const effPoison = swap(rawPoison);
+    const effGuard = swap(guard);
 
     let deaths = [];
-    let hunterCanShoot = true;
-    let wolfKingCanShoot = true;
-
-    // 核心規則：狼人與狼弟同刀（擊殺同一名玩家），解藥與守衛皆無效直接穿透倒牌
-    const isBrotherDualKilled = (effectiveWolf > 0 && effectiveWolf === effectiveSoloWolf);
-
-    if (isBrotherDualKilled) {
-      deaths.push(effectiveWolf);
+    if (effWolf > 0 && effWolf === effSolo) {
+      deaths.push(effWolf);
     } else {
-      // 處理常規狼刀
-      if (effectiveWolf) {
-        if (antidoteUsed && effectiveGuard === effectiveWolf) {
-          deaths.push(effectiveWolf); // 同守同救奶穿
-        } else if (antidoteUsed || effectiveGuard === effectiveWolf) {
-          // 平安 (守衛守護或女巫開解藥)
-        } else {
-          deaths.push(effectiveWolf);
-        }
+      if (effWolf) {
+        if (antidote && effGuard === effWolf) deaths.push(effWolf);
+        else if (!antidote && effGuard !== effWolf) deaths.push(effWolf);
       }
-
-      // 處理狼弟覺醒刀
-      if (effectiveSoloWolf && !deaths.includes(effectiveSoloWolf)) {
-        if (effectiveGuard === effectiveSoloWolf) {
-          // 守衛守護成功
-        } else {
-          deaths.push(effectiveSoloWolf);
-        }
+      if (effSolo && !deaths.includes(effSolo) && effGuard !== effSolo) {
+        deaths.push(effSolo);
       }
     }
+    if (effPoison && !deaths.includes(effPoison)) deaths.push(effPoison);
 
-    // 女巫毒藥
-    if (effectivePoison && !deaths.includes(effectivePoison)) {
-      deaths.push(effectivePoison);
-    }
-
-    // 獵人 / 狼王 吃毒禁槍判定
-    if (deaths.includes(effectivePoison)) {
-      hunterCanShoot = false;
-      wolfKingCanShoot = false;
-    }
-
-    const summaryText = deaths.length === 0 
-      ? "昨夜是平安夜" 
-      : `昨夜倒牌：${deaths.sort((a,b)=>a-b).map(s => s + '號').join('、')}`;
-
+    const summaryText = deaths.length === 0 ? "昨夜是平安夜" : `昨夜倒牌：${deaths.sort((a,b)=>a-b).map(s => s + '號').join('、')}`;
     return {
-      deaths: deaths,
-      hunterCanShoot: hunterCanShoot,
-      wolfKingCanShoot: wolfKingCanShoot,
-      summaryText: summaryText,
-      transformationLogs: transformationLogs
+      deaths,
+      hunterCanShoot: !deaths.includes(effPoison),
+      wolfKingCanShoot: !deaths.includes(effPoison),
+      summaryText,
+      transformationLogs
     };
   },
 
-  // 8. 勝負判定 (好人滅狼勝 / 狼人屠邊勝 - 完全根據當前 seatType 判定)
+  // 勝負判定
   checkGameOver(players = []) {
     const alive = players.filter(p => p.isAlive);
     const gods = alive.filter(p => p.seatType === "GOD").length;
     const villagers = alive.filter(p => p.seatType === "VILLAGER").length;
     const wolves = alive.filter(p => p.seatType === "WEREWOLF").length;
 
-    if (wolves === 0) {
-      return { isOver: true, winner: "villager", reason: "好人陣營獲勝！(狼人全滅)" };
-    } else if (gods === 0) {
-      return { isOver: true, winner: "werewolf", reason: "狼人陣營屠神獲勝！" };
-    } else if (villagers === 0) {
-      return { isOver: true, winner: "werewolf", reason: "狼人陣營屠民獲勝！" };
-    }
-
+    if (wolves === 0) return { isOver: true, winner: "villager", reason: "好人陣營獲勝！(狼人全滅)" };
+    if (gods === 0) return { isOver: true, winner: "werewolf", reason: "狼人陣營屠神獲勝！" };
+    if (villagers === 0) return { isOver: true, winner: "werewolf", reason: "狼人陣營屠民獲勝！" };
     return { isOver: false, winner: null, reason: "進行中" };
   }
 };
