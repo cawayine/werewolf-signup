@@ -1,6 +1,6 @@
 /**
  * 基地狼人殺 - 規則與板型獨立設定檔 (rules_config.js)
- * 基準版本：全域規則大腦 + 26位角色字典 + 8套定案板型 + RULES_ENGINE 核心運算引擎 (完整修復增強版)
+ * 基準版本：全域規則大腦 + 27位角色字典 + 8套定案板型 + RULES_ENGINE 核心運算引擎 (動態轉化與坑位重塑增強版)
  */
 
 // ==========================================
@@ -37,7 +37,15 @@ const ROLE_DEFINITIONS = {
   "覺醒預言家": { seatType: "GOD", faction: "villager", canPeep: true, peepTwoTargets: true },
   "通靈師": { seatType: "GOD", faction: "villager", canCheckExactRole: true, canCheckSelf: false, allowRepeatCheck: false },
   "覺醒攝夢人": { seatType: "GOD", faction: "villager", canDreamWord: true, canDreamSelf: true, dreamerImmuneDamage: true, activeExileStart: 2, suppressVictimSkill: true, immunePoison: true },
-  "黑市商人": { seatType: "GOD", faction: "villager", activeNight: 1, canTradeSkill: true, canTradeSelf: false, threeGiftsMode: true },
+  "黑市商人": { 
+    seatType: "GOD", 
+    faction: "villager", 
+    activeNight: 1, 
+    canTradeSkill: true, 
+    canTradeSelf: false, 
+    threeGiftsMode: true,
+    transformsOnAllVillagerGifts: true // 標記：若三禮物皆贈與好人，則墮落轉化為狼人
+  },
 
   // --- 好人陣營：平民坑 (VILLAGER) ---
   "平民": { seatType: "VILLAGER", faction: "villager" },
@@ -55,7 +63,14 @@ const ROLE_DEFINITIONS = {
   "機械狼": { seatType: "WEREWOLF", faction: "werewolf", canImitate: true, canSelfExplode: false },
   "尋香魅影": { seatType: "WEREWOLF", faction: "werewolf", canBind: true, canSelfExplode: false, limitPerGame: 1, allowConsecutiveBindUntilTriggered: true },
   "夢魘": { seatType: "WEREWOLF", faction: "werewolf", canFear: true, priority: "FIRST", canFearSameTargetConsecutively: false, canFearSelf: false },
-  "覺醒石像鬼": { seatType: "WEREWOLF", faction: "werewolf", canConvertNeighbor: true, activeNight: 1 },
+  "覺醒石像鬼": { 
+    seatType: "WEREWOLF", 
+    faction: "werewolf", 
+    canConvertNeighbor: true, 
+    activeNight: 1,
+    convertsTargetTo: "轉化者" // 標記：轉化目標
+  },
+  "轉化者": { seatType: "WEREWOLF", faction: "werewolf", isConverted: true, canNightKill: true }, // 覺醒石像鬼轉化之衍生角色
   "寂夜導師": { seatType: "WEREWOLF", faction: "werewolf", canBuffOrDebuff: true, activeNightStart: 2, canSelfExplode: false },
   "狼兄": { seatType: "WEREWOLF", faction: "werewolf", canNightKill: true, canSelfExplode: false },
   "狼弟": { seatType: "WEREWOLF", faction: "werewolf", canNightKill: false, canSelfExplode: true, seerCheckBeforeBrotherDead: "villager", seerCheckAfterBrotherDead: "werewolf" }
@@ -267,6 +282,7 @@ const RULES_ENGINE = {
         role: "平民",
         seatType: "VILLAGER",
         victoryFaction: "villager",
+        originalSeatType: "VILLAGER",
         isAlive: true,
         deathReason: null,
         isCandidate: false,
@@ -293,6 +309,62 @@ const RULES_ENGINE = {
     };
   },
 
+  // 0. 動態身分轉化與坑位重塑機制 (支援覺醒石像鬼轉化與黑市商人變狼)
+  applyRoleTransformations(inputs = {}, players = [], nightMemory = {}) {
+    const logs = [];
+
+    // --- A. 覺醒石像鬼首夜轉化處理 ---
+    const gargoyleTarget = Number(inputs.gargoyleTarget) || 0;
+    if (gargoyleTarget > 0 && !nightMemory.gargoyleConvertedTarget) {
+      const targetPlayer = players.find(p => Number(p.seat) === gargoyleTarget);
+      if (targetPlayer) {
+        if (!targetPlayer.originalSeatType) targetPlayer.originalSeatType = targetPlayer.seatType;
+        targetPlayer.seatType = "WEREWOLF";
+        targetPlayer.victoryFaction = "werewolf";
+        targetPlayer.role = `${targetPlayer.role}(轉化)`;
+        nightMemory.gargoyleConvertedTarget = gargoyleTarget;
+        logs.push(`【覺醒石像鬼】成功轉化 ${gargoyleTarget} 號！其身分已正式變更為狼坑！`);
+      }
+    }
+
+    // --- B. 黑市商人三禮物送好人墮落變狼處理 ---
+    const gifts = inputs.blackMarketGifts;
+    if (gifts && !nightMemory.blackMarketTransformedWolf) {
+      const gSeer = Number(gifts.seer) || 0;
+      const gPoison = Number(gifts.poison) || 0;
+      const gGun = Number(gifts.gun) || 0;
+
+      if (gSeer > 0 && gPoison > 0 && gGun > 0) {
+        nightMemory.blackMarketGifts = { seer: gSeer, poison: gPoison, gun: gGun };
+
+        const targetSeer = players.find(p => Number(p.seat) === gSeer);
+        const targetPoison = players.find(p => Number(p.seat) === gPoison);
+        const targetGun = players.find(p => Number(p.seat) === gGun);
+
+        // 判定三個接收者是否「全體為好人」
+        const allGood = [targetSeer, targetPoison, targetGun].every(p => {
+          if (!p) return false;
+          // 若為被石像鬼轉化者，則視為狼人
+          return p.seatType !== "WEREWOLF";
+        });
+
+        if (allGood) {
+          const bmPlayer = players.find(p => p.role.includes("黑市商人"));
+          if (bmPlayer) {
+            if (!bmPlayer.originalSeatType) bmPlayer.originalSeatType = bmPlayer.seatType;
+            bmPlayer.seatType = "WEREWOLF";
+            bmPlayer.victoryFaction = "werewolf";
+            bmPlayer.role = "黑市商人(狼)";
+            nightMemory.blackMarketTransformedWolf = true;
+            logs.push(`【黑市商人】三份禮物皆贈與好人，已變身墮落為狼坑！神坑縮減、狼坑擴增！`);
+          }
+        }
+      }
+    }
+
+    return logs;
+  },
+
   // 1. 預言家查驗判定 (支援魔術師號碼牌置換 + 狼弟在狼兄死前為好人金水)
   resolveCheck(targetSeat, swapPair = [0, 0], players = []) {
     const tSeat = Number(targetSeat) || 0;
@@ -315,9 +387,9 @@ const RULES_ENGINE = {
       const brother = players.find(p => p.role === "狼兄");
       const isBrotherAlive = brother ? brother.isAlive : false;
       if (isBrotherAlive) {
-        isWolf = false; // 狼兄尚在，查驗顯示好人
+        isWolf = false;
       } else {
-        isWolf = true;  // 狼兄出局，查驗顯示狼人
+        isWolf = true;
       }
     }
 
@@ -533,8 +605,11 @@ const RULES_ENGINE = {
     }
   },
 
-  // 7. 夜間死訊綜合結算演算法 (含狼兄弟同刀穿透、守衛、女巫與魔術師換位)
-  resolveNight(inputs = {}, nightMemory = {}) {
+  // 7. 夜間死訊綜合結算演算法 (含轉化執行、狼兄弟同刀穿透、守衛、女巫與魔術師換位)
+  resolveNight(inputs = {}, nightMemory = {}, players = []) {
+    // 優先執行身分動態轉化與陣營覆寫
+    const transformationLogs = this.applyRoleTransformations(inputs, players, nightMemory);
+
     const rawWolf = Number(inputs.rawWolfTarget) || 0;
     const rawSoloWolf = Number(inputs.youngWolfSoloTarget) || 0; // 狼弟覺醒單獨刀
     const rawPoison = Number(inputs.rawPoisonTarget) || 0;
@@ -607,11 +682,12 @@ const RULES_ENGINE = {
       deaths: deaths,
       hunterCanShoot: hunterCanShoot,
       wolfKingCanShoot: wolfKingCanShoot,
-      summaryText: summaryText
+      summaryText: summaryText,
+      transformationLogs: transformationLogs
     };
   },
 
-  // 8. 勝負判定 (好人滅狼勝 / 狼人屠邊勝)
+  // 8. 勝負判定 (好人滅狼勝 / 狼人屠邊勝 - 完全根據當前 seatType 判定)
   checkGameOver(players = []) {
     const alive = players.filter(p => p.isAlive);
     const gods = alive.filter(p => p.seatType === "GOD").length;
