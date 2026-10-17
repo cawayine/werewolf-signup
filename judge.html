@@ -627,17 +627,14 @@
             };
           }).filter(p => p.session && (p.lineName || p.uid));
 
-          const sessions = [...new Set(remoteRosterData.map(p => p.session))];
+          const sessions = [...new Set(remoteRosterData.map(p => p.session))]
+                            .filter(s => !s.includes("10/17"));
           
           if (sessions.length > 0) {
             sessionSelect.innerHTML = sessions.map((s, idx) => `
               <option value="${s}" ${idx === 0 ? 'selected' : ''}>${s}</option>
             `).join('');
             onSessionRosterChange();
-          } else {
-            sessionSelect.innerHTML = '<option value="">無活動場次</option>';
-            currentRosterMembers = [...MOCK_MEMBERS];
-            updateAllSeatDropdownOptions();
           }
 
           if (isManual) alert("✅ 名單已同步至最新！");
