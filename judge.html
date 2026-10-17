@@ -17,7 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <!-- 引入規則大腦與獨立設定檔 (加入時間戳參數破除瀏覽器快取) -->
-  <script src="rules_config.js?v=20261016_patch_v6"></script>
+  <script src="rules_config.js?v=20261016_patch_v7"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -433,7 +433,7 @@
     let antidoteUsedThisNight = false;
 
     // ==========================================
-    // 1. 初始化與 Firebase 實時監聽
+    // 1. 初始化與 Firebase 實時監聽 (雙向互鎖全面修復)
     // ==========================================
     window.onload = () => {
       initBoardSelector();
@@ -442,9 +442,22 @@
       matchRef.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
-          if (data.actionId && data.actionId !== lastHandledActionId && data.lastActionBy === "RECORDER") {
+          // 支援識別 RECORDER 與 STANDALONE_RECORDER
+          const isFromBoard = (data.lastActionBy === "RECORDER" || data.lastActionBy === "STANDALONE_RECORDER");
+          if (data.actionId && data.actionId !== lastHandledActionId && isFromBoard) {
             lastHandledActionId = data.actionId;
-            alert(`🔔 【計票員已完成操作同步！】\n狀態更新：${data.lastActionSummary || '已完成開票'}`);
+
+            // 若公播看板發動重置，上帝主控台全面歸零 UI 避免反向覆蓋舊狀態
+            if (data.actionId.startsWith("RESET_")) {
+              alert(`🔔 【現場公播看板已執行重置開局！】\n主控台已同步歸零回到第 1 夜配置。`);
+              document.getElementById("setupPanel")?.setAttribute("open", "true");
+              document.getElementById("nightPanel")?.classList.remove("hidden");
+              document.getElementById("dayPanel")?.classList.add("hidden");
+              antidoteUsedThisNight = false;
+              initSeats();
+            } else {
+              alert(`🔔 【公播看板已同步操作！】\n狀態更新：${data.lastActionSummary || '已完成開票'}`);
+            }
           }
 
           isRemoteUpdate = true;
@@ -690,6 +703,7 @@
     function initSeats() {
       const config = BOARD_DATABASE[currentBoardKey];
       const container = document.getElementById("seatAssignmentGrid");
+      if (!container || !config) return;
       container.innerHTML = "";
       gameState.players = [];
 
@@ -841,7 +855,6 @@
     // ==========================================
     function updateCounts() {
       const isPoliceStage = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
-      // 警長競選階段死訊未宣讀，坑位皆以存活計算，除非先前已自爆/放逐
       const alive = isPoliceStage 
         ? gameState.players.filter(p => p.deathReason !== "EXPLODE" && p.deathReason !== "EXILE")
         : gameState.players.filter(p => p.isAlive);
@@ -878,7 +891,6 @@
         let statusBadge = "";
         let statusText = p.name ? p.name.slice(0, 3) : "存活";
 
-        // 警選階段中，夜亡玩家尚未對外宣讀，但上帝視圖標註提醒
         if (isPoliceStage && !p.isAlive && p.deathReason === "NIGHT") {
           borderStyle = "border-indigo-600 bg-indigo-950/40 text-indigo-200 font-bold";
           statusBadge = "🌙";
@@ -909,7 +921,7 @@
     }
 
     // ==========================================
-    // 6. 完整動態夜間卡片渲染器
+    // 6. 動態夜間卡片渲染器
     // ==========================================
     function renderNightPanel() {
       const config = BOARD_DATABASE[currentBoardKey];
@@ -1014,7 +1026,7 @@
             </div>
           `;
         } else if (step.id === "witch") {
-          const antUsed = isLockedNight ? !!savedSnapshot.inputs.antidoteUsed : !!gameState.nightMemory.witchAntidoteUsed;
+          const antUsed = isLockedNight ? !!savedSnapshot.inputs.antidoteUsed : !!gameState.nightMemory?.witchAntidoteUsed;
           bodyHtml = `
             <div class="flex justify-between items-center mb-1">
               <span class="text-[10px] text-amber-400 font-mono font-bold" id="witchRawKillHint">原始刀口：等待落刀</span>
@@ -1221,7 +1233,7 @@
     }
 
     function toggleAntidote() {
-      if (gameState.nightMemory.witchAntidoteUsed) return;
+      if (gameState.nightMemory?.witchAntidoteUsed) return;
 
       const witch = gameState.players.find(p => p.role === "女巫");
       const wolfEl = document.getElementById('target-wolf') || 
@@ -1288,7 +1300,7 @@
           if (hint) {
             hint.innerHTML = `原始刀口：<span class="text-rose-400 font-bold">${rawWolfTarget} 號 (女巫中刀，不可自救)</span>`;
           }
-          if (antBtn && !gameState.nightMemory.witchAntidoteUsed) {
+          if (antBtn && !gameState.nightMemory?.witchAntidoteUsed) {
             antBtn.disabled = true;
             antBtn.innerText = "不可自救";
             antBtn.className = "bg-gray-800 text-rose-400/60 border border-rose-900/50 text-[11px] px-2 py-0.5 rounded cursor-not-allowed";
@@ -1297,7 +1309,7 @@
           witchCard.classList.remove("bg-rose-950/40", "border-rose-600/80");
           witchCard.classList.add("bg-gray-800/70", "border-gray-700");
 
-          if (antBtn && !gameState.nightMemory.witchAntidoteUsed) {
+          if (antBtn && !gameState.nightMemory?.witchAntidoteUsed) {
             antBtn.disabled = false;
             antBtn.innerText = antidoteUsedThisNight ? "已使用 (救人)" : "未使用";
             antBtn.className = antidoteUsedThisNight 
@@ -1311,7 +1323,7 @@
         rawPoisonTarget: Number(document.getElementById("poisonTarget")?.value || 0) || 0,
         swapPair: swapPair,
         players: gameState.players,
-        blackMarketTransformedWolf: gameState.nightMemory.blackMarketTransformedWolf
+        blackMarketTransformedWolf: gameState.nightMemory?.blackMarketTransformedWolf
       };
 
       ["hunter_gesture", "wolf_king_gesture", "converter_gesture", "black_market_faction_gesture"].forEach(gId => {
@@ -1356,6 +1368,7 @@
         ]
       };
 
+      if (!gameState.nightMemory) gameState.nightMemory = {};
       const nResult = RULES_ENGINE.resolveNight(inputs, gameState.nightMemory);
 
       if (!gameState.nightHistory) gameState.nightHistory = {};
@@ -1446,11 +1459,7 @@
       else renderExileStageControls();
     }
 
-    // 核心邏輯修復：競選階段死訊尚未宣讀，所有狼人（含昨夜倒牌者）皆可自爆
     function populateDayDropdowns() {
-      const isPoliceStage = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
-
-      // 真正完全出局（被白天放逐、自爆過）者不可再自爆
       const canExplodeInPolice = gameState.players.filter(p => {
         return p.deathReason !== "EXPLODE" && p.deathReason !== "EXILE";
       });
@@ -1478,7 +1487,6 @@
       const expCnt = gameState.consecutiveExplodeCount || 0;
       document.getElementById("policeExplodeCountLabel").innerText = `自爆計數：${expCnt} / 2 (${expCnt === 0 ? '正常' : '已爆1次，再爆吞警徽'})`;
 
-      // 警選階段：所有非放逐/自爆玩家皆視為具備競選資格
       const eligiblePlayers = gameState.players.filter(p => p.deathReason !== "EXPLODE" && p.deathReason !== "EXILE");
 
       const grid = document.getElementById("policeCandidateToggleGrid");
@@ -1641,7 +1649,6 @@
         gameState.tempVotes = {};
         gameState.selectedTarget = null;
 
-        // 警長選出後，進入放逐環節正式結算並宣讀昨夜死訊與開槍
         checkPostNightGunAction();
 
         pushStateToFirebase(`👑 警長誕生：${winner} 號當選警長`);
@@ -1701,7 +1708,7 @@
 
       if (!gameState.tempVotes) gameState.tempVotes = {};
       Object.keys(gameState.tempVotes).forEach(k => {
-        gameState.tempVotes[k] = gameState.tempVotes[k].filter(s => Number(s) !== voter);
+        gameState.tempVotes[k] = (gameState.tempVotes[k] || []).filter(s => Number(s) !== voter);
       });
 
       if (!gameState.tempVotes[target]) gameState.tempVotes[target] = [];
@@ -2014,7 +2021,13 @@
       initSeats();
       antidoteUsedThisNight = false;
 
-      pushStateToFirebase(summaryText);
+      // 產生帶有 RESET_ 前綴的獨立 ID，通知看板端強制刷新
+      gameState.lastActionBy = "JUDGE";
+      gameState.actionId = "RESET_" + Date.now();
+      gameState.lastActionSummary = summaryText;
+      lastHandledActionId = gameState.actionId;
+
+      matchRef.set(gameState);
       renderAllViews();
     }
 
