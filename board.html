@@ -108,7 +108,7 @@
         <h1 class="text-sm lg:text-base font-black text-gray-100 flex items-center gap-1.5">
           基地公播看板 
           <span id="syncStatusBadge" class="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[10px] px-1.5 py-0.2 rounded font-bold">連線中...</span>
-          <span id="operatingModeBadge" class="bg-gray-800 text-gray-300 border border-gray-700 text-[10px] px-1.5 py-0.2 rounded font-bold cursor-pointer" onclick="toggleOperatingModeModal()" title="點擊切換模式">跟隨上帝端</span>
+          <span id="operatingModeBadge" class="bg-gray-800 text-gray-300 border border-gray-700 text-[10px] px-1.5 py-0.2 rounded font-bold">讀取模式...</span>
         </h1>
         <span class="text-[11px] lg:text-xs text-amber-300 font-mono font-bold" id="currentStageText">讀取對局進度中...</span>
       </div>
@@ -118,9 +118,9 @@
         <div class="text-[10px] text-gray-400">存活狀態</div>
         <div class="text-sm font-bold text-emerald-400 font-mono" id="aliveRatioText">-- / 12 人</div>
       </div>
-      <!-- 模式/解鎖入口按鈕 -->
-      <button onclick="toggleOperatingModeModal()" id="authLockBtn" class="text-gray-500 hover:text-amber-400 p-1.5 transition rounded-lg bg-gray-800/80 border border-gray-700" title="運作模式設定">
-        <i class="fa-solid fa-gear text-xs"></i>
+      <!-- 解鎖入口按鈕 (輸入密碼解鎖本設備控制權限) -->
+      <button onclick="promptAdminLogin()" id="authLockBtn" class="text-gray-500 hover:text-amber-400 p-1.5 transition rounded-lg bg-gray-800/80 border border-gray-700" title="計票員權限驗證">
+        <i class="fa-solid fa-lock text-xs"></i>
       </button>
     </div>
   </header>
@@ -196,7 +196,7 @@
     <aside id="controlDrawer" class="hidden lg:col-span-5 fixed inset-x-0 bottom-0 lg:static bg-gray-900 border-t lg:border border-gray-700 p-3 z-50 rounded-t-2xl lg:rounded-xl shadow-2xl max-w-xl lg:max-w-none mx-auto max-h-[88vh] lg:max-h-none overflow-y-auto">
       <div class="flex justify-between items-center pb-2 mb-2 border-b border-gray-800">
         <h3 class="text-xs lg:text-sm font-bold text-amber-400 flex items-center gap-1.5">
-          <i class="fa-solid fa-calculator"></i> 獨立計票工作台
+          <i class="fa-solid fa-calculator"></i> 現場計票控制端
         </h3>
         <div class="flex items-center gap-2">
           <button onclick="resetMatchData()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold px-2 py-0.5 rounded text-[11px] transition">
@@ -206,6 +206,16 @@
             <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
+      </div>
+
+      <!-- 全局對局模式切換列 (主控人員專用) -->
+      <div class="mb-2.5 p-2 bg-indigo-950/40 border border-indigo-700/60 rounded-lg flex items-center justify-between">
+        <span class="text-[11px] font-bold text-indigo-300 flex items-center gap-1">
+          <i class="fa-solid fa-network-wired"></i> 全局對局模式：
+        </span>
+        <button id="modeSwitchBtn" onclick="toggleGlobalMode()" class="px-2.5 py-1 rounded text-xs font-bold border transition bg-amber-600 text-white border-amber-400">
+          切換為：獨立看板模式
+        </button>
       </div>
 
       <!-- 模組開關配置列 -->
@@ -347,7 +357,7 @@
           </div>
         </div>
 
-        <!-- 夜間死訊更新 (獨立模式下可手動登記) -->
+        <!-- 夜間死訊更新 (由上帝或獨立計票員維護) -->
         <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
           <div class="flex justify-between items-center mb-1">
             <span class="text-xs font-bold text-purple-300">更新夜間倒牌死訊 (點選出局)</span>
@@ -388,13 +398,16 @@
     </aside>
   </div>
 
-  <!-- 手機端底部固定：計票員操作欄 (獨立模式下可見) -->
+  <!-- 手機端底部固定：計票員操作欄 (輸入密碼解鎖後呈現) -->
   <footer id="adminFooter" class="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-40 hidden">
     <div class="max-w-xl mx-auto flex justify-between items-center">
       <div class="flex items-center gap-2">
         <span class="text-xs text-amber-400 font-bold flex items-center gap-1">
-          <i class="fa-solid fa-pen-ruler"></i> 獨立控制台
+          <i class="fa-solid fa-circle-check"></i> 計票員已解鎖
         </span>
+        <button onclick="logoutAdmin()" class="text-[11px] text-gray-500 hover:text-gray-300 underline">
+          退出鎖定
+        </button>
       </div>
       <div class="flex gap-2">
         <button onclick="resetMatchData()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold px-2.5 py-1.5 rounded-lg text-xs transition">
@@ -425,8 +438,10 @@
     const db = firebase.database();
     const matchRef = db.ref("currentMatch");
 
-    // 運作模式：'SLAVE' (跟隨上帝端純公播) 或 'STANDALONE' (公播自主掌控計票)
-    let operatingMode = localStorage.getItem("werewolf_board_mode") || "SLAVE";
+    // 本設備身分權限 (純瀏覽 vs 計票員)
+    let isAdmin = localStorage.getItem("werewolf_board_admin") === "true";
+    // 全局運作模式：'SLAVE' (跟隨上帝端) 或 'STANDALONE' (獨立看板模式)
+    let operatingMode = "SLAVE";
     let isRemoteUpdate = false;
     let lastHandledActionId = null;
 
@@ -434,49 +449,92 @@
     let gameState = RULES_ENGINE.createInitialGameState();
     let currentHistoryViewIndex = -1;
 
-    // 切換模式設定
-    function toggleOperatingModeModal() {
-      if (operatingMode === "STANDALONE") {
-        if (confirm("目前為【獨立計票模式】。\n要切換回【跟隨上帝端（純投影幕）】嗎？")) {
-          setOperatingMode("SLAVE");
+    // ==========================================
+    // 權限與運作模式處理
+    // ==========================================
+    function promptAdminLogin() {
+      if (isAdmin) {
+        if (confirm("目前此設備已解鎖計票員權限，要退出並鎖定看板（切回純瀏覽）嗎？")) {
+          logoutAdmin();
         }
-      } else {
-        const pwd = prompt("請輸入模式切換密碼，啟用【獨立計票看板】：");
-        if (pwd === ADMIN_PASSWORD) {
-          setOperatingMode("STANDALONE");
-          alert("✅ 已切換為【獨立計票模式】！此設備可直接計票與重置，並即時同步給其他投影螢幕。");
-        } else if (pwd !== null) {
-          alert("❌ 密碼錯誤！");
-        }
+        return;
+      }
+      const pwd = prompt("請輸入計票員專屬解鎖密碼：");
+      if (pwd === ADMIN_PASSWORD) {
+        isAdmin = true;
+        localStorage.setItem("werewolf_board_admin", "true");
+        updateDeviceUI();
+        renderAll();
+        alert("✅ 計票員身分驗證成功！已解鎖控制面板。");
+      } else if (pwd !== null) {
+        alert("❌ 密碼錯誤，無法解鎖計票面板！");
       }
     }
 
-    function setOperatingMode(mode) {
-      operatingMode = mode;
-      localStorage.setItem("werewolf_board_mode", mode);
-      updateModeUI();
+    function logoutAdmin() {
+      isAdmin = false;
+      localStorage.removeItem("werewolf_board_admin");
+      updateDeviceUI();
+      renderAll();
+      alert("🔒 已鎖定計票面板，切回純瀏覽展示視圖。");
+    }
+
+    // 主控計票員手動切換全場運行模式 (廣播至所有設備)
+    function toggleGlobalMode() {
+      if (!isAdmin) {
+        alert("⚠️ 請先解鎖計票員權限後再切換模式！");
+        return;
+      }
+
+      const nextMode = (operatingMode === "STANDALONE") ? "SLAVE" : "STANDALONE";
+      const confirmMsg = (nextMode === "STANDALONE")
+        ? "⚠️ 確定要切換為【獨立看板模式】嗎？\n切換後，本看板擁有獨立掌控權，現場大螢幕將同步顯示為獨立模式。"
+        : "⚠️ 確定要切換為【跟隨上帝端模式】嗎？\n切換後，對局生命週期將完全由上帝主控台掌控。";
+
+      if (!confirm(confirmMsg)) return;
+
+      operatingMode = nextMode;
+      gameState.operatingMode = nextMode;
+      pushStateToFirebase(`切換運行模式為：${nextMode === 'STANDALONE' ? '獨立看板模式' : '跟隨上帝端模式'}`);
+      updateDeviceUI();
       renderAll();
     }
 
-    function updateModeUI() {
+    // 更新介面呈現 (嚴格分離「全局模式」與「本設備權限」)
+    function updateDeviceUI() {
       const modeBadge = document.getElementById("operatingModeBadge");
+      const modeSwitchBtn = document.getElementById("modeSwitchBtn");
       const footer = document.getElementById("adminFooter");
       const lockBtn = document.getElementById("authLockBtn");
       const controlDrawer = document.getElementById("controlDrawer");
       const displayMainCol = document.getElementById("displayMainCol");
 
+      // 1. 全局模式指示列 (現場所有設備均可同步看見)
       if (operatingMode === "STANDALONE") {
         modeBadge.innerText = "★ 獨立控制中";
-        modeBadge.className = "bg-amber-950 text-amber-300 border border-amber-600 text-[10px] px-1.5 py-0.2 rounded font-bold cursor-pointer animate-pulse";
+        modeBadge.className = "bg-amber-950 text-amber-300 border border-amber-600 text-[10px] px-1.5 py-0.2 rounded font-bold animate-pulse";
+        if (modeSwitchBtn) {
+          modeSwitchBtn.innerText = "切換回：跟隨上帝端";
+          modeSwitchBtn.className = "px-2.5 py-1 rounded text-xs font-bold border transition bg-gray-800 text-gray-300 border-gray-600";
+        }
+      } else {
+        modeBadge.innerText = "跟隨上帝端";
+        modeBadge.className = "bg-gray-800 text-gray-300 border border-gray-700 text-[10px] px-1.5 py-0.2 rounded font-bold";
+        if (modeSwitchBtn) {
+          modeSwitchBtn.innerText = "切換為：獨立看板模式";
+          modeSwitchBtn.className = "px-2.5 py-1 rounded text-xs font-bold border transition bg-amber-600 text-white border-amber-400";
+        }
+      }
+
+      // 2. 本設備控制抽屜 (僅輸入密碼的設備可見)
+      if (isAdmin) {
         lockBtn.innerHTML = '<i class="fa-solid fa-unlock-keyhole text-amber-400 text-xs"></i>';
         footer.classList.remove("hidden");
         controlDrawer.classList.remove("lg:hidden");
         controlDrawer.classList.remove("hidden");
         displayMainCol.className = "lg:col-span-7 space-y-3 transition-all duration-300";
       } else {
-        modeBadge.innerText = "跟隨上帝端";
-        modeBadge.className = "bg-gray-800 text-gray-300 border border-gray-700 text-[10px] px-1.5 py-0.2 rounded font-bold cursor-pointer";
-        lockBtn.innerHTML = '<i class="fa-solid fa-gear text-gray-400 text-xs"></i>';
+        lockBtn.innerHTML = '<i class="fa-solid fa-lock text-gray-500 text-xs"></i>';
         footer.classList.add("hidden");
         controlDrawer.classList.add("lg:hidden");
         controlDrawer.classList.add("hidden");
@@ -488,14 +546,18 @@
     // 1. 初始化與 Firebase 實時監聽
     // ==========================================
     window.onload = () => {
-      updateModeUI();
+      updateDeviceUI();
 
       matchRef.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
-          // 上帝端提示檢測 (僅在跟隨模式下顯示)
+          // 同步雲端對局的運行模式
+          operatingMode = data.operatingMode || "SLAVE";
+
+          // 上帝端提示檢測 (跟隨模式下收到上帝結算才彈窗)
           if (operatingMode === "SLAVE" && data.actionId && data.actionId !== lastHandledActionId && data.lastActionBy === "JUDGE") {
             lastHandledActionId = data.actionId;
+            alert(`🔔 【上帝已在主控台完成操作！】\n狀態更新：${data.lastActionSummary || '已完成開票結算'}`);
           }
 
           isRemoteUpdate = true;
@@ -505,29 +567,26 @@
           if (!gameState.tempVotes) gameState.tempVotes = {};
           if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
 
+          updateDeviceUI();
           renderAll();
           isRemoteUpdate = false;
         } else {
-          // 節點為空時自動初始化
-          if (operatingMode === "STANDALONE") {
-            pushStateToFirebase("初始化對局狀態");
-          }
+          if (isAdmin) pushStateToFirebase("初始化對局狀態");
         }
         
-        document.getElementById("syncStatusBadge").innerText = "● 雲端已連線";
+        document.getElementById("syncStatusBadge").innerText = "● 即時同步中";
         document.getElementById("syncStatusBadge").className = "bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] px-1.5 py-0.2 rounded font-bold";
       }, (error) => {
         console.error("Firebase 連線異常:", error);
-        document.getElementById("syncStatusBadge").innerText = "⚠️ 離線狀態";
+        document.getElementById("syncStatusBadge").innerText = "⚠️ 連線中斷";
         document.getElementById("syncStatusBadge").className = "bg-rose-950 text-rose-300 border border-rose-800 text-[10px] px-1.5 py-0.2 rounded font-bold";
       });
     };
 
-    // 推送到 Firebase (獨立模式下標記 STANDALONE_RECORDER)
     function pushStateToFirebase(actionSummary = null) {
-      if (operatingMode !== "STANDALONE" || isRemoteUpdate) return;
+      if (!isAdmin || isRemoteUpdate) return;
       if (actionSummary) {
-        gameState.lastActionBy = "STANDALONE_RECORDER";
+        gameState.lastActionBy = (operatingMode === "STANDALONE") ? "STANDALONE_RECORDER" : "RECORDER";
         gameState.actionId = "ACT_" + Date.now();
         gameState.lastActionSummary = actionSummary;
         lastHandledActionId = gameState.actionId;
@@ -547,12 +606,9 @@
       renderHistoryTabs();
       renderSeatsStatus();
       renderLottoVoteDisplay();
-      if (operatingMode === "STANDALONE") {
-        renderDrawerControls();
-      }
+      if (isAdmin) renderDrawerControls();
     }
 
-    // 競選階段頂部存活比例不提前洩漏夜亡人數
     function renderHeaderAndSections() {
       const isPoliceActive = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
 
@@ -844,7 +900,7 @@
     }
 
     // ==========================================
-    // 3. 獨立計票抽屜控制 (STANDALONE 專屬)
+    // 3. 現場計票控制端工作台
     // ==========================================
     function renderDrawerControls() {
       const isPoliceModuleActive = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
@@ -982,7 +1038,7 @@
     }
 
     // ==========================================
-    // 4. 自爆與技能
+    // 4. 自爆與技能處理
     // ==========================================
     function handlePoliceWolfExplode() {
       const select = document.getElementById("policeWolfExplodeSelect");
@@ -1480,17 +1536,21 @@
     }
 
     // ==========================================
-    // 6. 徹底修復：重置整局資料 (強制設定為警長競選環節)
+    // 6. 重置整局資料 (包含警選環節修復)
     // ==========================================
     function resetMatchData() {
-      if (operatingMode !== "STANDALONE") {
-        alert("⚠️ 目前為【跟隨上帝端模式】，重置開局請至上帝記分主控台操作！\n若現場無上帝主控台，請點擊右上角切換至【獨立控制模式】。");
+      if (!isAdmin) {
+        alert("⚠️ 請先點擊右上角鎖頭解鎖計票員權限！");
         return;
       }
 
-      if (!confirm("⚠️ 確定要將整局資料歸零重置嗎？\n此操作將回到【第 1 天 警長競選】首輪環節！")) return;
+      if (operatingMode !== "STANDALONE") {
+        if (!confirm("⚠️ 目前全場運行模式為【跟隨上帝端】！\n在上帝主控台未開時，建議先在抽屜內將模式切換為【獨立看板模式】。\n\n是否仍然強制重置開局？")) return;
+      } else {
+        if (!confirm("⚠️ 確定要將整局資料歸零重置嗎？\n此操作將回到【第 1 天 警長競選】首輪環節，所有看板螢幕將同步重置！")) return;
+      }
 
-      // 1. 初始化 1~12 號基礎席位，確保具備完整的候選人與投票屬性
+      // 初始化 1~12 號基礎席位
       const initialPlayers = [];
       for (let i = 1; i <= 12; i++) {
         initialPlayers.push({
@@ -1505,18 +1565,19 @@
         });
       }
 
-      // 2. 構建純淨的「第 1 天 警長競選」初始狀態
+      // 構建純淨的「第 1 天 警長競選」初始狀態
       const freshState = {
+        operatingMode: operatingMode,
         day: 1,
         round: 1,
-        phase: "POLICE_ELECTION",      // 強制重置回警長競選階段
-        policeSeat: null,              // 警長未指定
-        isBadgeTorn: false,            // 警徽正常在場
-        consecutiveExplodeCount: 0,    // 競選自爆次數歸零
-        pkCandidates: [],              // 清空 PK 候選人
+        phase: "POLICE_ELECTION",      // 強制回到警選階段
+        policeSeat: null,
+        isBadgeTorn: false,
+        consecutiveExplodeCount: 0,
+        pkCandidates: [],
         selectedTarget: null,
-        tempVotes: {},                 // 清空暫存票型
-        history: [],                   // 清空所有歷史紀錄
+        tempVotes: {},
+        history: [],
         players: initialPlayers,
         modules: {
           enableTrickster: false,
@@ -1525,15 +1586,15 @@
         princeUsed: false,
         isPrinceRevolving: false,
         tricksterSwap: null,
-        lastActionBy: "STANDALONE_RECORDER",
+        lastActionBy: (operatingMode === "STANDALONE") ? "STANDALONE_RECORDER" : "RECORDER",
         actionId: "RESET_" + Date.now(),
-        lastActionSummary: "公播看板重置開局回到第 1 天警選"
+        lastActionSummary: "現場公播重置開局回到第 1 天警選"
       };
 
       gameState = freshState;
       currentHistoryViewIndex = -1;
 
-      // 3. 推送雲端並立即強制本地重繪
+      // 推送雲端更新
       matchRef.set(freshState).then(() => {
         renderAll();
         alert("✅ 對局已成功重置！已回到【第 1 天 警長競選】環節。");
