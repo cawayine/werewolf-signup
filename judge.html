@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>基地狼人殺 - 上帝專屬記分主控台 (全功能完整修復版)</title>
+  <title>基地狼人殺 - 上帝專屬記分主控台 (全功能完整版)</title>
   
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
@@ -16,7 +16,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-  <!-- 引入規則大腦與獨立設定檔 (加入時間戳參數破除瀏覽器快取) -->
+  <!-- 引入規則大腦與獨立設定檔 -->
   <script src="rules_config.js?v=20261017_patch_v9"></script>
 
   <style>
@@ -427,13 +427,12 @@
 
     let currentBoardKey = "預女獵白混";
     let isRemoteUpdate = false;
-    let lastHandledActionId = null;
 
     let gameState = RULES_ENGINE.createInitialGameState();
     let antidoteUsedThisNight = false;
 
     // ==========================================
-    // 1. 初始化與 Firebase 實時監聽 (雙向互鎖與 F5 防呆)
+    // 1. 初始化與 Firebase 實時監聽 (上帝為唯一主控端)
     // ==========================================
     window.onload = () => {
       initBoardSelector();
@@ -442,22 +441,6 @@
       matchRef.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
-          const isFromBoard = (data.lastActionBy === "RECORDER" || data.lastActionBy === "STANDALONE_RECORDER");
-          if (data.actionId && data.actionId !== lastHandledActionId && isFromBoard) {
-            lastHandledActionId = data.actionId;
-
-            if (data.actionId.startsWith("RESET_")) {
-              alert(`🔔 【現場公播看板已執行重置開局！】\n主控台已同步歸零回到第 1 夜配置。`);
-              document.getElementById("setupPanel")?.setAttribute("open", "true");
-              document.getElementById("nightPanel")?.classList.remove("hidden");
-              document.getElementById("dayPanel")?.classList.add("hidden");
-              antidoteUsedThisNight = false;
-              initSeats();
-            } else {
-              alert(`🔔 【公播看板已同步操作！】\n狀態更新：${data.lastActionSummary || '已完成開票'}`);
-            }
-          }
-
           isRemoteUpdate = true;
           Object.assign(gameState, data);
           if (!gameState.players) gameState.players = [];
@@ -524,7 +507,6 @@
         gameState.lastActionBy = "JUDGE";
         gameState.actionId = "ACT_" + Date.now();
         gameState.lastActionSummary = actionSummary;
-        lastHandledActionId = gameState.actionId;
       }
       matchRef.set(gameState);
     }
@@ -2136,7 +2118,6 @@
       gameState.lastActionBy = "JUDGE";
       gameState.actionId = "RESET_" + Date.now();
       gameState.lastActionSummary = summaryText;
-      lastHandledActionId = gameState.actionId;
 
       matchRef.set(gameState);
       renderAllViews();
