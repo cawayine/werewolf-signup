@@ -12,7 +12,8 @@ const GLOBAL_RULES = {
   duelWolfNoSkill: true,
   consecutiveExplodeBadgeLoss: true,
   witchSeesRawWolfKill: true,
-  swapAppliesAtResolution: true
+  swapAppliesAtResolution: true,
+  onlyWerewolfCanExplode: true // 限制只有狼人陣營可以自爆，好人嚴禁自爆
 };
 
 // ==========================================
@@ -314,6 +315,37 @@ const RULES_ENGINE = {
         p.originalSeatType = p.originalSeatType || "VILLAGER";
       }
     });
+  },
+
+  // 取得全場具備自爆資格的玩家（嚴格限制：必須為狼人陣營 WEREWOLF 且未出局，好人嚴禁自爆）
+  getEligibleExplodePlayers(players = [], isPoliceStage = false) {
+    return (players || []).filter(p => {
+      const isWolf = (p.seatType === "WEREWOLF" || p.victoryFaction === "werewolf");
+      if (!isWolf) return false;
+
+      if (isPoliceStage) {
+        return p.deathReason !== "EXPLODE" && p.deathReason !== "EXILE";
+      } else {
+        return !!p.isAlive;
+      }
+    });
+  },
+
+  // 驗證指定席位是否合法可自爆
+  validateCanExplode(seat, players = []) {
+    const targetSeat = Number(seat);
+    const player = (players || []).find(p => Number(p.seat) === targetSeat);
+    if (!player) {
+      return { allowed: false, reason: "查無此席位玩家！" };
+    }
+    const isWolf = (player.seatType === "WEREWOLF" || player.victoryFaction === "werewolf");
+    if (!isWolf) {
+      return { 
+        allowed: false, 
+        reason: `【違規操作攔截】${player.seat} 號身分為【${player.role}】（好人陣營），規則禁止好人自爆！` 
+      };
+    }
+    return { allowed: true, reason: "" };
   },
 
   // 覺醒石像鬼：計算合法相鄰轉化席位
