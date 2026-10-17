@@ -17,7 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <!-- 引入規則大腦與獨立設定檔 (加入時間戳參數破除瀏覽器快取) -->
-  <script src="rules_config.js?v=20261017_patch_v8"></script>
+  <script src="rules_config.js?v=20261017_patch_v9"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -273,7 +273,7 @@
           </div>
         </div>
 
-        <!-- 白天突發中斷功能列：自爆與技能連帶 -->
+        <!-- 白天突發中斷功能列：自爆與技能連帶 (好人嚴禁自爆) -->
         <div class="grid grid-cols-2 gap-2 text-xs">
           <div class="bg-rose-950/30 p-2 rounded-lg border border-rose-800/60">
             <div class="text-[11px] font-bold text-rose-300 mb-1 flex items-center gap-1">
@@ -304,12 +304,12 @@
         <div id="dayPoliceModule" class="space-y-2.5 p-2.5 bg-gray-800/50 rounded-xl border border-amber-500/40">
           <div class="flex justify-between items-center">
             <span class="text-xs font-bold text-amber-400 flex items-center gap-1">
-              <i class="fa-solid fa-crown"></i> 👑 警長競選環節 (死訊尚未公佈，所有人具競選/自爆權)
+              <i class="fa-solid fa-crown"></i> 👑 警長競選環節 (死訊尚未公佈，狼人具競選自爆權)
             </span>
             <span id="policeExplodeCountLabel" class="text-[10px] text-amber-300 font-bold">自爆計數：0 / 2</span>
           </div>
 
-          <!-- 競選中自爆操作 -->
+          <!-- 競選中自爆操作 (僅限狼人) -->
           <div class="flex items-center gap-1.5 p-1.5 bg-rose-950/40 rounded border border-rose-800/60 text-xs">
             <span class="text-[10px] text-rose-300 font-bold">競選自爆：</span>
             <select id="policeWolfExplodeSelect" class="flex-1 rounded p-1 text-[11px] bg-gray-800 border"></select>
@@ -1540,21 +1540,28 @@
       else renderExileStageControls();
     }
 
+    // 重點更新：嚴格過濾自爆下拉選單，好人絕對不可自爆
     function populateDayDropdowns() {
-      const canExplodeInPolice = gameState.players.filter(p => {
-        return p.deathReason !== "EXPLODE" && p.deathReason !== "EXILE";
-      });
+      const policeWolves = RULES_ENGINE.getEligibleExplodePlayers(gameState.players, true);
+      const dayWolves = RULES_ENGINE.getEligibleExplodePlayers(gameState.players, false);
+
+      const optsPoliceExplode = policeWolves.length > 0 
+        ? policeWolves.map(p => `<option value="${p.seat}">${p.seat} 號 ${p.name || ''} (${p.role})</option>`).join('')
+        : '<option value="">無存活狼人可自爆</option>';
+
+      const optsDayExplode = dayWolves.length > 0
+        ? dayWolves.map(p => `<option value="${p.seat}">${p.seat} 號 ${p.name || ''} (${p.role})</option>`).join('')
+        : '<option value="">無存活狼人可自爆</option>';
 
       const alive = gameState.players.filter(p => p.isAlive);
       const optsAlive = alive.map(p => `<option value="${p.seat}">${p.seat} 號 ${p.name || ''}</option>`).join('');
-      const optsPoliceExplode = canExplodeInPolice.map(p => `<option value="${p.seat}">${p.seat} 號 ${p.name || ''} (${p.role})</option>`).join('');
       
       const wolfExplode = document.getElementById("dayWolfExplodeSelect");
       const skillKill = document.getElementById("daySkillKillSelect");
       const policeWolf = document.getElementById("policeWolfExplodeSelect");
 
-      if (wolfExplode) wolfExplode.innerHTML = optsAlive;
-      if (skillKill) skillKill.innerHTML = optsAlive;
+      if (wolfExplode) wolfExplode.innerHTML = optsDayExplode;
+      if (skillKill) skillKill.innerHTML = optsAlive; // 技能帶走仍可帶走所有人
       if (policeWolf) policeWolf.innerHTML = optsPoliceExplode;
     }
 
@@ -1913,10 +1920,21 @@
       alert(`⏳ 定序王子技能已觸發！請定序王子單獨發言一次後，進行重投。`);
     }
 
-    // --- 自爆與技能處理 ---
+    // --- 自爆與技能處理 (好人嚴禁自爆) ---
     function handlePoliceWolfExplode() {
-      const seat = Number(document.getElementById("policeWolfExplodeSelect").value);
-      if (!seat) return;
+      const select = document.getElementById("policeWolfExplodeSelect");
+      const seat = Number(select?.value);
+      if (!seat) {
+        alert("⚠️ 目前無選定的狼人玩家！");
+        return;
+      }
+
+      // 嚴格攔截：好人嚴禁自爆
+      const check = RULES_ENGINE.validateCanExplode(seat, gameState.players);
+      if (!check.allowed) {
+        alert(`🚫 ${check.reason}`);
+        return;
+      }
 
       const expRes = RULES_ENGINE.resolvePoliceExplode(gameState.consecutiveExplodeCount || 0);
       if (!confirm(`⚠️ 確定要由【${seat} 號】競選自爆嗎？\n${expRes.alertText}`)) return;
@@ -1944,8 +1962,21 @@
     }
 
     function handleDayWolfExplode() {
-      const seat = Number(document.getElementById("dayWolfExplodeSelect").value);
-      if (!seat || !confirm(`⚠️ 確定要確認 ${seat} 號玩家【白天自爆】嗎？白天將直接中斷並進入天黑！`)) return;
+      const select = document.getElementById("dayWolfExplodeSelect");
+      const seat = Number(select?.value);
+      if (!seat) {
+        alert("⚠️ 目前無選定的狼人玩家！");
+        return;
+      }
+
+      // 嚴格攔截：好人嚴禁自爆
+      const check = RULES_ENGINE.validateCanExplode(seat, gameState.players);
+      if (!check.allowed) {
+        alert(`🚫 ${check.reason}`);
+        return;
+      }
+
+      if (!confirm(`⚠️ 確定要確認 ${seat} 號狼人【白天自爆】嗎？白天將直接中斷並進入天黑！`)) return;
 
       const p = gameState.players.find(x => Number(x.seat) === seat);
       if (p) { p.isAlive = false; p.deathReason = "EXPLODE"; }
