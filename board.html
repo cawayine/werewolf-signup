@@ -17,8 +17,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-  <!-- 引入規則大腦與獨立設定檔 (對齊最新版本號) -->
-  <script src="rules_config.js?v=20261017_patch_v8"></script>
+  <!-- 引入規則大腦與獨立設定檔 -->
+  <script src="rules_config.js?v=20261017_patch_v9"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -96,7 +96,7 @@
     }
   </style>
 </head>
-<body class="p-3 max-w-xl lg:max-w-7xl mx-auto pb-32 lg:pb-12">
+<body class="p-3 max-w-xl lg:max-w-7xl mx-auto pb-12">
 
   <!-- 頂部即時公播標題列 -->
   <header class="flex justify-between items-center py-2.5 px-3 bg-gray-900 rounded-xl neon-border mb-3 shadow-lg">
@@ -108,20 +108,14 @@
         <h1 class="text-sm lg:text-base font-black text-gray-100 flex items-center gap-1.5">
           基地公播看板 
           <span id="syncStatusBadge" class="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[10px] px-1.5 py-0.2 rounded font-bold">連線中...</span>
-          <span id="operatingModeBadge" class="bg-gray-800 text-gray-300 border border-gray-700 text-[10px] px-1.5 py-0.2 rounded font-bold">讀取模式...</span>
+          <span class="bg-gray-800 text-gray-300 border border-gray-700 text-[10px] px-1.5 py-0.2 rounded font-bold">純公播端</span>
         </h1>
         <span class="text-[11px] lg:text-xs text-amber-300 font-mono font-bold" id="currentStageText">讀取對局進度中...</span>
       </div>
     </div>
-    <div class="text-right flex items-center gap-2">
-      <div>
-        <div class="text-[10px] text-gray-400">存活狀態</div>
-        <div class="text-sm font-bold text-emerald-400 font-mono" id="aliveRatioText">-- / 12 人</div>
-      </div>
-      <!-- 解鎖入口按鈕 (輸入密碼解鎖本設備控制權限) -->
-      <button onclick="promptAdminLogin()" id="authLockBtn" class="text-gray-500 hover:text-amber-400 p-1.5 transition rounded-lg bg-gray-800/80 border border-gray-700" title="計票員權限驗證">
-        <i class="fa-solid fa-lock text-xs"></i>
-      </button>
+    <div class="text-right">
+      <div class="text-[10px] text-gray-400">存活狀態</div>
+      <div class="text-sm font-bold text-emerald-400 font-mono" id="aliveRatioText">-- / 12 人</div>
     </div>
   </header>
 
@@ -129,300 +123,67 @@
   <nav class="flex gap-1.5 overflow-x-auto pb-2 mb-3 text-xs scrollbar-none" id="historyTabContainer">
   </nav>
 
-  <!-- 主版面容器：手機垂直單欄，電腦端 (lg) 雙欄並排 -->
-  <div class="lg:grid lg:grid-cols-12 lg:gap-4 lg:items-start">
+  <!-- 主版面容器：全螢幕純公播 -->
+  <main class="space-y-3">
     
-    <!-- 左側欄位：公播大螢幕核心 -->
-    <main id="displayMainCol" class="lg:col-span-12 space-y-3 transition-all duration-300">
-      
-      <!-- 階段 A：警長競選專屬面板 -->
-      <section id="policeSection" class="space-y-3">
-        <!-- 警上候選人區 -->
-        <div class="bg-gray-900 rounded-xl neon-border p-3 border-amber-500/40">
-          <div class="flex justify-between items-center mb-2">
-            <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-              <i class="fa-solid fa-crown text-amber-400"></i> 🔥 警上競選區 (候選人與狀態)
-            </span>
-            <span class="text-[10px] text-gray-400" id="candidateCountLabel">0 人上警</span>
-          </div>
-          <div class="grid grid-cols-6 lg:grid-cols-12 gap-1.5" id="candidatesGrid"></div>
+    <!-- 階段 A：警長競選專屬面板 -->
+    <section id="policeSection" class="space-y-3">
+      <!-- 警上候選人區 -->
+      <div class="bg-gray-900 rounded-xl neon-border p-3 border-amber-500/40">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-crown text-amber-400"></i> 🔥 警上競選區 (候選人與狀態)
+          </span>
+          <span class="text-[10px] text-gray-400" id="candidateCountLabel">0 人上警</span>
         </div>
+        <div class="grid grid-cols-6 lg:grid-cols-12 gap-1.5" id="candidatesGrid"></div>
+      </div>
 
-        <!-- 警下投票區 -->
-        <div class="bg-gray-900 rounded-xl neon-border p-3 border-blue-500/40">
-          <div class="flex justify-between items-center mb-2">
-            <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
-              <i class="fa-solid fa-check-to-slot text-blue-400"></i> 🛡️ 具備投票權選民區
-            </span>
-            <span class="text-[10px] text-gray-400" id="votersCountLabel">12 人在警下</span>
-          </div>
-          <div class="grid grid-cols-6 lg:grid-cols-12 gap-1.5" id="votersGrid"></div>
+      <!-- 警下投票區 -->
+      <div class="bg-gray-900 rounded-xl neon-border p-3 border-blue-500/40">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-check-to-slot text-blue-400"></i> 🛡️ 具備投票權選民區
+          </span>
+          <span class="text-[10px] text-gray-400" id="votersCountLabel">12 人在警下</span>
         </div>
-      </section>
+        <div class="grid grid-cols-6 lg:grid-cols-12 gap-1.5" id="votersGrid"></div>
+      </div>
+    </section>
 
-      <!-- 階段 B：席位即時存活點陣 (資訊黑盒：只顯示席位與死因標籤，無身分外洩) -->
-      <section id="seatStatusSection">
-        <div class="bg-gray-900 rounded-xl neon-border p-3">
-          <div class="flex justify-between items-center mb-2">
-            <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
-              <i class="fa-solid fa-users"></i> 全場席位存活狀態
-            </span>
-            <span class="text-[10px] text-amber-400 font-bold" id="badgeHolderLabel">警長：未指定</span>
-          </div>
-          <div class="grid grid-cols-6 lg:grid-cols-12 gap-1.5" id="standardSeatsGrid"></div>
-        </div>
-      </section>
-
-      <!-- 核心重點：當前選定輪次的「樂透彩球票型看板」 -->
-      <section class="bg-gray-900 rounded-xl neon-border p-3">
-        <div class="flex justify-between items-center mb-2.5 pb-2 border-b border-gray-800">
+    <!-- 階段 B：席位即時存活點陣 (資訊黑盒：只顯示席位、暱稱與死因標籤，無身分外洩) -->
+    <section id="seatStatusSection">
+      <div class="bg-gray-900 rounded-xl neon-border p-3">
+        <div class="flex justify-between items-center mb-2">
           <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
-            <i class="fa-solid fa-square-poll-vertical text-amber-400"></i>
-            <span id="voteSummaryTitle">票型開票結果</span>
+            <i class="fa-solid fa-users"></i> 全場席位存活狀態
           </span>
-          <span id="voteSummaryBadge" class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded font-bold">
-            等待計票
-          </span>
+          <span class="text-[10px] text-amber-400 font-bold" id="badgeHolderLabel">警長：未指定</span>
         </div>
-
-        <!-- 樂透彩球票型清單 -->
-        <div id="lottoVotesContainer" class="space-y-2.5">
-          <div class="text-gray-500 text-xs text-center py-6">尚未輸入投票票型</div>
-        </div>
-      </section>
-    </main>
-
-    <!-- 右側欄位：現場計票控制工作台 (手機端為底部抽屜) -->
-    <aside id="controlDrawer" class="hidden lg:col-span-5 fixed inset-x-0 bottom-0 lg:static bg-gray-900 border-t lg:border border-gray-700 p-3 z-50 rounded-t-2xl lg:rounded-xl shadow-2xl max-w-xl lg:max-w-none mx-auto max-h-[88vh] lg:max-h-none overflow-y-auto">
-      <div class="flex justify-between items-center pb-2 mb-2 border-b border-gray-800">
-        <h3 class="text-xs lg:text-sm font-bold text-amber-400 flex items-center gap-1.5">
-          <i class="fa-solid fa-calculator"></i> 現場計票控制端
-        </h3>
-        <div class="flex items-center gap-2">
-          <button onclick="resetMatchData()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold px-2 py-0.5 rounded text-[11px] transition">
-            重置開局
-          </button>
-          <button onclick="toggleControlDrawer()" class="lg:hidden text-gray-400 hover:text-white text-sm px-2">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
+        <div class="grid grid-cols-6 lg:grid-cols-12 gap-1.5" id="standardSeatsGrid"></div>
       </div>
+    </section>
 
-      <!-- 全局對局模式切換列 (主控人員專用) -->
-      <div class="mb-2.5 p-2 bg-indigo-950/40 border border-indigo-700/60 rounded-lg flex items-center justify-between">
-        <span class="text-[11px] font-bold text-indigo-300 flex items-center gap-1">
-          <i class="fa-solid fa-network-wired"></i> 全局對局模式：
+    <!-- 核心重點：當前選定輪次的「樂透彩球票型看板」 -->
+    <section class="bg-gray-900 rounded-xl neon-border p-3">
+      <div class="flex justify-between items-center mb-2.5 pb-2 border-b border-gray-800">
+        <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+          <i class="fa-solid fa-square-poll-vertical text-amber-400"></i>
+          <span id="voteSummaryTitle">票型開票結果</span>
         </span>
-        <button id="modeSwitchBtn" onclick="toggleGlobalMode()" class="px-2.5 py-1 rounded text-xs font-bold border transition bg-amber-600 text-white border-amber-400">
-          切換為：獨立看板模式
-        </button>
-      </div>
-
-      <!-- 模組開關配置列 -->
-      <div class="mb-2.5 p-2 bg-gray-800/80 border border-gray-700 rounded-lg flex items-center justify-between">
-        <span class="text-[11px] font-bold text-gray-300 flex items-center gap-1">
-          <i class="fa-solid fa-sliders text-indigo-400"></i> 特殊角色模組：
+        <span id="voteSummaryBadge" class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded font-bold">
+          等待計票
         </span>
-        <div class="flex gap-1.5">
-          <button id="toggleTricksterBtn" onclick="toggleModuleSetting('enableTrickster')" class="px-2 py-0.5 rounded text-[10px] font-bold border transition bg-gray-900 text-gray-400 border-gray-700">
-            🎭 詭術師：關
-          </button>
-          <button id="togglePrinceBtn" onclick="toggleModuleSetting('enablePrince')" class="px-2 py-0.5 rounded text-[10px] font-bold border transition bg-gray-900 text-gray-400 border-gray-700">
-            👑 定序王子：關
-          </button>
-        </div>
       </div>
 
-      <!-- 警徽處置操作卡片 -->
-      <div id="policeBadgeTransferBox" class="mb-3 p-2.5 bg-amber-950/40 border border-amber-500/80 rounded-lg hidden">
-        <div class="flex justify-between items-center mb-1.5">
-          <span class="text-xs font-bold text-amber-300 flex items-center gap-1">
-            <i class="fa-solid fa-crown text-amber-400"></i> ⚠️ 警長已出局！請處置警徽：
-          </span>
-        </div>
-        <div class="flex items-center gap-2 mb-2">
-          <span class="text-xs text-gray-300">移交給：</span>
-          <select id="transferBadgeTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-amber-200 font-bold outline-none"></select>
-          <button onclick="applyTransferBadge()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-2.5 py-1 rounded text-xs transition">
-            確認移交
-          </button>
-        </div>
-        <div class="pt-1.5 border-t border-amber-900/60 flex justify-end">
-          <button onclick="applyTearBadge()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold px-3 py-1 rounded text-xs transition">
-            🔥 撕毀警徽 (本局不再有警長)
-          </button>
-        </div>
+      <!-- 樂透彩球票型清單 -->
+      <div id="lottoVotesContainer" class="space-y-2.5">
+        <div class="text-gray-500 text-xs text-center py-6">尚未輸入投票票型</div>
       </div>
-
-      <!-- 模式 1：警長競選計票模組 -->
-      <div id="drawerPoliceModule" class="space-y-2.5">
-        <!-- 競選中自爆專屬入口 -->
-        <div class="bg-rose-950/40 p-2.5 rounded-lg border border-rose-800/80">
-          <div class="flex justify-between items-center mb-1.5">
-            <span class="text-xs font-bold text-rose-300 flex items-center gap-1">
-              <i class="fa-solid fa-bomb text-rose-400"></i> 💥 競選環節自爆 (連續兩天自爆吞警徽)
-            </span>
-            <span class="text-[10px] text-amber-300 font-bold" id="policeExplodeCountLabel">自爆計數：0 / 2</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <select id="policeWolfExplodeSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-rose-200 font-bold outline-none"></select>
-            <button onclick="handlePoliceWolfExplode()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1 rounded text-xs transition">
-              確認競選自爆
-            </button>
-          </div>
-        </div>
-
-        <!-- 步驟 1：登記上警 / 退水操作 -->
-        <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
-          <div class="flex justify-between items-center mb-1.5">
-            <span class="text-xs font-bold text-gray-200" id="step1HeaderLabel">步驟 1：登記上警名單 (點選切換)</span>
-            <span class="text-[10px] text-amber-400 font-bold" id="preserveHintText"></span>
-          </div>
-          <div class="grid grid-cols-6 gap-1" id="drawerCandidateToggleGrid"></div>
-        </div>
-
-        <!-- 步驟 2：警長計票 / PK 計票 -->
-        <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
-          <div class="flex justify-between items-center mb-1">
-            <span class="text-xs font-bold text-gray-200" id="step2HeaderLabel">步驟 2：警長計票 (先選候選人 ➔ 點投票選民)</span>
-            <span class="text-[10px] text-amber-300 font-bold" id="pkBadgeIndicator" style="display: none;">⚖️ PK 決選輪次</span>
-          </div>
-          <div class="text-[11px] text-amber-300 mb-1" id="selectTargetDescLabel">選擇受票候選人：</div>
-          <div class="flex flex-wrap gap-1.5 mb-2" id="drawerPoliceTargetCandidatesContainer"></div>
-          
-          <div class="text-[11px] text-blue-300 mb-1" id="selectVoterDescLabel">投票選民點擊投票 (未退水者無投票權)：</div>
-          <div class="grid grid-cols-6 gap-1 mb-2" id="drawerPoliceEligibleVotersGrid"></div>
-          
-          <button onclick="confirmPoliceElection()" id="confirmPoliceBtn" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded text-xs shadow transition">
-            確認開票並結算警長
-          </button>
-        </div>
-      </div>
-
-      <!-- 模式 2：白天放逐與即時操作模組 -->
-      <div id="drawerExileModule" class="space-y-2.5 hidden">
-        
-        <!-- 特殊角色卡片：詭術師夜間置換 -->
-        <div id="tricksterControlBox" class="bg-purple-950/30 p-2.5 rounded-lg border border-purple-800/70 hidden">
-          <div class="flex justify-between items-center mb-1.5">
-            <span class="text-xs font-bold text-purple-300 flex items-center gap-1">
-              <i class="fa-solid fa-masks-theater text-purple-400"></i> 🎭 詭術師夜間置換紀錄
-            </span>
-            <span class="text-[10px] text-purple-400 font-mono" id="tricksterStatusText">未置換</span>
-          </div>
-          <div class="flex items-center gap-1.5 mb-1.5">
-            <select id="tricksterSeatASelect" class="bg-gray-800 border border-gray-600 rounded p-1 text-xs text-purple-200 flex-1 outline-none"></select>
-            <span class="text-xs text-purple-400 font-bold">⇄</span>
-            <select id="tricksterSeatBSelect" class="bg-gray-800 border border-gray-600 rounded p-1 text-xs text-purple-200 flex-1 outline-none"></select>
-            <button onclick="saveTricksterSwap()" class="bg-purple-700 hover:bg-purple-600 text-white font-bold px-2 py-1 rounded text-xs transition">
-              儲存
-            </button>
-          </div>
-          <div class="flex justify-end">
-            <button onclick="clearTricksterSwap()" class="text-[10px] text-gray-400 hover:text-rose-400 underline">
-              清空/本晚空換
-            </button>
-          </div>
-        </div>
-
-        <!-- 白天狼人自爆操作區 -->
-        <div class="bg-rose-950/30 p-2.5 rounded-lg border border-rose-800/80">
-          <div class="flex justify-between items-center mb-1.5">
-            <span class="text-xs font-bold text-rose-300 flex items-center gap-1">
-              <i class="fa-solid fa-bomb text-rose-400"></i> 💥 白天狼人自爆
-            </span>
-            <span class="text-[10px] text-rose-400">將立即中斷白天並出局</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <select id="wolfExplodeSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-rose-200 font-bold outline-none"></select>
-            <button onclick="handleWolfExplode()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1 rounded text-xs transition">
-              確認自爆
-            </button>
-          </div>
-        </div>
-
-        <!-- 技能連帶出局快速入口 -->
-        <div class="bg-orange-950/30 p-2.5 rounded-lg border border-orange-800/70">
-          <div class="flex justify-between items-center mb-1.5">
-            <span class="text-xs font-bold text-orange-300 flex items-center gap-1">
-              <i class="fa-solid fa-crosshairs text-orange-400"></i> 🎯 發動技能連帶帶走 (獵人/狼美/毒殺)
-            </span>
-            <span class="text-[10px] text-orange-400">指定 1 名玩家連帶出局</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <select id="skillTargetSelect" class="flex-1 bg-gray-800 border border-gray-600 rounded p-1 text-xs text-orange-200 font-bold outline-none"></select>
-            <button onclick="handleSkillKill()" class="bg-orange-600 hover:bg-orange-500 text-white font-bold px-3 py-1 rounded text-xs transition">
-              技能帶走
-            </button>
-          </div>
-        </div>
-
-        <!-- 夜間死訊更新 (由上帝或獨立計票員維護) -->
-        <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
-          <div class="flex justify-between items-center mb-1">
-            <span class="text-xs font-bold text-purple-300">更新夜間倒牌死訊 (點選出局)</span>
-            <span class="text-[10px] text-gray-400">平安夜則無需點選</span>
-          </div>
-          <div class="grid grid-cols-6 gap-1" id="drawerNightDeathGrid"></div>
-        </div>
-
-        <!-- 放逐投票計票 -->
-        <div class="bg-gray-800/60 p-2.5 rounded-lg border border-gray-700">
-          <div class="flex justify-between items-center mb-1">
-            <span class="text-xs font-bold text-gray-200 block" id="exileSectionTitle">放逐計票 (先選被投人 ➔ 點投票選民)</span>
-            <span id="princeStatusTag" class="text-[10px] font-bold text-amber-400 hidden">⏳ 王子重投輪次</span>
-          </div>
-          <div class="text-[11px] text-amber-300 mb-1">選擇放逐目標：</div>
-          <div class="flex flex-wrap gap-1.5 mb-2" id="drawerExileTargetContainer"></div>
-          <div class="text-[11px] text-emerald-300 mb-1">存活選民投票 (警長自動計 1.5 票)：</div>
-          <div class="grid grid-cols-6 gap-1 mb-2" id="drawerExileVotersGrid"></div>
-
-          <!-- 放逐結算動作按鈕群 -->
-          <div class="space-y-1.5 mt-2">
-            <div class="flex gap-2">
-              <button onclick="confirmExileVote()" id="confirmExileBtn" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded text-xs shadow transition">
-                確認放逐出局並封存票型
-              </button>
-              <button onclick="enterNextDayCycle()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded text-xs shadow transition">
-                進入下一天 ➔
-              </button>
-            </div>
-            
-            <!-- 定序王子翻牌專用按鈕 -->
-            <button id="princeTriggerBtn" onclick="handlePrinceReversal()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-1.5 rounded text-xs shadow transition hidden">
-              👑 定序王子翻牌發動【逆轉時空】(票型作廢並重投)
-            </button>
-          </div>
-        </div>
-      </div>
-    </aside>
-  </div>
-
-  <!-- 手機端底部固定：計票員操作欄 (輸入密碼解鎖後呈現) -->
-  <footer id="adminFooter" class="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-2.5 z-40 hidden">
-    <div class="max-w-xl mx-auto flex justify-between items-center">
-      <div class="flex items-center gap-2">
-        <span class="text-xs text-amber-400 font-bold flex items-center gap-1">
-          <i class="fa-solid fa-circle-check"></i> 計票員已解鎖
-        </span>
-        <button onclick="logoutAdmin()" class="text-[11px] text-gray-500 hover:text-gray-300 underline">
-          退出鎖定
-        </button>
-      </div>
-      <div class="flex gap-2">
-        <button onclick="resetMatchData()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold px-2.5 py-1.5 rounded-lg text-xs transition">
-          重置開局
-        </button>
-        <button onclick="toggleControlDrawer()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow transition">
-          <i class="fa-solid fa-pen-to-square"></i> 開啟計票面板
-        </button>
-      </div>
-    </div>
-  </footer>
+    </section>
+  </main>
 
   <script>
-    const ADMIN_PASSWORD = "8888";
-
     // Firebase 配置 (與上帝端連線相同節點)
     const firebaseConfig = {
       apiKey: "AIzaSyD-IcZrJUj4pXYxe9ZXNxU5o5A1koSwxbc",
@@ -438,134 +199,24 @@
     const db = firebase.database();
     const matchRef = db.ref("currentMatch");
 
-    // 本設備身分權限 (純瀏覽 vs 計票員)
-    let isAdmin = localStorage.getItem("werewolf_board_admin") === "true";
-    // 全局運作模式：'SLAVE' (跟隨上帝端) 或 'STANDALONE' (獨立看板模式)
-    let operatingMode = "SLAVE";
-    let isRemoteUpdate = false;
-    let lastHandledActionId = null;
-
-    // 核心資料狀態
+    // 核心資料狀態 (純讀取，不執行任何 set 寫入)
     let gameState = RULES_ENGINE.createInitialGameState();
     let currentHistoryViewIndex = -1;
 
     // ==========================================
-    // 權限與運作模式處理
-    // ==========================================
-    function promptAdminLogin() {
-      if (isAdmin) {
-        if (confirm("目前此設備已解鎖計票員權限，要退出並鎖定看板（切回純瀏覽）嗎？")) {
-          logoutAdmin();
-        }
-        return;
-      }
-      const pwd = prompt("請輸入計票員專屬解鎖密碼：");
-      if (pwd === ADMIN_PASSWORD) {
-        isAdmin = true;
-        localStorage.setItem("werewolf_board_admin", "true");
-        updateDeviceUI();
-        renderAll();
-        alert("✅ 計票員身分驗證成功！已解鎖控制面板。");
-      } else if (pwd !== null) {
-        alert("❌ 密碼錯誤，無法解鎖計票面板！");
-      }
-    }
-
-    function logoutAdmin() {
-      isAdmin = false;
-      localStorage.removeItem("werewolf_board_admin");
-      updateDeviceUI();
-      renderAll();
-      alert("🔒 已鎖定計票面板，切回純瀏覽展示視圖。");
-    }
-
-    function toggleGlobalMode() {
-      if (!isAdmin) {
-        alert("⚠️ 請先解鎖計票員權限後再切換模式！");
-        return;
-      }
-
-      const nextMode = (operatingMode === "STANDALONE") ? "SLAVE" : "STANDALONE";
-      const confirmMsg = (nextMode === "STANDALONE")
-        ? "⚠️ 確定要切換為【獨立看板模式】嗎？\n切換後，本看板擁有獨立掌控權，現場大螢幕將同步顯示為獨立模式。"
-        : "⚠️ 確定要切換為【跟隨上帝端模式】嗎？\n切換後，對局生命週期將完全由上帝主控台掌控。";
-
-      if (!confirm(confirmMsg)) return;
-
-      operatingMode = nextMode;
-      gameState.operatingMode = nextMode;
-      pushStateToFirebase(`切換運行模式為：${nextMode === 'STANDALONE' ? '獨立看板模式' : '跟隨上帝端模式'}`);
-      updateDeviceUI();
-      renderAll();
-    }
-
-    function updateDeviceUI() {
-      const modeBadge = document.getElementById("operatingModeBadge");
-      const modeSwitchBtn = document.getElementById("modeSwitchBtn");
-      const footer = document.getElementById("adminFooter");
-      const lockBtn = document.getElementById("authLockBtn");
-      const controlDrawer = document.getElementById("controlDrawer");
-      const displayMainCol = document.getElementById("displayMainCol");
-
-      if (operatingMode === "STANDALONE") {
-        modeBadge.innerText = "★ 獨立控制中";
-        modeBadge.className = "bg-amber-950 text-amber-300 border border-amber-600 text-[10px] px-1.5 py-0.2 rounded font-bold animate-pulse";
-        if (modeSwitchBtn) {
-          modeSwitchBtn.innerText = "切換回：跟隨上帝端";
-          modeSwitchBtn.className = "px-2.5 py-1 rounded text-xs font-bold border transition bg-gray-800 text-gray-300 border-gray-600";
-        }
-      } else {
-        modeBadge.innerText = "跟隨上帝端";
-        modeBadge.className = "bg-gray-800 text-gray-300 border border-gray-700 text-[10px] px-1.5 py-0.2 rounded font-bold";
-        if (modeSwitchBtn) {
-          modeSwitchBtn.innerText = "切換為：獨立看板模式";
-          modeSwitchBtn.className = "px-2.5 py-1 rounded text-xs font-bold border transition bg-amber-600 text-white border-amber-400";
-        }
-      }
-
-      if (isAdmin) {
-        lockBtn.innerHTML = '<i class="fa-solid fa-unlock-keyhole text-amber-400 text-xs"></i>';
-        footer.classList.remove("hidden");
-        controlDrawer.classList.remove("lg:hidden");
-        controlDrawer.classList.remove("hidden");
-        displayMainCol.className = "lg:col-span-7 space-y-3 transition-all duration-300";
-      } else {
-        lockBtn.innerHTML = '<i class="fa-solid fa-lock text-gray-500 text-xs"></i>';
-        footer.classList.add("hidden");
-        controlDrawer.classList.add("lg:hidden");
-        controlDrawer.classList.add("hidden");
-        displayMainCol.className = "lg:col-span-12 space-y-3 transition-all duration-300";
-      }
-    }
-
-    // ==========================================
-    // 1. 初始化與 Firebase 實時監聽
+    // 初始化與 Firebase 實時監聽 (唯讀監聽)
     // ==========================================
     window.onload = () => {
-      updateDeviceUI();
-
       matchRef.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
-          operatingMode = data.operatingMode || "SLAVE";
-
-          if (operatingMode === "SLAVE" && data.actionId && data.actionId !== lastHandledActionId && data.lastActionBy === "JUDGE") {
-            lastHandledActionId = data.actionId;
-            alert(`🔔 【上帝已在主控台完成操作！】\n狀態更新：${data.lastActionSummary || '已完成開票結算'}`);
-          }
-
-          isRemoteUpdate = true;
           Object.assign(gameState, data);
           if (!gameState.players) gameState.players = [];
           if (!gameState.history) gameState.history = [];
           if (!gameState.tempVotes) gameState.tempVotes = {};
           if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
 
-          updateDeviceUI();
           renderAll();
-          isRemoteUpdate = false;
-        } else {
-          if (isAdmin) pushStateToFirebase("初始化對局狀態");
         }
         
         document.getElementById("syncStatusBadge").innerText = "● 即時同步中";
@@ -577,30 +228,11 @@
       });
     };
 
-    function pushStateToFirebase(actionSummary = null) {
-      if (!isAdmin || isRemoteUpdate) return;
-      if (actionSummary) {
-        gameState.lastActionBy = (operatingMode === "STANDALONE") ? "STANDALONE_RECORDER" : "RECORDER";
-        gameState.actionId = "ACT_" + Date.now();
-        gameState.lastActionSummary = actionSummary;
-        lastHandledActionId = gameState.actionId;
-      }
-      matchRef.set(gameState);
-    }
-
-    function toggleModuleSetting(moduleKey) {
-      if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
-      gameState.modules[moduleKey] = !gameState.modules[moduleKey];
-      pushStateToFirebase(`更新特殊模組：${moduleKey} = ${gameState.modules[moduleKey]}`);
-      renderAll();
-    }
-
     function renderAll() {
       renderHeaderAndSections();
       renderHistoryTabs();
       renderSeatsStatus();
       renderLottoVoteDisplay();
-      if (isAdmin) renderDrawerControls();
     }
 
     function renderHeaderAndSections() {
@@ -613,9 +245,13 @@
       document.getElementById("aliveRatioText").innerText = `${aliveCount} / 12 人`;
 
       let stageDesc = "";
-      if (gameState.phase === "POLICE_ELECTION") {
+      if (gameState.phase === "SETUP") {
+        stageDesc = "開局配置中 (等待上帝確認席位)";
+      } else if (gameState.phase === "NIGHT") {
+        stageDesc = `第 ${gameState.round || 1} 夜 天黑請閉眼`;
+      } else if (gameState.phase === "POLICE_ELECTION") {
         if (gameState.consecutiveExplodeCount === 1) {
-          stageDesc = `第 ${gameState.day || 1} 天 警長補選 (延續昨日上警名單)`;
+          stageDesc = `第 ${gameState.day || 1} 天 警長補選 (延續名單)`;
         } else {
           stageDesc = `第 ${gameState.day || 1} 天 警長競選 (首輪投票)`;
         }
@@ -658,7 +294,9 @@
 
       const isCurrentActive = (currentHistoryViewIndex === -1);
       let currentTitle = "";
-      if (gameState.phase === "POLICE_ELECTION") currentTitle = `即時: D${gameState.day || 1}警選`;
+      if (gameState.phase === "SETUP") currentTitle = "即時: 開局配置";
+      else if (gameState.phase === "NIGHT") currentTitle = `即時: 第${gameState.round || 1}夜`;
+      else if (gameState.phase === "POLICE_ELECTION") currentTitle = `即時: D${gameState.day || 1}警選`;
       else if (gameState.phase === "POLICE_PK") currentTitle = `即時: D${gameState.day || 1}警長PK`;
       else {
         currentTitle = gameState.isPrinceRevolving ? `即時: D${gameState.day || 1}放逐重投` : `即時: D${gameState.day || 1}放逐`;
@@ -758,7 +396,7 @@
         }).join('');
       }
 
-      // 3. 全場席位存活狀態（嚴格黑盒保護：只顯示席位、玩家名字與出局死因圖標，絕不顯示角色或轉化註記）
+      // 3. 全場席位存活狀態（嚴格黑盒保護：只顯示席位、玩家暱稱與出局死因圖標，絕不顯示角色或轉化註記）
       const stdGrid = document.getElementById("standardSeatsGrid");
       stdGrid.innerHTML = gameState.players.map(p => {
         let cardStyle = "seat-alive";
@@ -839,7 +477,11 @@
         effectiveBadgeHolder = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
         isElectionStage = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
 
-        if (gameState.phase === "POLICE_ELECTION") {
+        if (gameState.phase === "SETUP") {
+          titleEl.innerText = "開局準備中";
+        } else if (gameState.phase === "NIGHT") {
+          titleEl.innerText = `第 ${gameState.round || 1} 夜進行中`;
+        } else if (gameState.phase === "POLICE_ELECTION") {
           titleEl.innerText = `即時：第 ${gameState.day || 1} 天 警長競選首輪票型`;
         } else if (gameState.phase === "POLICE_PK") {
           titleEl.innerText = `即時：第 ${gameState.day || 1} 天 警長 PK 決選票型`;
@@ -848,7 +490,7 @@
             ? `即時：第 ${gameState.day || 1} 天 放逐重投票型 (定序倒流)` 
             : `即時：第 ${gameState.day || 1} 天 放逐票型`;
         }
-        badgeEl.innerText = "即時開票中";
+        badgeEl.innerText = (gameState.phase === "SETUP" || gameState.phase === "NIGHT") ? "夜間/準備中" : "即時開票中";
         badgeEl.className = "text-xs bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold";
       }
 
@@ -889,717 +531,6 @@
           </div>
         `;
       }).join('');
-    }
-
-    function toggleControlDrawer() {
-      const drawer = document.getElementById("controlDrawer");
-      drawer.classList.toggle("hidden");
-    }
-
-    // ==========================================
-    // 3. 現場計票控制端工作台
-    // ==========================================
-    function renderDrawerControls() {
-      const isPoliceModuleActive = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
-      document.getElementById("drawerPoliceModule").classList.toggle("hidden", !isPoliceModuleActive);
-      document.getElementById("drawerExileModule").classList.toggle("hidden", isPoliceModuleActive);
-
-      const btnTrickster = document.getElementById("toggleTricksterBtn");
-      const btnPrince = document.getElementById("togglePrinceBtn");
-      const isTricksterEnabled = !!gameState.modules?.enableTrickster;
-      const isPrinceEnabled = !!gameState.modules?.enablePrince;
-
-      btnTrickster.innerText = `🎭 詭術師：${isTricksterEnabled ? '開' : '關'}`;
-      btnTrickster.className = `px-2 py-0.5 rounded text-[10px] font-bold border transition ${isTricksterEnabled ? 'bg-purple-900 border-purple-400 text-purple-200' : 'bg-gray-900 text-gray-500 border-gray-700'}`;
-
-      btnPrince.innerText = `👑 定序王子：${isPrinceEnabled ? '開' : '關'}`;
-      btnPrince.className = `px-2 py-0.5 rounded text-[10px] font-bold border transition ${isPrinceEnabled ? 'bg-amber-900 border-amber-400 text-amber-200' : 'bg-gray-900 text-gray-500 border-gray-700'}`;
-
-      checkPoliceBadgeStatus();
-
-      const alivePlayers = gameState.players.filter(p => p.isAlive);
-      const policeWolfPlayers = gameState.players.filter(p => p.deathReason !== "EXPLODE" && p.deathReason !== "EXILE");
-      
-      const policeWolfSelect = document.getElementById("policeWolfExplodeSelect");
-      if (policeWolfSelect) {
-        policeWolfSelect.innerHTML = policeWolfPlayers.map(p => `<option value="${p.seat}">${p.seat} 號玩家 (${p.name || ''})</option>`).join('');
-      }
-
-      const explodeLabel = document.getElementById("policeExplodeCountLabel");
-      const preserveHint = document.getElementById("preserveHintText");
-      if (explodeLabel) {
-        const cnt = gameState.consecutiveExplodeCount || 0;
-        explodeLabel.innerText = `自爆計數：${cnt} / 2 次 (${cnt === 0 ? '正常' : '已自爆1次，再爆即吞警徽'})`;
-        explodeLabel.className = cnt > 0 ? "text-[10px] text-rose-400 font-bold animate-pulse" : "text-[10px] text-amber-300 font-bold";
-        if (preserveHint) preserveHint.innerText = cnt === 1 ? "★ 已保留昨日名單" : "";
-      }
-
-      const wolfSelect = document.getElementById("wolfExplodeSelect");
-      if (wolfSelect) {
-        wolfSelect.innerHTML = alivePlayers.map(p => `<option value="${p.seat}">${p.seat} 號玩家 (${p.name || ''})</option>`).join('');
-      }
-
-      const skillSelect = document.getElementById("skillTargetSelect");
-      if (skillSelect) {
-        skillSelect.innerHTML = alivePlayers.map(p => `<option value="${p.seat}">${p.seat} 號玩家 (${p.name || ''})</option>`).join('');
-      }
-
-      const tricksterBox = document.getElementById("tricksterControlBox");
-      if (isTricksterEnabled && !isPoliceModuleActive) {
-        tricksterBox.classList.remove("hidden");
-        const selectA = document.getElementById("tricksterSeatASelect");
-        const selectB = document.getElementById("tricksterSeatBSelect");
-        const statusText = document.getElementById("tricksterStatusText");
-
-        selectA.innerHTML = gameState.players.map(p => `<option value="${p.seat}">${p.seat} 號</option>`).join('');
-        selectB.innerHTML = gameState.players.map(p => `<option value="${p.seat}">${p.seat} 號</option>`).join('');
-
-        if (gameState.tricksterSwap) {
-          selectA.value = gameState.tricksterSwap.seatA;
-          selectB.value = gameState.tricksterSwap.seatB;
-          statusText.innerText = `已置換：${gameState.tricksterSwap.seatA} ⇄ ${gameState.tricksterSwap.seatB}`;
-          statusText.className = "text-[10px] text-amber-300 font-bold font-mono";
-        } else {
-          statusText.innerText = "本晚無置換 / 空換";
-          statusText.className = "text-[10px] text-gray-400 font-mono";
-        }
-      } else {
-        tricksterBox.classList.add("hidden");
-      }
-
-      if (isPoliceModuleActive) renderPoliceDrawerControls();
-      else renderExileDrawerControls();
-    }
-
-    function checkPoliceBadgeStatus() {
-      const box = document.getElementById("policeBadgeTransferBox");
-      if (!gameState.policeSeat || gameState.isBadgeTorn) {
-        box.classList.add("hidden");
-        return;
-      }
-
-      const policePlayer = gameState.players.find(p => p.seat === gameState.policeSeat);
-      if (policePlayer && !policePlayer.isAlive) {
-        box.classList.remove("hidden");
-        const alivePlayers = gameState.players.filter(p => p.isAlive);
-        const select = document.getElementById("transferBadgeTargetSelect");
-        select.innerHTML = alivePlayers.map(p => `
-          <option value="${p.seat}">${p.seat} 號玩家 (${p.name || ''})</option>
-        `).join('');
-      } else {
-        box.classList.add("hidden");
-      }
-    }
-
-    function applyTransferBadge() {
-      const select = document.getElementById("transferBadgeTargetSelect");
-      const targetSeat = parseInt(select.value);
-      if (!targetSeat) return;
-
-      const oldPolice = gameState.policeSeat;
-      gameState.policeSeat = targetSeat;
-      document.getElementById("policeBadgeTransferBox").classList.add("hidden");
-      
-      pushStateToFirebase(`👑 警徽移交：${oldPolice} 號 ➔ ${targetSeat} 號`);
-      renderAll();
-      alert(`👑 ${oldPolice} 號已將警徽移交給 ${targetSeat} 號！`);
-    }
-
-    function applyTearBadge() {
-      if (!confirm("⚠️ 確定要撕毀警徽嗎？撕毀後本局將不再有警長，所有人回歸 1 票權！")) return;
-      const oldPolice = gameState.policeSeat;
-      gameState.policeSeat = null;
-      gameState.isBadgeTorn = true;
-      document.getElementById("policeBadgeTransferBox").classList.add("hidden");
-
-      pushStateToFirebase(`🔥 警長 ${oldPolice} 號撕毀警徽`);
-      renderAll();
-      alert(`🔥 警徽已撕毀！本局後續投票皆為 1 票制。`);
-    }
-
-    function saveTricksterSwap() {
-      const a = parseInt(document.getElementById("tricksterSeatASelect").value);
-      const b = parseInt(document.getElementById("tricksterSeatBSelect").value);
-      if (a === b) { alert("⚠️ 置換兩名玩家號碼不可相同！"); return; }
-      gameState.tricksterSwap = { seatA: a, seatB: b };
-      pushStateToFirebase(`🎭 詭術師夜間置換：${a} ⇄ ${b}`);
-      renderAll();
-      alert(`🎭 詭術師置換已登記：【${a} 號 ⇄ ${b} 號】！`);
-    }
-
-    function clearTricksterSwap() {
-      gameState.tricksterSwap = null;
-      pushStateToFirebase("清空詭術師置換");
-      renderAll();
-      alert("🎭 已清空詭術師置換紀錄。");
-    }
-
-    // ==========================================
-    // 4. 自爆與技能處理
-    // ==========================================
-    function handlePoliceWolfExplode() {
-      const select = document.getElementById("policeWolfExplodeSelect");
-      const wolfSeat = parseInt(select.value);
-      if (!wolfSeat) return;
-
-      const expRes = RULES_ENGINE.resolvePoliceExplode(gameState.consecutiveExplodeCount || 0);
-      if (!confirm(`⚠️ 確定要由【${wolfSeat} 號玩家】在競選階段自爆嗎？\n${expRes.alertText}`)) return;
-
-      const p = gameState.players.find(x => x.seat === wolfSeat);
-      if (p) {
-        p.isAlive = false;
-        p.deathReason = "EXPLODE";
-        p.isCandidate = false;
-      }
-
-      gameState.consecutiveExplodeCount = expRes.nextCount;
-      gameState.isBadgeTorn = expRes.isBadgeLoss;
-      if (expRes.isBadgeLoss) gameState.policeSeat = null;
-
-      gameState.history.push({
-        title: `D${gameState.day || 1} 警選自爆`,
-        badgeText: `💥 ${wolfSeat}號自爆 (${expRes.isBadgeLoss ? '警徽流失吞警徽' : '保留名單補選'})`,
-        votes: {},
-        badgeHolder: null
-      });
-
-      gameState.day = (gameState.day || 1) + 1;
-      gameState.phase = expRes.nextPhase;
-      gameState.pkCandidates = [];
-      gameState.tempVotes = {};
-      gameState.selectedTarget = null;
-      currentHistoryViewIndex = gameState.history.length - 1;
-
-      pushStateToFirebase(`💥 競選階段自爆：${wolfSeat} 號`);
-      renderAll();
-    }
-
-    function handleWolfExplode() {
-      const select = document.getElementById("wolfExplodeSelect");
-      const wolfSeat = parseInt(select.value);
-      if (!wolfSeat) return;
-
-      if (!confirm(`⚠️ 確定要確認 ${wolfSeat} 號玩家【白天自爆】嗎？白天將直接中斷並進入天黑！`)) return;
-
-      const p = gameState.players.find(x => x.seat === wolfSeat);
-      if (p) {
-        p.isAlive = false;
-        p.deathReason = "EXPLODE";
-      }
-
-      gameState.history.push({
-        title: `D${gameState.day || 1} 白天自爆`,
-        badgeText: `💥 ${wolfSeat} 號自爆`,
-        votes: {},
-        badgeHolder: (!gameState.isBadgeTorn) ? gameState.policeSeat : null
-      });
-
-      gameState.tempVotes = {};
-      gameState.selectedTarget = null;
-      currentHistoryViewIndex = gameState.history.length - 1;
-
-      checkPoliceBadgeStatus();
-      pushStateToFirebase(`💥 白天自爆：${wolfSeat} 號`);
-      renderAll();
-
-      if (confirm(`💥 ${wolfSeat} 號已自爆出局！是否直接切入第 ${(gameState.day || 1) + 1} 天白天？`)) {
-        enterNextDayCycle(true);
-      }
-    }
-
-    function handleSkillKill() {
-      const select = document.getElementById("skillTargetSelect");
-      const targetSeat = parseInt(select.value);
-      if (!targetSeat) return;
-
-      const reason = prompt("請輸入連帶帶走的技能原因（例如：獵人開槍、狼美人魅惑、騎士決鬥）：", "獵人開槍");
-      if (reason === null) return;
-
-      const p = gameState.players.find(x => x.seat === targetSeat);
-      if (p) {
-        p.isAlive = false;
-        p.deathReason = "SKILL";
-      }
-
-      gameState.history.push({
-        title: `D${gameState.day || 1} 技能帶走`,
-        badgeText: `🎯 ${targetSeat} 號出局 (${reason})`,
-        votes: {},
-        badgeHolder: (!gameState.isBadgeTorn) ? gameState.policeSeat : null
-      });
-
-      currentHistoryViewIndex = gameState.history.length - 1;
-      checkPoliceBadgeStatus();
-      pushStateToFirebase(`🎯 ${targetSeat} 號因【${reason}】出局`);
-      renderAll();
-      alert(`🎯 已標記：${targetSeat} 號玩家因【${reason}】連帶出局！`);
-    }
-
-    // ==========================================
-    // 5. 警選與放逐計票
-    // ==========================================
-    function renderPoliceDrawerControls() {
-      const isPkMode = (gameState.phase === "POLICE_PK");
-      const pkCandidates = gameState.pkCandidates || [];
-
-      document.getElementById("pkBadgeIndicator").style.display = isPkMode ? "inline-block" : "none";
-      document.getElementById("step1HeaderLabel").innerText = isPkMode ? "步驟 1：警上退水確認 (點選切換退水狀態)" : "步驟 1：登記上警名單 (點選切換)";
-      document.getElementById("step2HeaderLabel").innerText = isPkMode ? "步驟 2：PK 計票 (僅 PK 候選人可受票)" : "步驟 2：警長計票 (先選候選人 ➔ 點警下選民)";
-      document.getElementById("selectTargetDescLabel").innerText = isPkMode ? "選擇 PK 受票候選人：" : "選擇受票候選人：";
-      document.getElementById("selectVoterDescLabel").innerText = isPkMode ? "合資格選民投票 (未退水者無投票權)：" : "警下投票人點擊投票：";
-      document.getElementById("confirmPoliceBtn").innerText = isPkMode ? "確認 PK 開票 (二次平票則警徽流失)" : "確認首輪開票 (若平票則進入 PK)";
-
-      const eligiblePlayers = gameState.players.filter(p => p.deathReason !== "EXPLODE" && p.deathReason !== "EXILE");
-
-      const toggleGrid = document.getElementById("drawerCandidateToggleGrid");
-      toggleGrid.innerHTML = eligiblePlayers.map(p => {
-        let btnClass = "bg-gray-800 border-gray-700 text-gray-300";
-        let label = `${p.seat}號`;
-
-        if (p.isCandidate) {
-          if (p.hasDropped) {
-            btnClass = "bg-blue-950 border-blue-600 text-blue-300";
-            label = `${p.seat}號(退水)`;
-          } else {
-            if (isPkMode && pkCandidates.includes(p.seat)) {
-              btnClass = "bg-amber-500 border-amber-300 text-black font-extrabold";
-              label = `${p.seat}號(PK)`;
-            } else {
-              btnClass = "bg-amber-600 border-amber-400 text-white font-bold";
-            }
-          }
-        }
-
-        return `
-          <button onclick="toggleCandidateOrDrop(${p.seat})" class="h-8 rounded text-[11px] font-bold border transition ${btnClass}">
-            ${label}
-          </button>
-        `;
-      }).join('');
-
-      const candContainer = document.getElementById("drawerPoliceTargetCandidatesContainer");
-      let activeCandidates = !isPkMode
-        ? eligiblePlayers.filter(p => p.isCandidate && !p.hasDropped)
-        : eligiblePlayers.filter(p => pkCandidates.includes(p.seat));
-      
-      if (activeCandidates.length === 0) {
-        candContainer.innerHTML = `<span class="text-xs text-gray-500">無有效候選人</span>`;
-      } else {
-        candContainer.innerHTML = activeCandidates.map(p => `
-          <button onclick="selectTargetForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === p.seat ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
-            投 ${p.seat}號
-          </button>
-        `).join('') + `
-          <button onclick="selectTargetForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
-            棄票
-          </button>
-        `;
-      }
-
-      const votersGrid = document.getElementById("drawerPoliceEligibleVotersGrid");
-      votersGrid.innerHTML = eligiblePlayers.map(p => {
-        let isEligible = false;
-        let disableReason = "";
-
-        if (!isPkMode) {
-          if (!p.isCandidate) isEligible = true;
-          else { isEligible = false; disableReason = p.hasDropped ? "已退水" : "在警上"; }
-        } else {
-          if (pkCandidates.includes(p.seat)) { isEligible = false; disableReason = "PK候選"; }
-          else if (p.isCandidate && !p.hasDropped) { isEligible = false; disableReason = "未退水無票"; }
-          else isEligible = true;
-        }
-
-        let votedTarget = null;
-        Object.entries(gameState.tempVotes || {}).forEach(([cand, list]) => {
-          if (list.includes(p.seat)) votedTarget = cand;
-        });
-
-        if (!isEligible) {
-          return `
-            <div class="h-9 rounded text-xs border border-gray-800 bg-gray-900/60 text-gray-600 font-mono flex flex-col items-center justify-center opacity-40 cursor-not-allowed">
-              <span>${p.seat}號</span>
-              <span class="text-[7px]">${disableReason}</span>
-            </div>
-          `;
-        }
-
-        return `
-          <button onclick="assignVote(${p.seat})" class="h-9 rounded text-xs border font-mono flex flex-col items-center justify-center transition ${votedTarget !== null ? 'bg-indigo-950 border-indigo-400 text-indigo-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
-            <span>${p.seat}號</span>
-            <span class="text-[8px] text-amber-300">${votedTarget !== null ? (votedTarget == 0 ? '棄' : '➔' + votedTarget) : '未投'}</span>
-          </button>
-        `;
-      }).join('');
-    }
-
-    function toggleCandidateOrDrop(seat) {
-      const p = gameState.players.find(x => x.seat === seat);
-      if (!p) return;
-      if (gameState.phase === "POLICE_PK") {
-        if ((gameState.pkCandidates || []).includes(seat)) {
-          alert("⚠️ PK 候選人不可在 PK 發言階段退水！");
-          return;
-        }
-        if (p.isCandidate) {
-          p.hasDropped = !p.hasDropped;
-          pushStateToFirebase(`PK退水狀態更新：${seat}號`);
-          renderAll();
-        }
-        return;
-      }
-
-      if (!p.isCandidate) { p.isCandidate = true; p.hasDropped = false; }
-      else if (!p.hasDropped) { p.hasDropped = true; }
-      else { p.isCandidate = false; p.hasDropped = false; }
-      pushStateToFirebase(`上警狀態更新：${seat}號`);
-      renderAll();
-    }
-
-    function confirmPoliceElection() {
-      const isPkMode = (gameState.phase === "POLICE_PK");
-      const pResult = RULES_ENGINE.resolvePoliceElection(gameState.tempVotes, isPkMode, gameState.pkCandidates);
-
-      if (pResult.status === "ALL_ABSTAIN") {
-        alert("⚠️ 所有人都棄票或尚未輸入任何有效投票！無法結算。");
-        return;
-      }
-
-      if (pResult.status === "TIE_ENTER_PK") {
-        if (!confirm(`⚖️ 檢測到平票！【${pResult.topCandidates.join(' 號、')} 號】同獲 ${pResult.maxVotes} 票最高票！\n\n確定進入【警長競選 PK 輪次】嗎？`)) return;
-
-        gameState.history.push({
-          title: `D${gameState.day || 1} 警選首輪(平票)`,
-          badgeText: `⚖️ ${pResult.topCandidates.join('、')}號平票 (${pResult.maxVotes}票)`,
-          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
-          badgeHolder: null
-        });
-
-        gameState.phase = "POLICE_PK";
-        gameState.pkCandidates = pResult.topCandidates;
-        gameState.tempVotes = {};
-        gameState.selectedTarget = null;
-        currentHistoryViewIndex = -1;
-
-        pushStateToFirebase("警長競選平票，進入 PK 決選");
-        renderAll();
-        alert(`⚖️ 已切換至【警長競選 PK 輪次】！僅 ${pResult.topCandidates.join(' 號與 ')} 號可被投票。`);
-        return;
-      }
-
-      if (pResult.status === "PK_TIE_BADGE_LOSS") {
-        alert(`🔥 PK 輪次再次平票！【${pResult.topCandidates.join(' 號與 ')} 號】同獲 ${pResult.maxVotes} 票！\n觸發規則【警徽流失】！進入白天放逐並公佈昨夜死訊。`);
-
-        gameState.history.push({
-          title: `D${gameState.day || 1} 警選PK(二次平票)`,
-          badgeText: `🔥 二次平票 (警徽流失)`,
-          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
-          badgeHolder: null
-        });
-
-        gameState.policeSeat = null;
-        gameState.isBadgeTorn = true;
-        gameState.phase = "DAY_EXILE";
-        gameState.pkCandidates = [];
-        gameState.tempVotes = {};
-        gameState.selectedTarget = null;
-        currentHistoryViewIndex = -1;
-
-        pushStateToFirebase("警長 PK 二次平票，警徽流失");
-        renderAll();
-        return;
-      }
-
-      if (pResult.status === "WINNER") {
-        const winnerSeat = pResult.winner;
-        gameState.policeSeat = winnerSeat;
-        gameState.isBadgeTorn = false;
-        gameState.consecutiveExplodeCount = 0;
-        gameState.pkCandidates = [];
-
-        gameState.history.push({
-          title: isPkMode ? `D${gameState.day || 1} 警選PK決選` : `D${gameState.day || 1} 警長競選`,
-          badgeText: `👑 ${winnerSeat}號當選警長 (${pResult.maxVotes}票)`,
-          votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
-          badgeHolder: null
-        });
-
-        gameState.phase = "DAY_EXILE";
-        gameState.tempVotes = {};
-        gameState.selectedTarget = null;
-        currentHistoryViewIndex = -1;
-
-        pushStateToFirebase(`👑 警長誕生：${winnerSeat} 號當選警長`);
-        renderAll();
-        alert(`🎉 恭喜！${winnerSeat} 號玩家當選警長！已公佈死訊，進入【第 ${gameState.day || 1} 天 白天放逐對局】。`);
-      }
-    }
-
-    function renderExileDrawerControls() {
-      const isPrinceEnabled = !!gameState.modules?.enablePrince;
-      const isPrinceRevolving = !!gameState.isPrinceRevolving;
-      const princeBtn = document.getElementById("princeTriggerBtn");
-      const princeTag = document.getElementById("princeStatusTag");
-      const sectionTitle = document.getElementById("exileSectionTitle");
-
-      if (isPrinceRevolving) {
-        sectionTitle.innerText = "放逐計票 (定序倒流重投中)";
-        princeTag.classList.remove("hidden");
-      } else {
-        sectionTitle.innerText = "放逐計票 (先選被投人 ➔ 點投票選民)";
-        princeTag.classList.add("hidden");
-      }
-
-      if (isPrinceEnabled && !gameState.princeUsed && !isPrinceRevolving) {
-        princeBtn.classList.remove("hidden");
-      } else {
-        princeBtn.classList.add("hidden");
-      }
-
-      const deathGrid = document.getElementById("drawerNightDeathGrid");
-      deathGrid.innerHTML = gameState.players.map(p => {
-        const isNightDead = (!p.isAlive && p.deathReason === "NIGHT");
-        return `
-          <button onclick="togglePlayerNightDeath(${p.seat})" class="h-8 rounded text-xs font-bold border transition ${isNightDead ? 'bg-purple-900 border-purple-500 text-purple-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
-            ${p.seat}號 ${isNightDead ? '🌙' : ''}
-          </button>
-        `;
-      }).join('');
-
-      const targetContainer = document.getElementById("drawerExileTargetContainer");
-      const alivePlayers = gameState.players.filter(p => p.isAlive);
-
-      targetContainer.innerHTML = alivePlayers.map(p => `
-        <button onclick="selectTargetForVote(${p.seat})" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === p.seat ? 'bg-amber-500 text-black border-amber-300' : 'bg-gray-800 text-amber-300 border-gray-600'}">
-          投 ${p.seat}號
-        </button>
-      `).join('') + `
-        <button onclick="selectTargetForVote(0)" class="px-2.5 py-1 rounded text-xs font-bold border transition ${gameState.selectedTarget === 0 ? 'bg-gray-400 text-black border-white' : 'bg-gray-800 text-gray-400 border-gray-600'}">
-          棄票
-        </button>
-      `;
-
-      const votersGrid = document.getElementById("drawerExileVotersGrid");
-      votersGrid.innerHTML = alivePlayers.map(p => {
-        let votedTarget = null;
-        Object.entries(gameState.tempVotes || {}).forEach(([target, list]) => {
-          if (list.includes(p.seat)) votedTarget = target;
-        });
-
-        const isPolice = (!gameState.isBadgeTorn && p.seat === gameState.policeSeat);
-        return `
-          <button onclick="assignVote(${p.seat})" class="h-9 rounded text-xs border font-mono flex flex-col items-center justify-center transition ${votedTarget !== null ? 'bg-indigo-950 border-indigo-400 text-indigo-200' : 'bg-gray-800 border-gray-700 text-gray-300'}">
-            <span>${p.seat}號${isPolice ? '👑' : ''}</span>
-            <span class="text-[8px] text-amber-300">${votedTarget !== null ? (votedTarget == 0 ? '棄' : '➔' + votedTarget) : '未投'}</span>
-          </button>
-        `;
-      }).join('');
-    }
-
-    function selectTargetForVote(targetSeat) {
-      gameState.selectedTarget = targetSeat;
-      renderDrawerControls();
-    }
-
-    function assignVote(voterSeat) {
-      if (gameState.selectedTarget === null) {
-        alert("請先點選上方的受票目標或棄票！");
-        return;
-      }
-      const target = gameState.selectedTarget;
-
-      if (!gameState.tempVotes) gameState.tempVotes = {};
-      Object.keys(gameState.tempVotes).forEach(k => {
-        gameState.tempVotes[k] = (gameState.tempVotes[k] || []).filter(s => s !== voterSeat);
-      });
-
-      if (!gameState.tempVotes[target]) gameState.tempVotes[target] = [];
-      gameState.tempVotes[target].push(voterSeat);
-
-      currentHistoryViewIndex = -1;
-      pushStateToFirebase();
-      renderAll();
-    }
-
-    function togglePlayerNightDeath(seat) {
-      const p = gameState.players.find(x => x.seat === seat);
-      if (!p) return;
-      if (p.isAlive) {
-        p.isAlive = false;
-        p.deathReason = "NIGHT";
-      } else {
-        p.isAlive = true;
-        p.deathReason = null;
-      }
-      pushStateToFirebase(`更新夜間死訊：${seat}號`);
-      renderAll();
-    }
-
-    function handlePrinceReversal() {
-      if (!confirm("👑 確定現場有【定序王子】翻牌發動【逆轉時空】嗎？\n\n此動作將：\n1. 封存剛剛的票型（供全場盤邏輯）\n2. 取消放逐出局（本次無人出局）\n3. 定序王子單獨發言後進行【第二次放逐投票】")) return;
-
-      const activePoliceAtThisVote = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
-
-      gameState.history.push({
-        title: `D${gameState.day || 1} 放逐(定序逆轉)`,
-        badgeText: `⏳ 定序王子發動時光倒流 (本次無人出局)`,
-        votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
-        badgeHolder: activePoliceAtThisVote
-      });
-
-      gameState.princeUsed = true;
-      gameState.isPrinceRevolving = true;
-      gameState.tempVotes = {};
-      gameState.selectedTarget = null;
-      currentHistoryViewIndex = -1;
-
-      pushStateToFirebase("定序王子翻牌發動逆轉時空");
-      renderAll();
-      alert(`⏳ 定序王子技能已觸發！請定序王子額外發言一次，隨後進行【第 ${gameState.day || 1} 天 第二次放逐投票】！`);
-    }
-
-    function confirmExileVote() {
-      const eResult = RULES_ENGINE.resolveExileVote(
-        gameState.tempVotes,
-        gameState.policeSeat,
-        gameState.isBadgeTorn,
-        gameState.modules,
-        gameState.tricksterSwap,
-        gameState.players
-      );
-
-      if (eResult.status === "ALL_ABSTAIN") {
-        alert("⚠️ 平票或全體棄票，無人被放逐！");
-        return;
-      }
-
-      const activePoliceAtThisVote = (!gameState.isBadgeTorn) ? gameState.policeSeat : null;
-      let historyBadgeText = "";
-
-      if (eResult.status === "TIE_NO_EXILE") {
-        historyBadgeText = `⚖️ 平票無人出局 (${eResult.topSeats.join('、')}號同得${eResult.maxPoints}票)`;
-      } else if (eResult.status === "EXILED") {
-        const exiledPlayer = gameState.players.find(x => x.seat === eResult.exiledSeat);
-        if (exiledPlayer) {
-          exiledPlayer.isAlive = false;
-          exiledPlayer.deathReason = "EXILE";
-          gameState.lastExiledPlayer = exiledPlayer;
-        }
-
-        if (eResult.isTricksterSubstituted) {
-          historyBadgeText = `❌ ${eResult.exiledSeat}號替罪出局 (🎭詭術置換原投${eResult.originalVotedSeat}號)`;
-        } else {
-          historyBadgeText = `❌ ${eResult.exiledSeat}號放逐出局 (${eResult.maxPoints}票)`;
-        }
-      }
-
-      const historyTitle = gameState.isPrinceRevolving ? `D${gameState.day || 1} 放逐重投` : `D${gameState.day || 1} 白天放逐`;
-
-      gameState.history.push({
-        title: historyTitle,
-        badgeText: historyBadgeText,
-        votes: JSON.parse(JSON.stringify(gameState.tempVotes || {})),
-        badgeHolder: activePoliceAtThisVote
-      });
-
-      gameState.consecutiveExplodeCount = 0;
-      gameState.isPrinceRevolving = false;
-      gameState.tricksterSwap = null; 
-      gameState.tempVotes = {};
-      gameState.selectedTarget = null;
-      currentHistoryViewIndex = gameState.history.length - 1;
-
-      checkPoliceBadgeStatus();
-      pushStateToFirebase(`放逐結算：${historyBadgeText}`);
-      renderAll();
-      alert(`✅ 第 ${gameState.day || 1} 天放逐票型已同步封存！\n${historyBadgeText}`);
-    }
-
-    function enterNextDayCycle(auto = false) {
-      if (!auto && !confirm(`確定要結算今天並進入【第 ${(gameState.day || 1) + 1} 天】嗎？`)) return;
-
-      gameState.day = (gameState.day || 1) + 1;
-      gameState.phase = "DAY_EXILE";
-      gameState.tempVotes = {};
-      gameState.selectedTarget = null;
-      gameState.pkCandidates = [];
-      gameState.isPrinceRevolving = false;
-      gameState.tricksterSwap = null;
-      currentHistoryViewIndex = -1;
-
-      pushStateToFirebase(`進入第 ${gameState.day} 天白天`);
-      renderAll();
-      alert(`☀️ 已進入第 ${gameState.day} 天白天！雲端已同步更新。`);
-    }
-
-    // ==========================================
-    // 6. 重置整局資料 (包含警選環節修復與 originalSeatType 補齊)
-    // ==========================================
-    function resetMatchData() {
-      if (!isAdmin) {
-        alert("⚠️ 請先點擊右上角鎖頭解鎖計票員權限！");
-        return;
-      }
-
-      if (operatingMode !== "STANDALONE") {
-        if (!confirm("⚠️ 目前全場運行模式為【跟隨上帝端】！\n在上帝主控台未開時，建議先在抽屜內將模式切換為【獨立看板模式】。\n\n是否仍然強制重置開局？")) return;
-      } else {
-        if (!confirm("⚠️ 確定要將整局資料歸零重置嗎？\n此操作將回到【第 1 天 警長競選】首輪環節，所有看板螢幕將同步重置！")) return;
-      }
-
-      // 初始化 1~12 號基礎席位 (補齊 originalSeatType)
-      const initialPlayers = [];
-      for (let i = 1; i <= 12; i++) {
-        initialPlayers.push({
-          seat: i,
-          name: "",
-          role: "平民",
-          seatType: "VILLAGER",
-          originalSeatType: "VILLAGER",
-          isAlive: true,
-          deathReason: null,
-          isCandidate: false,
-          hasDropped: false
-        });
-      }
-
-      // 構建純淨的「第 1 天 警長競選」初始狀態
-      const freshState = {
-        operatingMode: operatingMode,
-        day: 1,
-        round: 1,
-        phase: "POLICE_ELECTION",
-        policeSeat: null,
-        isBadgeTorn: false,
-        consecutiveExplodeCount: 0,
-        pkCandidates: [],
-        selectedTarget: null,
-        tempVotes: {},
-        history: [],
-        players: initialPlayers,
-        modules: {
-          enableTrickster: false,
-          enablePrince: false
-        },
-        princeUsed: false,
-        isPrinceRevolving: false,
-        tricksterSwap: null,
-        lastActionBy: (operatingMode === "STANDALONE") ? "STANDALONE_RECORDER" : "RECORDER",
-        actionId: "RESET_" + Date.now(),
-        lastActionSummary: "現場公播重置開局回到第 1 天警選"
-      };
-
-      gameState = freshState;
-      currentHistoryViewIndex = -1;
-
-      // 推送雲端更新
-      matchRef.set(freshState).then(() => {
-        renderAll();
-        alert("✅ 對局已成功重置！已回到【第 1 天 警長競選】環節。");
-      }).catch((err) => {
-        console.error("重置失敗:", err);
-        alert("❌ 重置寫入失敗，請檢查網路連線！");
-      });
     }
   </script>
 </body>
