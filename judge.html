@@ -17,7 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <!-- 引入規則大腦與獨立設定檔 -->
-  <script src="rules_config.js?v=20261017_patch_v9"></script>
+  <script src="rules_config.js?v=20261017_patch_v10"></script>
 
   <style>
     body { background-color: #0b0f17; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -432,7 +432,7 @@
     let antidoteUsedThisNight = false;
 
     // ==========================================
-    // 1. 初始化與 Firebase 實時監聽 (上帝為唯一主控端)
+    // 1. 初始化與 Firebase 實時監聽
     // ==========================================
     window.onload = () => {
       initBoardSelector();
@@ -447,8 +447,19 @@
           if (!gameState.history) gameState.history = [];
           if (!gameState.tempVotes) gameState.tempVotes = {};
           if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
+          if (!gameState.nightMemory) {
+            gameState.nightMemory = {
+              guardLastTarget: null,
+              witchAntidoteUsed: false,
+              witchPoisonUsed: false,
+              gargoyleConvertedTarget: null,
+              blackMarketGifts: { seer: null, poison: null, gun: null },
+              blackMarketTransformedWolf: false,
+              luckySeerUsed: false,
+              luckyPoisonUsed: false
+            };
+          }
 
-          // 核心檢查：若雲端資料庫的角色皆為平民（剛重置），依左側 UI 下拉選單補正
           const isAllVillagers = gameState.players.length > 0 && gameState.players.every(p => p.role === "平民");
 
           gameState.players.forEach((p, idx) => { 
@@ -474,7 +485,6 @@
               if (!p.victoryFaction) p.victoryFaction = roleDef.faction || "villager";
             }
 
-            // 反向同步左側 UI 下拉選單
             const roleSel = document.getElementById(`roleSelect-${p.seat}`);
             const userSel = document.getElementById(`userSelect-${p.seat}`);
             const roleTag = document.getElementById(`roleTag-${p.seat}`);
@@ -966,7 +976,7 @@
     }
 
     // ==========================================
-    // 6. 動態夜間卡片渲染器
+    // 6. 動態夜間卡片渲染器 (通用與幸運兒支援)
     // ==========================================
     function renderNightPanel() {
       const config = BOARD_DATABASE[currentBoardKey];
@@ -1015,6 +1025,11 @@
           if (step.role === "狼兄狼弟") {
             const b = gameState.players.filter(x => x.role.includes("狼兄") || x.role.includes("狼弟"));
             desc = b.length > 0 ? b.map(x => `${x.seat}號(${x.role})`).join('、') : "未配置";
+          } else if (step.id === "seer_lucky_confirm" || step.id === "poison_lucky_confirm") {
+            const gType = step.id.includes("seer") ? "seer" : "poison";
+            const luckySeat = Number(gameState.nightMemory?.blackMarketGifts?.[gType] || 0);
+            const p = gameState.players.find(x => Number(x.seat) === luckySeat);
+            desc = p ? `${p.seat}號 ${p.name || ''}` : "首夜待指派";
           } else {
             const p = gameState.players.find(x => x.role.includes(step.role));
             desc = p ? `${p.seat}號 ${p.name || ''}` : "未配置";
@@ -1028,12 +1043,21 @@
             </div>
           `;
         } else if (step.type === "GESTURE") {
+          let extraInfo = "";
+          if (step.id === "lucky_gun_gesture" || step.id === "gun_lucky_gesture") {
+            const gunSeat = Number(gameState.nightMemory?.blackMarketGifts?.gun || 0);
+            const p = gameState.players.find(x => Number(x.seat) === gunSeat);
+            extraInfo = `<span class="text-[10px] text-amber-300 font-bold block mb-1">🔫 幸運兒：${p ? `${p.seat}號 ${p.name || ''}` : '未指派'}</span>`;
+          }
           bodyHtml = `
-            <div class="flex justify-between items-center bg-gray-900/60 p-2 rounded">
-              <span class="text-gray-300">給予手勢：</span>
-              <span id="gesture-badge-${step.id}" class="bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold">
-                👍 狀態良好
-              </span>
+            <div class="bg-gray-900/60 p-2 rounded">
+              ${extraInfo}
+              <div class="flex justify-between items-center">
+                <span class="text-gray-300">給予手勢：</span>
+                <span id="gesture-badge-${step.id}" class="bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-bold">
+                  👍 狀態良好
+                </span>
+              </div>
             </div>
           `;
         } else if (step.type === "INFO") {
@@ -1049,6 +1073,51 @@
             <div class="bg-gray-900/60 p-2 rounded flex justify-between items-center">
               <span class="text-gray-300">放逐陣營資訊：</span>
               <span class="${badgeClass} px-2 py-0.5 rounded font-bold">${infoText}</span>
+            </div>
+          `;
+        } else if (step.type === "LUCKY_SEER") {
+          const luckySeat = Number(gameState.nightMemory?.blackMarketGifts?.seer || 0);
+          const luckyP = gameState.players.find(x => Number(x.seat) === luckySeat);
+          const isUsed = !!gameState.nightMemory?.luckySeerUsed;
+          const isDead = luckyP && !luckyP.isAlive;
+
+          bodyHtml = `
+            <div class="space-y-1.5 bg-gray-900/60 p-2 rounded">
+              <div class="flex justify-between items-center text-[11px]">
+                <span class="font-bold text-amber-300">🔮 幸運兒：${luckyP ? `${luckyP.seat}號 ${luckyP.name || ''} (${luckyP.seatType === 'WEREWOLF' ? '狼人查身分' : '好人查陣營'})` : '未指定'}</span>
+                <span class="text-[10px] ${isUsed ? 'text-rose-400 font-bold' : (isDead ? 'text-gray-400' : 'text-emerald-400')}">${isUsed ? '❌ 已使用過' : (isDead ? '💀 玩家已出局' : '✨ 可使用')}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400">查驗目標：</span>
+                <select id="luckySeerTarget" ${isLockedNight || isUsed || isDead ? 'disabled' : ''} onchange="refreshAllRuleDisplays()" class="flex-1 rounded p-1 text-xs border ${isLockedNight || isUsed || isDead ? 'opacity-60 cursor-not-allowed' : ''}">
+                  <option value="">選擇查驗目標 (不使用請留空)</option>
+                  ${allPlayersOptions}
+                </select>
+                <span id="luckySeerResultBadge" class="bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold whitespace-nowrap">
+                  待查驗
+                </span>
+              </div>
+            </div>
+          `;
+        } else if (step.type === "LUCKY_POISON") {
+          const luckySeat = Number(gameState.nightMemory?.blackMarketGifts?.poison || 0);
+          const luckyP = gameState.players.find(x => Number(x.seat) === luckySeat);
+          const isUsed = !!gameState.nightMemory?.luckyPoisonUsed;
+          const isDead = luckyP && !luckyP.isAlive;
+
+          bodyHtml = `
+            <div class="space-y-1.5 bg-gray-900/60 p-2 rounded">
+              <div class="flex justify-between items-center text-[11px]">
+                <span class="font-bold text-amber-300">🧪 幸運兒：${luckyP ? `${luckyP.seat}號 ${luckyP.name || ''}` : '未指定'}</span>
+                <span class="text-[10px] ${isUsed ? 'text-rose-400 font-bold' : (isDead ? 'text-gray-400' : 'text-emerald-400')}">${isUsed ? '❌ 已使用過' : (isDead ? '💀 玩家已出局' : '✨ 可使用')}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400">開毒目標：</span>
+                <select id="luckyPoisonTarget" ${isLockedNight || isUsed || isDead ? 'disabled' : ''} onchange="refreshAllRuleDisplays()" class="flex-1 rounded p-1 text-xs border ${isLockedNight || isUsed || isDead ? 'opacity-60 cursor-not-allowed' : ''}">
+                  <option value="">不使用毒藥</option>
+                  ${aliveOptions}
+                </select>
+              </div>
             </div>
           `;
         } else if (step.id === "magician") {
@@ -1203,6 +1272,9 @@
           const poisonEl = document.getElementById("poisonTarget");
           if (poisonEl && savedSnapshot.inputs.rawPoisonTarget) poisonEl.value = savedSnapshot.inputs.rawPoisonTarget;
 
+          const luckyPoisonEl = document.getElementById("luckyPoisonTarget");
+          if (luckyPoisonEl && savedSnapshot.inputs.luckyPoisonTarget) luckyPoisonEl.value = savedSnapshot.inputs.luckyPoisonTarget;
+
           const guardEl = document.getElementById("target-guard");
           if (guardEl && savedSnapshot.inputs.guardTarget) guardEl.value = savedSnapshot.inputs.guardTarget;
 
@@ -1214,6 +1286,9 @@
 
           const seerEl = document.getElementById("seerTarget");
           if (seerEl && savedSnapshot.seerTarget) seerEl.value = savedSnapshot.seerTarget;
+
+          const luckySeerEl = document.getElementById("luckySeerTarget");
+          if (luckySeerEl && savedSnapshot.inputs.luckySeerTarget) luckySeerEl.value = savedSnapshot.inputs.luckySeerTarget;
 
           const gargoyleEl = document.getElementById("target-gargoyle");
           if (gargoyleEl && savedSnapshot.inputs.gargoyleTarget) gargoyleEl.value = savedSnapshot.inputs.gargoyleTarget;
@@ -1312,6 +1387,7 @@
         Number(document.getElementById("swapTargetB")?.value || 0) || 0
       ];
 
+      // 1. 預言家查驗
       const seerSelect = document.getElementById("seerTarget");
       const seerSeat = Number(seerSelect?.value || 0) || 0;
       const seerBadge = document.getElementById("seerResultBadge");
@@ -1329,6 +1405,25 @@
         }
       }
 
+      // 2. 幸運兒查驗 (好人查陣營／狼人查具體身分)
+      const luckySeerSelect = document.getElementById("luckySeerTarget");
+      const luckyTargetSeat = Number(luckySeerSelect?.value || 0) || 0;
+      const luckyBadge = document.getElementById("luckySeerResultBadge");
+      if (luckyBadge) {
+        const luckySeat = Number(gameState.nightMemory?.blackMarketGifts?.seer || 0);
+        if (!luckyTargetSeat || !luckySeat) {
+          luckyBadge.innerText = "待查驗";
+          luckyBadge.className = "bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold whitespace-nowrap";
+        } else {
+          const lRes = RULES_ENGINE.resolveLuckyCheck(luckySeat, luckyTargetSeat, swapPair, gameState.players);
+          luckyBadge.innerText = lRes.text;
+          luckyBadge.className = lRes.isWolfChecker 
+            ? "bg-purple-950 text-purple-300 border border-purple-700 px-2 py-0.5 rounded font-bold whitespace-nowrap"
+            : (lRes.isWolf ? "bg-rose-950 text-rose-300 border border-rose-700 px-2 py-0.5 rounded font-bold whitespace-nowrap" : "bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded font-bold whitespace-nowrap");
+        }
+      }
+
+      // 3. 女巫刀口與自救限制
       const witchCard = document.getElementById("action-card-witch");
       const wolfEl = document.getElementById('target-wolf') || 
                      document.getElementById('target-wolf_team_confirm') ||
@@ -1367,14 +1462,17 @@
         }
       }
 
+      // 4. 手勢狀態判定 (獵人、狼王、獵槍幸運兒等)
       const context = {
         rawPoisonTarget: Number(document.getElementById("poisonTarget")?.value || 0) || 0,
+        rawLuckyPoisonTarget: Number(document.getElementById("luckyPoisonTarget")?.value || 0) || 0,
+        luckyGunSeat: Number(gameState.nightMemory?.blackMarketGifts?.gun || 0),
         swapPair: swapPair,
         players: gameState.players,
         blackMarketTransformedWolf: gameState.nightMemory?.blackMarketTransformedWolf
       };
 
-      ["hunter_gesture", "wolf_king_gesture", "converter_gesture", "black_market_faction_gesture"].forEach(gId => {
+      ["hunter_gesture", "wolf_king_gesture", "gun_lucky_gesture", "lucky_gun_gesture", "converter_gesture", "black_market_faction_gesture"].forEach(gId => {
         const badge = document.getElementById(`gesture-badge-${gId}`);
         if (badge) {
           const res = RULES_ENGINE.evaluateGesture(gId, context);
@@ -1387,7 +1485,7 @@
     }
 
     // ==========================================
-    // 7. 天亮死訊結算 (包含動態轉化與身分同步)
+    // 7. 天亮死訊結算
     // ==========================================
     function resolveNight() {
       const curRound = Number(gameState.round) || 1;
@@ -1399,10 +1497,12 @@
                      document.querySelector("select[id^='target-wolf']");
       const youngSoloEl = document.getElementById("target-wolf_younger_solo");
       const poisonEl = document.getElementById("poisonTarget");
+      const luckyPoisonEl = document.getElementById("luckyPoisonTarget");
       const guardEl = document.getElementById("target-guard");
       const swapAEl = document.getElementById("swapTargetA");
       const swapBEl = document.getElementById("swapTargetB");
       const seerEl = document.getElementById("seerTarget");
+      const luckySeerEl = document.getElementById("luckySeerTarget");
       const gargoyleEl = document.getElementById("target-gargoyle");
 
       const giftSeerEl = document.getElementById("giftSeer");
@@ -1413,13 +1513,15 @@
         rawWolfTarget: Number(wolfEl?.value || 0) || 0,
         youngWolfSoloTarget: Number(youngSoloEl?.value || 0) || 0,
         rawPoisonTarget: Number(poisonEl?.value || 0) || 0,
+        luckyPoisonTarget: Number(luckyPoisonEl?.value || 0) || 0,
         guardTarget: Number(guardEl?.value || 0) || 0,
         gargoyleTarget: Number(gargoyleEl?.value || 0) || 0,
         blackMarketGifts: {
-          seer: Number(giftSeerEl?.value || 0) || null,
-          poison: Number(giftPoisonEl?.value || 0) || null,
-          gun: Number(giftGunEl?.value || 0) || null
+          seer: Number(giftSeerEl?.value || 0) || gameState.nightMemory?.blackMarketGifts?.seer || null,
+          poison: Number(giftPoisonEl?.value || 0) || gameState.nightMemory?.blackMarketGifts?.poison || null,
+          gun: Number(giftGunEl?.value || 0) || gameState.nightMemory?.blackMarketGifts?.gun || null
         },
+        luckySeerTarget: Number(luckySeerEl?.value || 0) || null,
         antidoteUsed: antidoteUsedThisNight,
         swapPair: [
           Number(swapAEl?.value || 0) || 0,
@@ -1436,6 +1538,7 @@
         round: curRound,
         inputs: JSON.parse(JSON.stringify(inputs)),
         seerTarget: Number(seerEl?.value || 0) || 0,
+        luckySeerTarget: Number(luckySeerEl?.value || 0) || 0,
         deaths: [...nResult.deaths],
         summaryText: nResult.summaryText
       };
@@ -1474,10 +1577,17 @@
       const deadHunter = gameState.players.find(p => p.role.includes("獵人") && deaths.includes(Number(p.seat)));
       const deadWolfKing = gameState.players.find(p => p.role.includes("狼王") && deaths.includes(Number(p.seat)));
 
+      const luckyGunSeat = Number(gameState.nightMemory?.blackMarketGifts?.gun || 0);
+      const deadLuckyGun = luckyGunSeat > 0 && deaths.includes(luckyGunSeat) 
+        ? gameState.players.find(p => Number(p.seat) === luckyGunSeat) 
+        : null;
+
       if (deadHunter && (nResult ? nResult.hunterCanShoot : true)) {
         triggerGunAction("獵人", deadHunter.seat);
       } else if (deadWolfKing && (nResult ? nResult.wolfKingCanShoot : true)) {
         triggerGunAction("狼王", deadWolfKing.seat);
+      } else if (deadLuckyGun && (nResult ? nResult.luckyGunCanShoot : true)) {
+        triggerGunAction("幸運兒(獵槍)", deadLuckyGun.seat);
       }
     }
 
@@ -1522,7 +1632,6 @@
       else renderExileStageControls();
     }
 
-    // 重點更新：嚴格過濾自爆下拉選單，好人絕對不可自爆
     function populateDayDropdowns() {
       const policeWolves = RULES_ENGINE.getEligibleExplodePlayers(gameState.players, true);
       const dayWolves = RULES_ENGINE.getEligibleExplodePlayers(gameState.players, false);
@@ -1543,7 +1652,7 @@
       const policeWolf = document.getElementById("policeWolfExplodeSelect");
 
       if (wolfExplode) wolfExplode.innerHTML = optsDayExplode;
-      if (skillKill) skillKill.innerHTML = optsAlive; // 技能帶走仍可帶走所有人
+      if (skillKill) skillKill.innerHTML = optsAlive;
       if (policeWolf) policeWolf.innerHTML = optsPoliceExplode;
     }
 
@@ -1846,6 +1955,12 @@
 
             if (exiledPlayer.role.includes("獵人")) triggerGunAction("獵人", exiledPlayer.seat);
             else if (exiledPlayer.role.includes("狼王")) triggerGunAction("狼王", exiledPlayer.seat);
+            else {
+              const luckyGunSeat = Number(gameState.nightMemory?.blackMarketGifts?.gun || 0);
+              if (luckyGunSeat > 0 && Number(exiledPlayer.seat) === luckyGunSeat) {
+                triggerGunAction("幸運兒(獵槍)", exiledPlayer.seat);
+              }
+            }
           }
         }
 
@@ -1902,7 +2017,7 @@
       alert(`⏳ 定序王子技能已觸發！請定序王子單獨發言一次後，進行重投。`);
     }
 
-    // --- 自爆與技能處理 (好人嚴禁自爆) ---
+    // --- 自爆與技能處理 ---
     function handlePoliceWolfExplode() {
       const select = document.getElementById("policeWolfExplodeSelect");
       const seat = Number(select?.value);
@@ -1911,7 +2026,6 @@
         return;
       }
 
-      // 嚴格攔截：好人嚴禁自爆
       const check = RULES_ENGINE.validateCanExplode(seat, gameState.players);
       if (!check.allowed) {
         alert(`🚫 ${check.reason}`);
@@ -1951,7 +2065,6 @@
         return;
       }
 
-      // 嚴格攔截：好人嚴禁自爆
       const check = RULES_ENGINE.validateCanExplode(seat, gameState.players);
       if (!check.allowed) {
         alert(`🚫 ${check.reason}`);
@@ -1980,7 +2093,7 @@
     function handleDaySkillKill() {
       const seat = Number(document.getElementById("daySkillKillSelect").value);
       if (!seat) return;
-      const reason = prompt("請輸入技能帶走原因（例如：獵人開槍、狼王開槍、狼美人魅惑）：", "技能開槍");
+      const reason = prompt("請輸入技能帶走原因（例如：獵人開槍、幸運兒開槍、狼王開槍、狼美人魅惑）：", "技能開槍");
       if (reason === null) return;
 
       const p = gameState.players.find(x => Number(x.seat) === seat);
