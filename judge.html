@@ -465,7 +465,26 @@
           if (!gameState.tempVotes) gameState.tempVotes = {};
           if (!gameState.modules) gameState.modules = { enableTrickster: false, enablePrince: false };
 
-          gameState.players.forEach(p => { p.seat = Number(p.seat); });
+          gameState.players.forEach(p => { 
+            p.seat = Number(p.seat);
+            // 自動過濾轉化後綴，從角色字典校正坑位屬性
+            const baseRole = (p.role || "平民").replace(/\(轉化\)|\(狼\)/g, "");
+            const roleDef = ROLE_DEFINITIONS[baseRole] || ROLE_DEFINITIONS[p.role];
+
+            // 若 seatType 遺失或被誤存為平民，依角色字典自動校正恢復
+            if ((!p.seatType || p.seatType === "VILLAGER") && roleDef && roleDef.seatType !== "VILLAGER") {
+              p.seatType = roleDef.seatType;
+            } else if (!p.seatType && roleDef) {
+              p.seatType = roleDef.seatType;
+            }
+
+            if (!p.originalSeatType && roleDef) {
+              p.originalSeatType = roleDef.seatType;
+            }
+            if (!p.victoryFaction && roleDef) {
+              p.victoryFaction = roleDef.faction || "villager";
+            }
+          });
           if (gameState.policeSeat !== null && gameState.policeSeat !== undefined) {
             gameState.policeSeat = Number(gameState.policeSeat);
           }
@@ -856,6 +875,24 @@
     // ==========================================
     function updateCounts() {
       const isPoliceStage = (gameState.phase === "POLICE_ELECTION" || gameState.phase === "POLICE_PK");
+      
+      // 雙重保險：統計前檢查每位玩家的 seatType 是否合規，防止空值或型別遺失
+      if (gameState.players && gameState.players.length > 0) {
+        gameState.players.forEach(p => {
+          const baseRole = (p.role || "平民").replace(/\(轉化\)|\(狼\)/g, "");
+          const def = ROLE_DEFINITIONS[baseRole] || ROLE_DEFINITIONS[p.role];
+
+          if ((!p.seatType || p.seatType === "VILLAGER") && def && def.seatType !== "VILLAGER") {
+            p.seatType = def.seatType;
+          } else if (!p.seatType) {
+            p.seatType = def?.seatType || "VILLAGER";
+          }
+          if (!p.originalSeatType) {
+            p.originalSeatType = def?.seatType || p.seatType;
+          }
+        });
+      }
+
       const alive = isPoliceStage 
         ? gameState.players.filter(p => p.deathReason !== "EXPLODE" && p.deathReason !== "EXILE")
         : gameState.players.filter(p => p.isAlive);
@@ -864,7 +901,7 @@
       const villagers = alive.filter(p => p.seatType === "VILLAGER").length;
       const wolves = alive.filter(p => p.seatType === "WEREWOLF").length;
 
-      // 總坑位動態重新配額（分子與分母完全對齊當前 seatType）
+      // 總坑位動態配額計算（分子與分母即時對齊真實 seatType）
       const totalGods = gameState.players.filter(p => p.seatType === "GOD").length;
       const totalVillagers = gameState.players.filter(p => p.seatType === "VILLAGER").length;
       const totalWolves = gameState.players.filter(p => p.seatType === "WEREWOLF").length;
