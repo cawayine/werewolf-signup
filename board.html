@@ -1480,7 +1480,7 @@
     }
 
     // ==========================================
-    // 6. 徹底修復：重置整局資料
+    // 6. 徹底修復：重置整局資料 (強制設定為警長競選環節)
     // ==========================================
     function resetMatchData() {
       if (operatingMode !== "STANDALONE") {
@@ -1488,21 +1488,55 @@
         return;
       }
 
-      if (!confirm("⚠️ 確定要將整局資料歸零重置嗎？\n此操作將清空所有投票與出局紀錄，所有連線中的設備將同步重置！")) return;
+      if (!confirm("⚠️ 確定要將整局資料歸零重置嗎？\n此操作將回到【第 1 天 警長競選】首輪環節！")) return;
 
-      // 產生全新的完整初始狀態
-      const freshState = RULES_ENGINE.createInitialGameState();
-      freshState.lastActionBy = "STANDALONE_RECORDER";
-      freshState.actionId = "RESET_" + Date.now();
-      freshState.lastActionSummary = "現場公播重置開局";
+      // 1. 初始化 1~12 號基礎席位，確保具備完整的候選人與投票屬性
+      const initialPlayers = [];
+      for (let i = 1; i <= 12; i++) {
+        initialPlayers.push({
+          seat: i,
+          name: "",
+          role: "平民",
+          seatType: "VILLAGER",
+          isAlive: true,
+          deathReason: null,
+          isCandidate: false,
+          hasDropped: false
+        });
+      }
+
+      // 2. 構建純淨的「第 1 天 警長競選」初始狀態
+      const freshState = {
+        day: 1,
+        round: 1,
+        phase: "POLICE_ELECTION",      // 強制重置回警長競選階段
+        policeSeat: null,              // 警長未指定
+        isBadgeTorn: false,            // 警徽正常在場
+        consecutiveExplodeCount: 0,    // 競選自爆次數歸零
+        pkCandidates: [],              // 清空 PK 候選人
+        selectedTarget: null,
+        tempVotes: {},                 // 清空暫存票型
+        history: [],                   // 清空所有歷史紀錄
+        players: initialPlayers,
+        modules: {
+          enableTrickster: false,
+          enablePrince: false
+        },
+        princeUsed: false,
+        isPrinceRevolving: false,
+        tricksterSwap: null,
+        lastActionBy: "STANDALONE_RECORDER",
+        actionId: "RESET_" + Date.now(),
+        lastActionSummary: "公播看板重置開局回到第 1 天警選"
+      };
 
       gameState = freshState;
       currentHistoryViewIndex = -1;
 
-      // 強制推送到 Firebase
+      // 3. 推送雲端並立即強制本地重繪
       matchRef.set(freshState).then(() => {
         renderAll();
-        alert("✅ 對局已成功歸零重置！所有看板螢幕已同步清空。");
+        alert("✅ 對局已成功重置！已回到【第 1 天 警長競選】環節。");
       }).catch((err) => {
         console.error("重置失敗:", err);
         alert("❌ 重置寫入失敗，請檢查網路連線！");
