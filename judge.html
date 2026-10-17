@@ -893,19 +893,30 @@
         let statusBadge = "";
         let statusText = p.name ? p.name.slice(0, 3) : "存活";
 
+        // 判定該玩家是否為動態轉化為狼人 (原生為神/民，現為狼)
+        const isConvertedWolf = (p.seatType === "WEREWOLF" && p.originalSeatType && p.originalSeatType !== "WEREWOLF");
+
         if (isPoliceStage && !p.isAlive && p.deathReason === "NIGHT") {
           borderStyle = "border-indigo-600 bg-indigo-950/40 text-indigo-200 font-bold";
           statusBadge = "🌙";
-          statusText = "夜亡(待宣)";
+          statusText = isConvertedWolf ? "夜亡(轉)" : "夜亡(待宣)";
         } else if (!p.isAlive) {
           borderStyle = "border-gray-800 bg-gray-900/60 text-gray-600 line-through opacity-50";
-          if (p.deathReason === "NIGHT") { statusBadge = "🌙"; statusText = "夜亡"; }
-          else if (p.deathReason === "EXILE") { statusBadge = "❌"; statusText = "放逐"; }
-          else if (p.deathReason === "SKILL") { statusBadge = "🎯"; statusText = "技能"; }
-          else if (p.deathReason === "EXPLODE") { statusBadge = "💥"; statusText = "自爆"; }
+          if (p.deathReason === "NIGHT") { statusBadge = "🌙"; statusText = isConvertedWolf ? "夜亡(轉)" : "夜亡"; }
+          else if (p.deathReason === "EXILE") { statusBadge = "❌"; statusText = isConvertedWolf ? "放逐(轉)" : "放逐"; }
+          else if (p.deathReason === "SKILL") { statusBadge = "🎯"; statusText = isConvertedWolf ? "技能(轉)" : "技能"; }
+          else if (p.deathReason === "EXPLODE") { statusBadge = "💥"; statusText = isConvertedWolf ? "自爆(轉)" : "自爆"; }
         } else if (Number(gameState.policeSeat) === Number(p.seat)) {
-          borderStyle = "border-amber-500 bg-amber-950/40 text-amber-300 font-bold";
+          borderStyle = isConvertedWolf 
+            ? "border-amber-500 bg-rose-950/40 text-amber-300 font-bold" 
+            : "border-amber-500 bg-amber-950/40 text-amber-300 font-bold";
           statusBadge = "👑";
+          if (isConvertedWolf) statusText = "警長(轉)";
+        } else if (isConvertedWolf) {
+          // 轉化存活：給予特殊邊框與狼頭標記提醒法官
+          borderStyle = "border-rose-600 bg-rose-950/30 text-rose-300 font-bold";
+          statusBadge = "🐺";
+          statusText = "狼(轉)";
         }
 
         const badgeHtml = statusBadge 
