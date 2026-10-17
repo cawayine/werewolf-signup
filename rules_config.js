@@ -1,6 +1,6 @@
 /**
  * 基地狼人殺 - 規則與板型獨立設定檔 (rules_config.js)
- * 基準版本：全域規則大腦 + 27位角色字典 + 8套定案板型 + RULES_ENGINE 核心運算引擎 (完整精簡重構版)
+ * 基準版本：全域規則大腦 + 27位角色字典 + 8套定案板型 + RULES_ENGINE 核心運算引擎 (含超級黑商幸運兒技能擴展版)
  */
 
 // ==========================================
@@ -197,7 +197,11 @@ const BOARD_DATABASE = {
       { id: "wolf_younger_solo", role: "狼弟", type: "SKILL", title: "狼弟請睜眼", prompt: "單獨開刀 (狼兄出局時觸發)" },
       { id: "wolf", role: "狼人", type: "SKILL", title: "狼隊請睜眼", prompt: "狼隊落刀" },
       { id: "witch", role: "女巫", type: "SKILL", title: "女巫請睜眼", prompt: "昨夜倒牌與用藥" },
-      { id: "seer", role: "預言家", type: "SKILL", title: "預言家請睜眼", prompt: "查驗陣營" }
+      { id: "seer", role: "預言家", type: "SKILL", title: "預言家請睜眼", prompt: "查驗陣營" },
+      // 幸運兒第二夜起行動節點
+      { id: "lucky_seer", role: "幸運兒(查驗)", type: "LUCKY_SEER", title: "查驗幸運兒請睜眼", prompt: "使用查驗技能 (好人查陣營／狼人查身分)" },
+      { id: "lucky_poison", role: "幸運兒(毒藥)", type: "LUCKY_POISON", title: "毒藥幸運兒請睜眼", prompt: "使用毒藥技能" },
+      { id: "lucky_gun_gesture", role: "幸運兒(獵槍)", type: "GESTURE", title: "獵槍幸運兒請睜眼", prompt: "給予開槍手勢" }
     ]
   },
   "狼美騎士": {
@@ -283,12 +287,14 @@ const RULES_ENGINE = {
         witchPoisonUsed: false,
         gargoyleConvertedTarget: null,
         blackMarketGifts: { seer: null, poison: null, gun: null },
-        blackMarketTransformedWolf: false
+        blackMarketTransformedWolf: false,
+        luckySeerUsed: false,
+        luckyPoisonUsed: false
       }
     };
   },
 
-  // 席位屬性自動同步（徹底防止 F5 資料庫身分丟失變 12 平民）
+  // 席位屬性自動同步
   syncPlayerRoles(players = [], boardKey = "") {
     if (!players || players.length === 0) return;
     const config = BOARD_DATABASE[boardKey];
@@ -395,6 +401,7 @@ const RULES_ENGINE = {
       const gGun = Number(gifts.gun) || 0;
 
       if (gSeer > 0 && gPoison > 0 && gGun > 0) {
+        if (!nightMemory.blackMarketGifts) nightMemory.blackMarketGifts = {};
         nightMemory.blackMarketGifts = { seer: gSeer, poison: gPoison, gun: gGun };
         const t1 = players.find(p => Number(p.seat) === gSeer);
         const t2 = players.find(p => Number(p.seat) === gPoison);
@@ -442,26 +449,85 @@ const RULES_ENGINE = {
     };
   },
 
+  // 幸運兒查驗：好人查陣營，狼人查具體身分
+  resolveLuckyCheck(luckySeat, targetSeat, swapPair = [0, 0], players = []) {
+    const lSeat = Number(luckySeat) || 0;
+    const tSeat = Number(targetSeat) || 0;
+    if (!lSeat || !tSeat) return { isReady: false, text: "待查驗" };
+
+    const luckyPlayer = players.find(p => Number(p.seat) === lSeat);
+    if (!luckyPlayer) return { isReady: false, text: "查無幸運兒" };
+
+    let effectiveSeat = tSeat;
+    if (Number(swapPair[0]) === tSeat) effectiveSeat = Number(swapPair[1]);
+    else if (Number(swapPair[1]) === tSeat) effectiveSeat = Number(swapPair[0]);
+
+    const targetPlayer = players.find(p => Number(p.seat) === effectiveSeat);
+    if (!targetPlayer) return { isReady: false, text: "查無此目標" };
+
+    const isLuckyWolf = (luckyPlayer.seatType === "WEREWOLF" || luckyPlayer.victoryFaction === "werewolf");
+
+    if (isLuckyWolf) {
+      // 狼人獲得查驗：查驗玩家具體身分 (通靈師機制)
+      const baseRole = (targetPlayer.role || "平民").replace(/\(轉化\)|\(狼\)/g, "");
+      return {
+        isReady: true,
+        isWolfChecker: true,
+        text: `狼人通靈身分：【${baseRole}】`
+      };
+    } else {
+      // 好人獲得查驗：查驗陣營 (金水/查殺)
+      let isTargetWolf = (targetPlayer.seatType === "WEREWOLF");
+      if (targetPlayer.role === "狼弟") {
+        const brother = players.find(p => p.role === "狼兄");
+        isTargetWolf = brother ? !brother.isAlive : true;
+      }
+      return {
+        isReady: true,
+        isWolfChecker: false,
+        isWolf: isTargetWolf,
+        text: isTargetWolf ? "好人查驗結果：【狼人 (查殺)】" : "好人查驗結果：【好人 (金水)】"
+      };
+    }
+  },
+
   // 手勢狀態判定
   evaluateGesture(gestureId, context = {}) {
     const rawPoison = Number(context.rawPoisonTarget) || 0;
+    const luckyPoison = Number(context.rawLuckyPoisonTarget) || 0;
     const swapPair = context.swapPair || [0, 0];
-    let effPoison = rawPoison;
-    if (Number(swapPair[0]) === rawPoison) effPoison = Number(swapPair[1]);
-    else if (Number(swapPair[1]) === rawPoison) effPoison = Number(swapPair[0]);
 
+    const swap = (s) => {
+      if (Number(swapPair[0]) === s) return Number(swapPair[1]);
+      if (Number(swapPair[1]) === s) return Number(swapPair[0]);
+      return s;
+    };
+
+    const effPoison1 = swap(rawPoison);
+    const effPoison2 = swap(luckyPoison);
     const players = context.players || [];
+
     if (gestureId === "hunter_gesture" || gestureId === "wolf_king_gesture") {
       const roleName = gestureId === "hunter_gesture" ? "獵人" : "狼王";
       const target = players.find(p => p.role.includes(roleName));
-      const isPoisoned = !!target && effPoison > 0 && Number(target.seat) === effPoison;
+      const targetSeat = target ? Number(target.seat) : 0;
+      const isPoisoned = targetSeat > 0 && (effPoison1 === targetSeat || effPoison2 === targetSeat);
       return { isPositive: !isPoisoned, text: isPoisoned ? "👎 狀態異常 (吃毒禁槍)" : "👍 狀態良好 (可開槍)" };
     }
+
+    if (gestureId === "gun_lucky_gesture" || gestureId === "lucky_gun_gesture") {
+      const luckyGunSeat = Number(context.luckyGunSeat || context.blackMarketGifts?.gun || 0);
+      const isPoisoned = luckyGunSeat > 0 && (effPoison1 === luckyGunSeat || effPoison2 === luckyGunSeat);
+      return { isPositive: !isPoisoned, text: isPoisoned ? "👎 狀態異常 (吃毒禁槍)" : "👍 狀態良好 (可開槍)" };
+    }
+
     if (gestureId === "converter_gesture") return { isPositive: true, text: "🔪 轉化確認 (可參與落刀)" };
+
     if (gestureId === "black_market_faction_gesture") {
       const isWolf = !!context.blackMarketTransformedWolf;
       return { isPositive: !isWolf, text: isWolf ? "🐺 陣營轉變 (已變為狼人)" : "🧑 陣營正常 (仍為好人)" };
     }
+
     return { isPositive: true, text: "👍 狀態良好" };
   },
 
@@ -558,12 +624,13 @@ const RULES_ENGINE = {
     return { nextCount: 1, isBadgeLoss: false, nextPhase: "POLICE_ELECTION", alertText: "狼人競選自爆！保留警徽，延續名單於次日補選。" };
   },
 
-  // 夜間死訊結算
+  // 夜間死訊結算 (含幸運兒毒藥)
   resolveNight(inputs = {}, nightMemory = {}, players = []) {
     const transformationLogs = this.applyRoleTransformations(inputs, players, nightMemory);
     const rawWolf = Number(inputs.rawWolfTarget) || 0;
     const rawSolo = Number(inputs.youngWolfSoloTarget) || 0;
     const rawPoison = Number(inputs.rawPoisonTarget) || 0;
+    const rawLuckyPoison = Number(inputs.luckyPoisonTarget) || 0;
     const guard = Number(inputs.guardTarget) || 0;
     const antidote = !!inputs.antidoteUsed;
 
@@ -574,6 +641,7 @@ const RULES_ENGINE = {
     const effWolf = swap(rawWolf);
     const effSolo = swap(rawSolo);
     const effPoison = swap(rawPoison);
+    const effLuckyPoison = swap(rawLuckyPoison);
     const effGuard = swap(guard);
 
     let deaths = [];
@@ -589,12 +657,24 @@ const RULES_ENGINE = {
       }
     }
     if (effPoison && !deaths.includes(effPoison)) deaths.push(effPoison);
+    if (effLuckyPoison && !deaths.includes(effLuckyPoison)) deaths.push(effLuckyPoison);
+
+    // 幸運兒技能耗盡標記
+    if (inputs.luckySeerTarget) {
+      nightMemory.luckySeerUsed = true;
+    }
+    if (rawLuckyPoison > 0) {
+      nightMemory.luckyPoisonUsed = true;
+    }
 
     const summaryText = deaths.length === 0 ? "昨夜是平安夜" : `昨夜倒牌：${deaths.sort((a,b)=>a-b).map(s => s + '號').join('、')}`;
+    const allPoisons = [effPoison, effLuckyPoison].filter(s => s > 0);
+
     return {
       deaths,
-      hunterCanShoot: !deaths.includes(effPoison),
-      wolfKingCanShoot: !deaths.includes(effPoison),
+      hunterCanShoot: !allPoisons.some(p => deaths.includes(p)),
+      wolfKingCanShoot: !allPoisons.some(p => deaths.includes(p)),
+      luckyGunCanShoot: !allPoisons.includes(Number(nightMemory?.blackMarketGifts?.gun || 0)),
       summaryText,
       transformationLogs
     };
